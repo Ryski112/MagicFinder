@@ -4,11 +4,33 @@ import type { CartCheckResponse, ItemView, StoreView } from '../../shared/api';
 import { api } from '../api';
 import { Button, Dialog, money, Notice } from './ui';
 
-export type CartTarget = { kind: 'fetch'; items: ItemView[]; k: number } | { kind: 'store'; store: StoreView; k: number };
+export type CartTarget = { kind: 'fetch'; items: ItemView[]; k: number; seller?: string } | { kind: 'store'; store: StoreView; k: number };
 
-function openAll(urls: string[]) {
-  // Browsers may only allow the first tab from one click; the list below covers the rest.
-  for (const u of urls) window.open(u, '_blank', 'noopener');
+/** Opens every link in a new tab. Returns how many the browser blocked (it allows one per click unless pop-ups are allowed). */
+function openAll(urls: string[]): number {
+  let blocked = 0;
+  for (const u of urls) {
+    const w = window.open(u, '_blank');
+    if (w) w.opener = null;
+    else blocked++;
+  }
+  return blocked;
+}
+
+function OpenAllButton({ urls }: { urls: string[] }) {
+  const [blocked, setBlocked] = useState(0);
+  return (
+    <div className="mb-3 space-y-2">
+      <Button variant="accent" onClick={() => setBlocked(openAll(urls))}>Open all {urls.length}</Button>
+      {blocked > 0 && (
+        <Notice tone="warn">
+          Your browser blocked {blocked} of the {urls.length} tabs; it only allows one per click from a new site. To open them all at once,
+          click the blocked pop-up icon at the right of the address bar, choose <b>Always allow pop-ups from {window.location.host}</b>, then
+          press Open all again. You only need to do this once. Or open them one by one below.
+        </Notice>
+      )}
+    </div>
+  );
 }
 
 function ListingLinks({ items }: { items: { name: string; qty: number; price: number; url: string; note?: string }[] }) {
@@ -30,11 +52,11 @@ export function CartDialog({ runId, target, onClose }: { runId: string; target: 
   if (target.kind === 'fetch') {
     const items = target.items.map(i => ({ name: i.name, qty: i.qty, price: i.price, url: i.url }));
     return (
-      <Dialog open onClose={onClose} title={`Open ${items.length} Fetch Listings`}>
+      <Dialog open onClose={onClose} title={target.seller ? `Open ${items.length} Listings from ${target.seller}` : `Open ${items.length} Fetch Listings`}>
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-          Fetch TCG has one cart for every seller. Open each Listing and press "Add to cart"; items from all Fetch Stores in this Plan check out together, one parcel per seller.
+          Open each Listing and press "Add to cart" on Fetch TCG. Fetch has one cart for every seller, so items from all Fetch Stores in this Plan check out together, one parcel per seller.
         </p>
-        <Button variant="accent" className="mb-3" onClick={() => openAll(items.map(i => i.url))}>Open all</Button>
+        <OpenAllButton urls={items.map(i => i.url)} />
         <ListingLinks items={items} />
       </Dialog>
     );
@@ -46,7 +68,7 @@ export function CartDialog({ runId, target, onClose }: { runId: string; target: 
   return (
     <Dialog open onClose={onClose} title={`Open Listings at ${s.name}`}>
       <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{s.name}'s shop can't be filled from a link. Open each Listing and add it to your cart there.</p>
-      <Button variant="accent" className="mb-3" onClick={() => openAll(items.map(i => i.url))}>Open all</Button>
+      <OpenAllButton urls={items.map(i => i.url)} />
       <ListingLinks items={items} />
     </Dialog>
   );

@@ -115,6 +115,15 @@ export interface RungView {
   cheapestOverall: boolean;
   stores: StoreView[];
   pickupHints: { storeId: string; name: string; saves: number }[];
+  /** Short Plans: copies bought out of copies wanted, and the cards left out. */
+  short?: { covered: number; wanted: number; leftOut: LeftOutView[] };
+}
+
+export interface LeftOutView {
+  buyKey: string;
+  name: string;
+  missing: number;
+  image: string | null;
 }
 
 export interface NotFoundView {
@@ -129,6 +138,7 @@ export interface NotFoundView {
   notSearchedOn: string[];
   /** Sources that were searched. */
   searchedOn: string[];
+  image: string | null;
 }
 
 export interface LadderView {

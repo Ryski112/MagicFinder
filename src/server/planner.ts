@@ -69,6 +69,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
       notFound.push({
         buyKey: line.key, lineIds: line.lineIds, name: line.name, missing: line.quantity - need, wanted: line.quantity,
         locked: !!line.lock, notSearchedOn: notSearched(line.oracleId), searchedOn: searched(line.oracleId),
+        image: cardImage(ctx.catalogue, line.oracleId),
       });
     }
     if (!need) continue;
@@ -167,9 +168,20 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
     const pickupHints = stores
       .filter(s => s.pickupEligible && !s.pickupOn && s.postage > s.pickupFee)
       .map(s => ({ storeId: s.id, name: s.name, saves: Math.round((s.postage - s.pickupFee) * 100) / 100 }));
+    let short: RungView['short'];
+    if (r.short) {
+      const bought = new Map<number, number>();
+      for (const [i, q] of r.plan.take) bought.set(prep.problem.offers[i].line, (bought.get(prep.problem.offers[i].line) ?? 0) + q);
+      const leftOut = prep.problem.lines.flatMap((l, line) => {
+        const missing = l.need - (bought.get(line) ?? 0);
+        const b = buyByKey.get(l.key)!;
+        return missing > 0 ? [{ buyKey: l.key, name: b.name, missing, image: cardImage(catalogue, b.oracleId) }] : [];
+      });
+      short = { covered: r.short.covered, wanted: r.short.wanted, leftOut };
+    }
     return {
       k: r.k, total: r.plan.total, cards: r.plan.cards, postage: r.plan.postage, status: r.status, mightSave: r.mightSave,
-      saves: r.saves, cheapestOverall: r.cheapestOverall, stores, pickupHints,
+      saves: r.saves, cheapestOverall: r.cheapestOverall, stores, pickupHints, short,
     };
   });
 

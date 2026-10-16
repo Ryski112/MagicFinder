@@ -2,7 +2,7 @@
 // Each seller is its own Store. See "How can Fetch TCG listings be searched and read?".
 import type { Condition } from '../core/types';
 import { USER_AGENT } from '../server/paths';
-import { classify, Throttle, withRetries, type HttpAnswer } from './policy';
+import { classify, mapRows, Throttle, withRetries, type HttpAnswer } from './policy';
 import { SourceError, type Source, type SourceListing } from './types';
 
 const API = 'https://api.fetchtcg.com/v1/market/listings';
@@ -86,10 +86,7 @@ export class FetchTcgSource implements Source {
       }, { signal });
       const results = body?.searchResults;
       if (!results || !Array.isArray(results.content)) throw new SourceError('changed', 'Fetch TCG answer has no searchResults.content');
-      for (const l of results.content) {
-        const m = mapFetchListing(l);
-        if (m) out.push(m);
-      }
+      out.push(...mapRows(results.content, mapFetchListing));
       if (results.last !== false) break;
     }
     return out;

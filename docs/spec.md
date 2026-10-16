@@ -120,7 +120,7 @@ The owner decided not to ask the Sources for permission ([Ask MtgSingles for per
 
 ### 5.2 MtgSingles
 - Playwright drives the user's installed Chrome/Chromium (it downloads one only if none is found). It loads `mtgsingles.co.nz`, then calls `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1` from the page context, about 1 request/second.
-- Paging: 20 results per page. Keep paging until fewer than 20 come back.
+- Paging: 20 results per page. Keep paging until fewer than 20 come back. A card with no Listings comes back as `204 No Content` with an empty body.
 - Don't use exact match. Normalise names ourselves, because double-faced card titles differ.
 - `includeMarketplaces=false`: Fetch sellers are handled by the Fetch Source.
 - There's no collector number or Store location. Location comes from the Store table. `features[]` gives treatment and `Non-English`. Prices are strings such as `"$1,345.99"`.
@@ -137,7 +137,7 @@ Decided in [What happens when a Source blocks MagicFinder?](https://github.com/R
 | OK | Normal answers | — |
 | Blocked | Cloudflare / "checking your browser" page, or 403 | Stop that Source for this run at once, with no retries. No automatic retry for 30 min, plus a **Try again now** button |
 | Slowed down | 429 | Wait as asked (Retry-After), up to 3 attempts, then treat it as Blocked for this run |
-| Down | 5xx, timeout, network error | 2 retries a few seconds apart, then skip the Source for this run |
+| Down | 5xx, timeout, network error | 2 retries a few seconds apart, then skip that card on that Source (it's searched on the others only). Server errors on 3 cards in a row mean the Source is down for this run |
 | Changed | Response is missing the fields we rely on | "MagicFinder may need an update", plus **Copy details** (Source, status, what was wrong, app version, time; no personal data) |
 
 **Detection** (no extra requests on a normal run)
@@ -206,7 +206,7 @@ Decided in [What optimiser approach produces the Trade-off Ladder?](https://gith
 - Rungs are shown from k_min up to the Store count of the cheapest Plan overall, and the top rung is labelled **Cheapest overall**.
 - A rung that saves nothing over the one below it is hidden.
 - There's no cap; each rung shows "saves $X vs one fewer Store".
-- Below k_min: no rungs and no partial Plans, just "Fewest Stores that cover your list: N".
+- Below k_min: **Short Plans** for 1, 2 and 3 Stores (owner's change, 2026-10-17, reversing "no partial Plans"). Each leaves out the fewest copies, then is the cheapest Plan that does so. It is solved in two steps: the most copies k Stores can supply, then the cheapest way to buy that many. Short Plans come first in the Ladder, show "N of M cards", and list the cards they leave out (collapsible, with images). The status line still says "Fewest Stores that cover your list: N".
 
 **Timeouts**
 - A rung that hits its time limit shows the best Plan found, with "might be up to $X cheaper" (from the solver bound).

@@ -96,3 +96,46 @@ describe('buildLadder', () => {
     });
   });
 });
+
+describe('Short Plans', () => {
+  // Three cards; each Store stocks two of them, so the whole list needs 2 Stores.
+  const p: Problem = {
+    lines: [{ key: 'a', need: 1 }, { key: 'b', need: 2 }, { key: 'c', need: 1 }],
+    stores: [0, 1, 2].map(i => ({ id: `S${i}`, postage: 6, freeOver: null })),
+    offers: [
+      { id: 'a0', line: 0, store: 0, price: 5, qty: 1 },
+      { id: 'b0', line: 1, store: 0, price: 3, qty: 2 },
+      { id: 'b1', line: 1, store: 1, price: 1, qty: 2 },
+      { id: 'c1', line: 2, store: 1, price: 9, qty: 1 },
+      { id: 'c2', line: 2, store: 2, price: 1, qty: 1 },
+      { id: 'a2', line: 0, store: 2, price: 2, qty: 1 },
+    ],
+  };
+
+  it('solves a 1-Store Plan that leaves out the fewest copies, then is cheapest', async () => {
+    const r = await solveRung(p, 1, { timeLimitS: 5, partial: true });
+    expect(r.kind).toBe('optimal');
+    if (r.kind !== 'optimal') return;
+    // S0 and S1 each supply 3 of the 4 copies, both for $17; S2 supplies only 2.
+    expect([...r.plan.take.values()].reduce((a, b) => a + b, 0)).toBe(3);
+    expect(r.plan.stores).toHaveLength(1);
+    expect(r.plan.total).toBe(17);
+  });
+
+  it('puts Short Plans before the full Ladder, marked with how many cards they cover', async () => {
+    const final = await buildLadder(p, { solve: solveRung, timeLimitS: 5, onUpdate: () => {} });
+    expect(final.kmin).toBe(2);
+    const [first, ...rest] = final.rungs;
+    expect(first).toMatchObject({ k: 1, short: { covered: 3, wanted: 4 }, status: 'optimal', cheapestOverall: false });
+    expect(rest[0].k).toBe(2);
+    expect(rest[0].short).toBeUndefined();
+  });
+
+  it('offers Short Plans only up to 3 Stores', async () => {
+    const k = new LadderKnowledge();
+    k.kmin = 6;
+    k.wanted = 10;
+    for (let n = 1; n <= 5; n++) k.offerShort(n, fakePlan(n, 100 - n));
+    expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([1, 2, 3]);
+  });
+});

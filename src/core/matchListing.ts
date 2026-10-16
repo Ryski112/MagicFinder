@@ -5,11 +5,14 @@ import type { Listing } from './types';
 
 // Title noise to strip before looking a name up: bracketed groups, condition and finish words.
 const BRACKETS = /\s*[([][^)\]]*[)\]]/g;
+/** Things that turn up in name searches but aren't cards anyone buys as singles. */
+export const NOT_A_CARD = /\b(art card|art series|double-sided token|token|art sleeves?|sleeves|theme card|checklist card|emblem|playmat|deck box)\b/i;
 const TRAILING_WORDS = /\s+[-–]\s+(?:foil|non-?foil|etched|nm|lp|mp|hp|near mint|lightly played)\b.*$/i;
 
 /** Candidate card names to try for a Listing title, best first. */
 export function nameCandidates(title: string): string[] {
-  const base = title.replace(BRACKETS, '').replace(TRAILING_WORDS, '').replace(/\s+/g, ' ').trim();
+  // Some Stores add "| Foil (255)" after the name.
+  const base = title.split(/\s+\|\s+/)[0].replace(BRACKETS, '').replace(TRAILING_WORDS, '').replace(/\s+/g, ' ').trim();
   const out = [base];
   // Secret Lair style "Wild Rose Rebellion - Counterspell": try each side of a dash.
   for (const part of base.split(/\s+[-–]\s+/)) if (part !== base) out.push(part.trim());

@@ -127,6 +127,34 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
   return planFrom(p, take);
 }
 
+/** Copies a Plan buys. */
+export function copiesIn(plan: Plan): number {
+  let n = 0;
+  for (const q of plan.take.values()) n += q;
+  return n;
+}
+
+export function copiesWanted(p: Problem): number {
+  return p.lines.reduce((n, l) => n + l.need, 0);
+}
+
+/** Like evaluateStoreSet, but buys whatever the open Stores have when they can't fill every line. */
+export function evaluatePartial(p: Problem, byLine: number[][], open: ReadonlySet<number>): Plan {
+  const take = new Map<number, number>();
+  for (let line = 0; line < p.lines.length; line++) {
+    let need = p.lines[line].need;
+    for (const i of byLine[line]) {
+      if (!need) break;
+      const o = p.offers[i];
+      if (!open.has(o.store)) continue;
+      const q = Math.min(need, o.qty);
+      take.set(i, q);
+      need -= q;
+    }
+  }
+  return planFrom(p, take);
+}
+
 /** Verifies a Plan buys exactly what each line needs; used by tests and as a guard on solver output. */
 export function isComplete(p: Problem, plan: Plan): boolean {
   const got = p.lines.map(() => 0);

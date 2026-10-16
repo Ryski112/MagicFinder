@@ -2,7 +2,7 @@
 // from inside a headless Chrome page, about one request a second. There is no stealth and no challenge-solving:
 // if a bot check appears, the Source is Blocked. See "How can MtgSingles listings be searched and read?".
 import type { Condition } from '../core/types';
-import { classify, Throttle, withRetries, type HttpAnswer } from './policy';
+import { classify, mapRows, Throttle, withRetries, type HttpAnswer } from './policy';
 import { SourceError, type Source, type SourceListing } from './types';
 import { openBrowserPage, type BrowserPage } from './browser';
 
@@ -105,6 +105,8 @@ export class MtgSinglesSource implements Source {
         await this.throttle.wait();
         const a = await this.get(url);
         classify(a);
+        // No Listings at all comes back as "204 No Content" with an empty body, not as an empty list.
+        if (a.status === 204 || !a.body.trim()) return [];
         let body: unknown;
         try {
           body = JSON.parse(a.body);
@@ -114,9 +116,8 @@ export class MtgSinglesSource implements Source {
         if (!Array.isArray(body)) throw new SourceError('changed', 'MtgSingles answer is not a list of Listings');
         return body;
       }, { signal });
-      for (const r of rows) {
-        const m = mapMtgSinglesListing(r, this.opts.storeName);
-        if (m && !seen.has(m.id)) {
+      for (const m of mapRows(rows, r => mapMtgSinglesListing(r, this.opts.storeName))) {
+        if (!seen.has(m.id)) {
           seen.add(m.id);
           out.push(m);
         }

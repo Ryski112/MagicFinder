@@ -1,6 +1,6 @@
 // Greedy drop + 1-swap heuristic: a draft Trade-off Ladder in well under a second, and a starting Plan for each
 // exact solve. It can miss tight rungs and is a few percent above optimal, which the exact solver fixes.
-import { evaluateStoreSet, offersByLine, type Plan, type Problem } from './problem';
+import { copiesIn, evaluatePartial, evaluateStoreSet, offersByLine, type Plan, type Problem } from './problem';
 
 /** Best Plan found for each Store count. */
 export type PlansByCount = Map<number, Plan>;
@@ -76,6 +76,49 @@ export function heuristicLadder(p: Problem, deadlineMs = 800): PlansByCount {
     }
     if (!next) break;
     current = improve(next);
+  }
+  return best;
+}
+
+/** Draft Short Plan for k Stores: greedily add the Store that covers the most extra copies, then try 1-swaps. */
+export function shortPlanDraft(p: Problem, k: number): Plan | null {
+  const byLine = offersByLine(p);
+  const all = [...new Set(p.offers.map(o => o.store))];
+  const better = (a: Plan, b: Plan | null) => !b || copiesIn(a) > copiesIn(b) || (copiesIn(a) === copiesIn(b) && a.total < b.total - 1e-9);
+  const open = new Set<number>();
+  let best: Plan | null = null;
+  while (open.size < k) {
+    let pick: { s: number; plan: Plan } | null = null;
+    for (const s of all) {
+      if (open.has(s)) continue;
+      const trial = new Set(open).add(s);
+      const plan = evaluatePartial(p, byLine, trial);
+      if (better(plan, pick?.plan ?? null)) pick = { s, plan };
+    }
+    if (!pick) break;
+    open.add(pick.s);
+    best = pick.plan;
+  }
+  if (!best) return null;
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false;
+    for (const out of [...open]) {
+      for (const inn of all) {
+        if (open.has(inn)) continue;
+        const trial = new Set(open);
+        trial.delete(out);
+        trial.add(inn);
+        const plan = evaluatePartial(p, byLine, trial);
+        if (better(plan, best)) {
+          best = plan;
+          open.delete(out);
+          open.add(inn);
+          improved = true;
+          break;
+        }
+      }
+    }
+    if (!improved) break;
   }
   return best;
 }

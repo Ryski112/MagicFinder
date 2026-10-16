@@ -29,7 +29,7 @@ const freshCache = () => new SearchCache(mkdtempSync(join(dir, `cache${n++}-`)))
 const settings = (over: Partial<Settings> = {}): Settings => ({ ...structuredClone(DEFAULT_SETTINGS), ...over });
 
 /** A Source that answers with one Listing per card, and can misbehave from the `failAt`-th search on. */
-function fakeSource(id: SourceId, opts: { failAt?: number; error?: SourceError; empty?: boolean } = {}): Source & { calls: string[] } {
+function fakeSource(id: SourceId, opts: { failAt?: number; error?: SourceError; empty?: boolean; failOn?: number[] } = {}): Source & { calls: string[] } {
   const calls: string[] = [];
   return {
     id,
@@ -37,6 +37,7 @@ function fakeSource(id: SourceId, opts: { failAt?: number; error?: SourceError; 
     calls,
     async search(q: string) {
       calls.push(q);
+      if (opts.failOn?.includes(calls.length)) throw new SourceError('down', 'Server error (504)');
       if (opts.failAt !== undefined && calls.length > opts.failAt) throw opts.error ?? new SourceError('blocked', 'nope');
       if (opts.empty) return [];
       const card = cat.findCard(q) ?? cat.findCard(q.split(' // ')[0]);
@@ -94,6 +95,20 @@ describe('searchAll', () => {
     expect(st.notSearched).toHaveLength(cards.length - 6);
     expect(st.staleSince).toBe(fiveHoursAgo);
     expect(r.listings).toHaveLength(6);
+  });
+
+  it('skips one card the Source has a server error on, and keeps searching the rest', async () => {
+    const mts = fakeSource('mtgsingles', { failOn: [3] });
+    const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't' }, () => {});
+    expect(r.sources[0]).toMatchObject({ status: 'ok', searched: cards.length - 1, failedCards: 1 });
+    expect(r.sources[0].notSearched).toEqual([cards[2].oracleId]);
+  });
+
+  it('treats server errors on several cards in a row as the Source being down', async () => {
+    const mts = fakeSource('mtgsingles', { failOn: [2, 3, 4] });
+    const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't' }, () => {});
+    expect(r.sources[0].status).toBe('down');
+    expect(mts.calls).toHaveLength(4);
   });
 
   it('does not ask a Source that blocked recently, and says when it will', async () => {

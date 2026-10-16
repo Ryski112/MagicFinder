@@ -55,13 +55,24 @@ export function PlanStep(p: Props) {
       {rung && rung.total !== null && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-semibold">Your {rung.k}-Store Plan</h2>
+            <h2 className="font-semibold">
+              Your {rung.k}-Store Plan
+              {rung.short && <span className="font-normal text-amber-600 dark:text-amber-400"> · leaves out {rung.short.wanted - rung.short.covered} of {rung.short.wanted} cards</span>}
+            </h2>
             {rung.pickupHints.length > 0 && (
               <div className="text-xs text-emerald-700 dark:text-emerald-400">
                 {rung.pickupHints.map(h => `Pickup available at ${h.name}, saves ${money(h.saves)}`).join(' · ')}
               </div>
             )}
           </div>
+          {rung.short && rung.short.leftOut.length > 0 && (
+            <CardList
+              tone="warn"
+              title={`Left out of this Plan (${rung.short.wanted - rung.short.covered})`}
+              note={`${rung.k} Store${rung.k > 1 ? 's' : ''} can't supply your whole list. These are the fewest cards to leave out; pick a bigger Plan to include them.`}
+              cards={rung.short.leftOut.map(l => ({ key: l.buyKey, name: l.name, qty: l.missing, image: l.image }))}
+            />
+          )}
           {fetchItems.length > 0 && (
             <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
               <SourceBadge source="fetch" />
@@ -70,7 +81,8 @@ export function PlanStep(p: Props) {
             </div>
           )}
           {rung.stores.map(s => (
-            <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={p.onSettings} onCart={() => setCart({ kind: 'store', store: s, k: rung.k })}
+            <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={p.onSettings}
+              onCart={() => setCart(s.cart === 'fetch' ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name } : { kind: 'store', store: s, k: rung.k })}
               onLock={setLock} />
           ))}
           <div className="text-right text-lg font-bold tabnum">
@@ -102,7 +114,9 @@ function RungCard({ r, selected, onSelect, onTryLonger }: { r: RungView; selecte
         {r.cheapestOverall && <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">· Cheapest overall</span>}
       </div>
       <div className="text-2xl font-bold tabnum">{money(r.total)}</div>
-      <div className="text-xs text-slate-500 tabnum h-4">{r.saves != null ? `saves ${money(r.saves)} vs ${r.k - 1}` : 'fewest Stores'}</div>
+      {r.short
+        ? <div className="text-xs text-amber-600 dark:text-amber-400 tabnum h-4">{r.short.covered} of {r.short.wanted} cards</div>
+        : <div className="text-xs text-slate-500 tabnum h-4">{r.saves != null ? `saves ${money(r.saves)} vs ${r.k - 1}` : 'all cards · fewest Stores'}</div>}
       <div className="mt-1 h-5">
         {r.status === 'refining' && <span className="text-xs text-amber-700 bg-amber-100 dark:bg-amber-900/50 dark:text-amber-200 px-2 py-0.5 rounded-full animate-pulse">refining…</span>}
         {r.status === 'timed-out' && (
@@ -119,9 +133,16 @@ function RungCard({ r, selected, onSelect, onTryLonger }: { r: RungView; selecte
 function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { ladder: LadderView; settings: Settings; onSettings: (p: Partial<Settings>) => void; onSearchAgain: () => void; onUnlock: (ids: string[]) => void }) {
   const [copied, setCopied] = useState(false);
   const troubled = ladder.sources.filter(s => s.status !== 'ok' && s.status !== 'off');
+  const skipped = ladder.sources.filter(s => s.status === 'ok' && s.notSearched.length > 0);
   const allFailed = ladder.sources.filter(s => s.status !== 'off').every(s => s.status !== 'ok') && ladder.rungs.length === 0;
   return (
     <div className="space-y-2">
+      {skipped.map(s => (
+        <Notice key={s.source} tone="info">
+          {s.name} had a server error on {s.notSearched.length} card{s.notSearched.length > 1 ? 's' : ''}, so {s.notSearched.length > 1 ? 'they were' : 'it was'} only
+          searched on the other Source: {ladder.partialCards.join(', ')}. <Button variant="link" onClick={onSearchAgain}>Search again</Button>
+        </Notice>
+      ))}
       {troubled.map(s => (
         <Notice key={s.source} tone="warn">
           <div>{s.message ?? sourceLine(s).text}</div>
@@ -143,20 +164,21 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
       ))}
       {allFailed && <Notice tone="bad">No Source could be searched, so there's no Plan this time. Check your internet connection and try again.</Notice>}
       {ladder.notFound.length > 0 && (
-        <Notice tone="bad">
-          <div className="font-medium">Not Found ({ladder.notFound.length}), left out of every Plan:</div>
-          <ul className="mt-1 space-y-0.5">
-            {ladder.notFound.map(n => (
-              <li key={n.buyKey}>
-                {n.missing < n.wanted ? `${n.missing} of ${n.wanted}× ` : `${n.wanted}× `}
-                {n.name}
-                {n.missing < n.wanted && ` (only ${n.wanted - n.missing} available)`}
-                {n.notSearchedOn.length > 0 && ` · Not Found on ${n.searchedOn.join(' and ') || 'any Source'} (${n.notSearchedOn.join(' and ')} not searched)`}
-                {n.locked && <> · locked Printing <Button variant="link" onClick={() => onUnlock(n.lineIds)}>unlock</Button></>}
-              </li>
-            ))}
-          </ul>
-        </Notice>
+        <CardList
+          tone="bad"
+          title={`Not Found (${ladder.notFound.reduce((n, x) => n + x.missing, 0)}), left out of every Plan`}
+          cards={ladder.notFound.map(n => ({
+            key: n.buyKey,
+            name: n.name,
+            qty: n.missing,
+            image: n.image,
+            note: [
+              n.missing < n.wanted ? `only ${n.wanted - n.missing} of ${n.wanted} available` : '',
+              n.notSearchedOn.length ? `${n.notSearchedOn.join(' and ')} not searched` : '',
+            ].filter(Boolean).join(' · '),
+            action: n.locked ? { label: 'locked Printing: unlock', onClick: () => onUnlock(n.lineIds) } : undefined,
+          }))}
+        />
       )}
       {ladder.unrecognised.length > 0 && <Notice tone="bad">Couldn't recognise: {ladder.unrecognised.join(' · ')}</Notice>}
       {ladder.skippedBasics.length > 0 && (
@@ -179,7 +201,12 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock }:
     if (on) next.add(s.id); else next.delete(s.id);
     onSettings({ pickupStores: [...next] });
   };
-  const cartLabel = { shopify: '🛒 Add all to cart', 'hobbymaster-deckbuilder': 'Copy list & open Deck Builder', 'open-listings': 'Open Listings', fetch: null }[s.cart];
+  const cartLabel = {
+    shopify: '🛒 Add all to cart',
+    'hobbymaster-deckbuilder': 'Copy list & open Deck Builder',
+    'open-listings': 'Open Listings',
+    fetch: `Open ${s.items.length} Listing${s.items.length > 1 ? 's' : ''}`,
+  }[s.cart];
   return (
     <div className={cx(panel, 'rounded-xl')}>
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
@@ -306,6 +333,50 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
         <div className="text-[11px] text-slate-500">Free postage over {money(s.freeOver)} ({money(s.freeOver - s.subtotal)} away)</div>
       )}
       <div className="flex justify-between font-semibold border-t border-slate-200 dark:border-slate-700 pt-1"><span>Store total</span><span>{money(s.total)}</span></div>
+    </div>
+  );
+}
+
+interface CardListItem {
+  key: string;
+  name: string;
+  qty: number;
+  image: string | null;
+  note?: string;
+  action?: { label: string; onClick: () => void };
+}
+
+/** A collapsible list of cards with their images, for Not Found and for cards a Short Plan leaves out. */
+function CardList({ title, note, cards, tone }: { title: string; note?: string; cards: CardListItem[]; tone: 'bad' | 'warn' }) {
+  const [open, setOpen] = useState(false);
+  const toneClass = tone === 'bad'
+    ? 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/50 dark:border-rose-900 dark:text-rose-200'
+    : 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200';
+  return (
+    <div className={cx('border rounded-lg text-sm', toneClass)}>
+      <button type="button" className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left font-medium" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span>{title}</span>
+        <span className="text-xs font-normal opacity-80 whitespace-nowrap">{open ? 'hide ▴' : `show ${cards.length} card${cards.length > 1 ? 's' : ''} ▾`}</span>
+      </button>
+      {!open && <div className="px-3 pb-2 -mt-1 text-xs opacity-80 truncate">{cards.map(c => c.name).join(', ')}</div>}
+      {open && (
+        <div className="px-3 pb-3">
+          {note && <p className="text-xs opacity-80 mb-2">{note}</p>}
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-3">
+            {cards.map(c => (
+              <div key={c.key} className="text-xs">
+                <div className="relative">
+                  <CardImage src={c.image} alt={c.name} className="w-full aspect-[5/7] rounded-lg" />
+                  {c.qty > 1 && <span className="absolute top-1 left-1 bg-black/75 text-white font-bold rounded px-1.5">×{c.qty}</span>}
+                </div>
+                <div className="mt-1 font-medium leading-tight">{c.name}</div>
+                {c.note && <div className="opacity-80">{c.note}</div>}
+                {c.action && <Button variant="link" className="text-xs" onClick={c.action.onClick}>{c.action.label}</Button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

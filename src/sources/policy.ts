@@ -70,6 +70,28 @@ export async function withRetries<T>(attempt: () => Promise<T>, opts: RetryOptio
   }
 }
 
+/**
+ * Maps a page of raw Listings, skipping the odd malformed one. Only when every row is unreadable is the Source
+ * treated as Changed (one Store's bad data shouldn't stop the whole Source).
+ */
+export function mapRows<T>(rows: unknown[], map: (r: any) => T | null): T[] {
+  const out: T[] = [];
+  let failed = 0;
+  let firstError: SourceError | null = null;
+  for (const r of rows) {
+    try {
+      const m = map(r);
+      if (m) out.push(m);
+    } catch (e) {
+      if (!(e instanceof SourceError)) throw e;
+      failed++;
+      firstError ??= e;
+    }
+  }
+  if (rows.length && failed === rows.length) throw firstError!;
+  return out;
+}
+
 /** Keeps at least `gapMs` between the starts of successive calls. */
 export class Throttle {
   private next = 0;

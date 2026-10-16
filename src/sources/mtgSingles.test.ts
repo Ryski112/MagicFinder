@@ -66,6 +66,17 @@ describe('MtgSinglesSource.search', () => {
     expect(n).toBe(3);
   });
 
+  it('reads an empty "204 No Content" answer as no Listings', async () => {
+    const src = new MtgSinglesSource({ pageGet: async () => ({ status: 204, body: '', contentType: null }) });
+    expect(await src.search('Black Waltz No 3')).toEqual([]);
+  });
+
+  it('skips a malformed Listing instead of giving up on the Source', async () => {
+    const page = [...rows.slice(0, 5), { store: 'NZ/Odd', title: 'Broken' }];
+    const src = new MtgSinglesSource({ pageGet: async () => ({ status: 200, body: JSON.stringify(page), contentType: 'application/json' }) });
+    expect(await src.search('Counterspell')).toHaveLength(5);
+  });
+
   it('is Blocked by a bot check page, without retrying', async () => {
     let n = 0;
     const src = new MtgSinglesSource({ pageGet: async () => { n++; return { status: 403, body: 'Sorry, you have been blocked', contentType: 'text/html' }; } });

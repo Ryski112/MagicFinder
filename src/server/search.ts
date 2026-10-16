@@ -1,13 +1,15 @@
 // Searches every enabled Source for every card on the Want List, applying the agreed rules for Sources that
 // block, slow down, go down or change. See "What happens when a Source blocks MagicFinder?".
 import type { Catalogue } from '../catalogue/catalogue';
-import { matchListing } from '../core/matchListing';
+import { matchListing, NOT_A_CARD } from '../core/matchListing';
 import type { Listing, SourceId } from '../core/types';
 import { SourceError, type Source, type SourceListing, type SourceStatus } from '../sources/types';
 import { FRESH_MS, STALE_MS, type SearchCache } from './searchCache';
 import type { Settings } from './settings';
 
 export const COOLDOWN_MS = 30 * 60 * 1000;
+/** Server errors on this many cards in a row mean the Source itself is down for this run. */
+export const MAX_DOWN_IN_A_ROW = 3;
 
 export interface SearchCard {
   oracleId: string;
@@ -30,6 +32,8 @@ export interface SourceRunStatus {
   cooldownUntil?: number;
   /** Technical summary to paste into a bug report when the Source has Changed. */
   details?: string;
+  /** Cards skipped because the Source had a server error on that one search. */
+  failedCards?: number;
 }
 
 export interface SearchProgress {
@@ -116,6 +120,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   await Promise.all(
     active.map(async src => {
       const st = statuses.get(src.id)!;
+      let downInARow = 0;
       for (let i = 0; i < cards.length; i++) {
         signal?.throwIfAborted();
         const card = cards[i];
@@ -132,9 +137,19 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
               deps.cache.put(src.id, q, listings);
               raw.get(src.id)!.set(card.oracleId, listings);
               st.searched++;
+              downInARow = 0;
             } catch (e) {
               if (signal?.aborted) throw e;
               const err = e instanceof SourceError ? e : new SourceError('down', (e as Error).message);
+              console.warn(`${src.name}: ${err.status} while searching "${card.name}": ${err.message}`);
+              // A server error on one card is usually that search, not the whole Source: skip the card and carry on.
+              if (err.status === 'down' && ++downInARow < MAX_DOWN_IN_A_ROW) {
+                useStale(src, card, st);
+                st.failedCards = (st.failedCards ?? 0) + 1;
+                position.set(src.id, i + 1);
+                report();
+                continue;
+              }
               st.status = err.status === 'slowed' ? 'blocked' : err.status;
               st.message = MESSAGES[err.status](src.name);
               if (st.status === 'blocked') {
@@ -167,7 +182,9 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
         if (seen.has(s.id)) continue;
         seen.add(s.id);
         const m = matchListing(deps.catalogue, s);
-        if (m.confidence === 'unmatched') unidentified++;
+        if (m.confidence === 'unmatched') {
+          if (!NOT_A_CARD.test(s.title)) unidentified++;
+        }
         else listings.push(m);
         if (m.oracleId === oracleId) found.add(oracleId);
       }

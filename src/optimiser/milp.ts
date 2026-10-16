@@ -9,8 +9,16 @@ const getHighs = () => (highsPromise ??= highsLoader());
 
 const num = (n: number) => (Math.round(n * 1e6) / 1e6).toString();
 
+/**
+ * What a model optimises:
+ * - full: buy every line, cheapest Landed Cost;
+ * - cover: buy as many copies as possible (Short Plans, step 1);
+ * - cost: buy at least `minCovered` copies, cheapest Landed Cost (Short Plans, step 2).
+ */
+export type ModelMode = { kind: 'full' } | { kind: 'cover' } | { kind: 'cost'; minCovered: number };
+
 /** CPLEX LP text for the Landed Cost model with a Store-count row named "rung". */
-export function buildLp(p: Problem): string {
+export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }): string {
   const obj: string[] = [];
   const rows: string[] = [];
   const bounds: string[] = [];
@@ -18,8 +26,9 @@ export function buildLp(p: Problem): string {
   const binaries: string[] = [];
   const usedStores = [...new Set(p.offers.map(o => o.store))];
 
+  const costs = mode.kind !== 'cover';
   p.offers.forEach((o, i) => {
-    obj.push(`${num(o.price)} x${i}`);
+    obj.push(costs ? `${num(o.price)} x${i}` : `- x${i}`);
     const ub = Math.min(o.qty, p.lines[o.line].need);
     if (ub === 1) binaries.push(`x${i}`);
     else {
@@ -30,13 +39,14 @@ export function buildLp(p: Problem): string {
   });
   p.lines.forEach((l, line) => {
     const terms = p.offers.map((o, i) => (o.line === line ? `x${i}` : null)).filter(Boolean);
-    rows.push(` need${line}: ${terms.join(' + ')} = ${l.need}`);
+    rows.push(` need${line}: ${terms.join(' + ')} ${mode.kind === 'full' ? '=' : '<='} ${l.need}`);
   });
+  if (mode.kind === 'cost') rows.push(` covered: ${p.offers.map((_, i) => `x${i}`).join(' + ')} >= ${mode.minCovered}`);
   for (const s of usedStores) {
     const st = p.stores[s];
     binaries.push(`y${s}`);
-    if (st.freeOver === null || st.postage === 0) {
-      if (st.postage > 0) obj.push(`${num(st.postage)} y${s}`);
+    if (!costs || st.freeOver === null || st.postage === 0) {
+      if (costs && st.postage > 0) obj.push(`${num(st.postage)} y${s}`);
       continue;
     }
     // Tier 0 pays postage; tier 1 is free but needs the subtotal to reach the threshold.
@@ -50,7 +60,7 @@ export function buildLp(p: Problem): string {
 
   return [
     'Minimize',
-    ` obj: ${obj.join(' + ') || '0'}`,
+    ` obj: ${obj.join(' + ').replace(/\+ -/g, '-') || '0'}`,
     'Subject To',
     ...rows,
     'Bounds',
@@ -72,19 +82,27 @@ export interface SolveOptions {
   timeLimitS: number;
   /** A starting Plan for this rung (from the heuristic). */
   start?: Plan;
+  /** Short Plan: leave out the fewest copies when k Stores can't supply everything. */
+  partial?: boolean;
 }
 
-/** Solves one rung: the cheapest Plan using at most k Stores. */
-export async function solveRung(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
+interface ModelResult {
+  status: 'optimal' | 'timed-out' | 'no-solution-in-time' | 'infeasible';
+  take: Map<number, number>;
+  objective: number;
+  bound: number;
+}
+
+async function runModel(p: Problem, mode: ModelMode, k: number, timeLimitS: number, start?: Plan): Promise<ModelResult> {
   const highs = await getHighs();
-  const model = highs.createModel({ format: 'lp', data: buildLp(p) });
+  const model = highs.createModel({ format: 'lp', data: buildLp(p, mode) });
   try {
-    model.options.set({ output_flag: false, time_limit: opts.timeLimitS, mip_rel_gap: 0.005, presolve: 'on' });
+    model.options.set({ output_flag: false, time_limit: timeLimitS, mip_rel_gap: mode.kind === 'cover' ? 0 : 0.005, presolve: 'on' });
     model.changeRowBounds(model.getRowByName('rung'), -Infinity, k);
-    if (opts.start) {
+    if (start) {
       const n = model.getDimensions().numCols;
       const values = new Array<number>(n).fill(0);
-      for (const [i, q] of opts.start.take) values[model.getColByName(`x${i}`)] = q;
+      for (const [i, q] of start.take) values[model.getColByName(`x${i}`)] = q;
       try {
         model.setSolution({ colValue: values });
       } catch {
@@ -94,22 +112,44 @@ export async function solveRung(p: Problem, k: number, opts: SolveOptions): Prom
     model.run();
     const status = model.getModelStatus();
     const C = highs.constants.modelStatus;
-    if (status === C.infeasible) return { kind: 'infeasible' };
+    const empty = { take: new Map<number, number>(), objective: 0, bound: 0 };
+    if (status === C.infeasible) return { status: 'infeasible', ...empty };
+    if (model.info.get('primal_solution_status') !== 2) return { status: status === C.timeLimit ? 'no-solution-in-time' : 'infeasible', ...empty };
     const sol = model.getSolution();
-    const hasSolution = model.info.get('primal_solution_status') === 2;
-    if (!hasSolution) return status === C.timeLimit ? { kind: 'no-plan-in-time' } : { kind: 'infeasible' };
     const take = new Map<number, number>();
     p.offers.forEach((_, i) => {
       const v = Math.round(sol.colValue[model.getColByName(`x${i}`)]);
       if (v > 0) take.set(i, v);
     });
-    const plan = planFrom(p, take);
-    if (status === C.optimal) return { kind: 'optimal', plan };
     const bound = Number(model.info.get('mip_dual_bound'));
-    return { kind: 'timed-out', plan, bound: Number.isFinite(bound) ? round2(bound) : 0 };
+    return { status: status === C.optimal ? 'optimal' : 'timed-out', take, objective: model.getObjectiveValue(), bound: Number.isFinite(bound) ? bound : 0 };
   } finally {
     model.dispose();
   }
+}
+
+/** Solves one rung: the cheapest Plan using at most k Stores (or, for a Short Plan, covering the most it can). */
+export async function solveRung(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
+  if (opts.partial) return solveShort(p, k, opts);
+  const r = await runModel(p, { kind: 'full' }, k, opts.timeLimitS, opts.start);
+  if (r.status === 'infeasible') return { kind: 'infeasible' };
+  if (r.status === 'no-solution-in-time') return { kind: 'no-plan-in-time' };
+  const plan = planFrom(p, r.take);
+  return r.status === 'optimal' ? { kind: 'optimal', plan } : { kind: 'timed-out', plan, bound: round2(r.bound) };
+}
+
+/** Short Plan: first the most copies k Stores can supply, then the cheapest way to buy that many. */
+async function solveShort(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
+  const half = opts.timeLimitS / 2;
+  const cover = await runModel(p, { kind: 'cover' }, k, half, opts.start);
+  if (cover.status === 'infeasible' || cover.status === 'no-solution-in-time') return { kind: 'no-plan-in-time' };
+  const most = Math.round(-cover.objective);
+  if (most <= 0) return { kind: 'infeasible' };
+  const cost = await runModel(p, { kind: 'cost', minCovered: most }, k, half, planFrom(p, cover.take));
+  const take = cost.status === 'optimal' || cost.status === 'timed-out' ? cost.take : cover.take;
+  const plan = planFrom(p, take);
+  if (cover.status === 'optimal' && cost.status === 'optimal') return { kind: 'optimal', plan };
+  return { kind: 'timed-out', plan, bound: cost.status === 'timed-out' ? round2(cost.bound) : plan.total };
 }
 
 /** The fewest Stores that can supply every line (cover MILP over Store binaries only), or null if none can. */

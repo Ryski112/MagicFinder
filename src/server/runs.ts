@@ -145,9 +145,14 @@ export class Run {
     if (!prepared || !knowledge || !this.search) return;
     const planId = this.planId;
     const ctx = this.ctx();
-    const outcome = await this.deps.solve(prepared.problem, k, { timeLimitS: ctx.settings.rungTimeLimitS * 6, start: knowledge.bestAtMost(k) ?? undefined });
+    const short = knowledge.kmin !== null && k < knowledge.kmin;
+    const timeLimitS = ctx.settings.rungTimeLimitS * 6;
+    const outcome = short
+      ? await this.deps.solve(prepared.problem, k, { timeLimitS, partial: true, start: knowledge.short.get(k)?.plan })
+      : await this.deps.solve(prepared.problem, k, { timeLimitS, start: knowledge.bestAtMost(k) ?? undefined });
     if (planId !== this.planId) return;
-    knowledge.record(k, outcome);
+    if (short) knowledge.recordShort(k, outcome);
+    else knowledge.record(k, outcome);
     this.emit({ type: 'ladder', ladder: ladderView(prepared, knowledge.state(true), ctx, { planId, want: this.want, search: this.search, choices: this.choices }) });
   }
 

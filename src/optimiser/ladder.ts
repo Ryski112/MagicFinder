@@ -1,9 +1,13 @@
 // Builds the Trade-off Ladder: a draft from the heuristic straight away, then exact rungs as they finish.
 // Rung k is the cheapest Plan using exactly k Stores; rungs run from the fewest covering Stores up to the cheapest
-// Plan overall, and a rung that saves nothing over the one below it is hidden.
-import { heuristicLadder } from './heuristic';
+// Plan overall, and a rung that saves nothing over the one below it is hidden. Below that, Short Plans for 1-3
+// Stores leave out the fewest cards when the whole list can't fit in that many Stores.
+import { heuristicLadder, shortPlanDraft } from './heuristic';
 import { minimumStores, type RungOutcome, type SolveOptions } from './milp';
-import { round2, type Plan, type Problem } from './problem';
+import { copiesIn, copiesWanted, round2, type Plan, type Problem } from './problem';
+
+/** Short Plans are offered for Store counts up to this. */
+export const SHORT_PLAN_MAX_STORES = 3;
 
 export type RungStatus = 'refining' | 'optimal' | 'timed-out' | 'no-plan-in-time';
 
@@ -16,6 +20,8 @@ export interface Rung {
   /** Saving against the rung below, or null for the first rung. */
   saves: number | null;
   cheapestOverall: boolean;
+  /** Set on Short Plans: copies bought out of copies wanted. */
+  short?: { covered: number; wanted: number };
 }
 
 export interface LadderState {
@@ -31,7 +37,40 @@ export type RungSolver = (p: Problem, k: number, opts: SolveOptions) => Promise<
 export class LadderKnowledge {
   readonly byCount = new Map<number, Plan>();
   readonly solved = new Map<number, RungOutcome>();
+  readonly short = new Map<number, { plan: Plan; outcome?: RungOutcome }>();
   kmin: number | null = null;
+  wanted = 0;
+
+  /** Keeps the better Short Plan for k Stores: more copies, then cheaper. */
+  offerShort(k: number, plan: Plan | null, outcome?: RungOutcome) {
+    const cur = this.short.get(k);
+    const better = plan && (!cur || copiesIn(plan) > copiesIn(cur.plan) || (copiesIn(plan) === copiesIn(cur.plan) && plan.total < cur.plan.total - 1e-9));
+    if (better) this.short.set(k, { plan, outcome });
+    else if (cur && outcome) cur.outcome = outcome;
+  }
+
+  recordShort(k: number, outcome: RungOutcome) {
+    if (outcome.kind === 'optimal' || outcome.kind === 'timed-out') this.offerShort(k, outcome.plan, outcome);
+    else {
+      const cur = this.short.get(k);
+      if (cur) cur.outcome = outcome;
+    }
+  }
+
+  private shortRungs(final: boolean): Rung[] {
+    if (this.kmin === null) return [];
+    const out: Rung[] = [];
+    for (let k = 1; k < Math.min(this.kmin, SHORT_PLAN_MAX_STORES + 1); k++) {
+      const s = this.short.get(k);
+      if (!s) continue;
+      const o = s.outcome;
+      const status: RungStatus = o?.kind === 'optimal' ? 'optimal' : o?.kind === 'timed-out' || final ? 'timed-out' : 'refining';
+      const rung: Rung = { k, plan: s.plan, status, saves: null, cheapestOverall: false, short: { covered: copiesIn(s.plan), wanted: this.wanted } };
+      if (o?.kind === 'timed-out') rung.mightSave = round2(Math.max(0, s.plan.total - o.bound));
+      out.push(rung);
+    }
+    return out;
+  }
 
   offer(plan: Plan) {
     const k = plan.stores.length;
@@ -95,7 +134,7 @@ export class LadderKnowledge {
     }
     const top = [...rungs].reverse().find(r => r.plan);
     if (top) top.cheapestOverall = true;
-    return { rungs, kmin: this.kmin, final };
+    return { rungs: [...this.shortRungs(final), ...rungs], kmin: this.kmin, final };
   }
 }
 
@@ -113,6 +152,7 @@ export interface LadderOptions {
 
 export async function buildLadder(p: Problem, opts: LadderOptions): Promise<LadderState> {
   const know = opts.knowledge ?? new LadderKnowledge();
+  know.wanted = copiesWanted(p);
   const emit = (final = false) => {
     const s = know.state(final);
     opts.onUpdate(s);
@@ -125,6 +165,11 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
 
   know.kmin = await minimumStores(p);
   if (know.kmin === null) return emit(true);
+  const shortCounts: number[] = [];
+  for (let k = 1; k < Math.min(know.kmin, SHORT_PLAN_MAX_STORES + 1); k++) {
+    shortCounts.push(k);
+    know.offerShort(k, shortPlanDraft(p, k));
+  }
   emit();
   opts.signal?.throwIfAborted();
 
@@ -135,16 +180,19 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
   emit();
   const top = know.state(false).rungs.at(-1)?.k ?? know.kmin;
 
-  const todo: number[] = [];
-  for (let k = top - 1; k >= know.kmin; k--) todo.push(k);
+  const todo: { k: number; short: boolean }[] = [];
+  for (let k = top - 1; k >= know.kmin; k--) todo.push({ k, short: false });
+  for (const k of shortCounts) todo.push({ k, short: true });
   const parallel = Math.max(1, opts.parallel ?? 2);
   await Promise.all(
     Array.from({ length: Math.min(parallel, todo.length) }, async () => {
-      for (let k = todo.shift(); k !== undefined; k = todo.shift()) {
+      for (let job = todo.shift(); job !== undefined; job = todo.shift()) {
         opts.signal?.throwIfAborted();
-        // A finished rung may already prove this one can't beat a Plan with fewer Stores.
-        const outcome = await opts.solve(p, k, { timeLimitS, start: know.bestAtMost(k) ?? undefined });
-        know.record(k, outcome);
+        if (job.short) {
+          know.recordShort(job.k, await opts.solve(p, job.k, { timeLimitS, partial: true, start: know.short.get(job.k)?.plan }));
+        } else {
+          know.record(job.k, await opts.solve(p, job.k, { timeLimitS, start: know.bestAtMost(job.k) ?? undefined }));
+        }
         emit();
       }
     }),

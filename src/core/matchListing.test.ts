@@ -29,6 +29,7 @@ describe('nameCandidates', () => {
     expect(nameCandidates('Lightning Bolt (Showcase) (Foil) (SP)')).toEqual(['Lightning Bolt']);
     expect(nameCandidates('Wild Rose Rebellion - Counterspell (Showcase)')).toEqual(['Wild Rose Rebellion - Counterspell', 'Wild Rose Rebellion', 'Counterspell']);
     expect(nameCandidates('Delver of Secrets // Insectile Aberration [ISD]')[0]).toBe('Delver of Secrets // Insectile Aberration');
+    expect(nameCandidates('Counterspell (Borderless) |  Foil (009)')).toEqual(['Counterspell']);
   });
 });
 

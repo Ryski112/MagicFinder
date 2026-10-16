@@ -68,7 +68,7 @@ function openBrowser(url: string) {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
-const port = dev ? 5180 : await freePort(5180);
+const port = Number(process.env.MAGICFINDER_PORT) || (dev ? 5180 : await freePort(5180));
 serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
   const url = `http://localhost:${port}`;
   console.log(`MagicFinder ${version} is running at ${url}${dev ? ' (API only; open the Vite dev server)' : ''}`);

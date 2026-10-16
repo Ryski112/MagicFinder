@@ -305,7 +305,7 @@ All settings live in the user's settings file and are editable in the Settings d
 
 ## 12. Defaults chosen while writing this spec
 
-These details weren't explicitly settled on a ticket. They follow from the decisions above and can be changed cheaply.
+These details weren't settled on a ticket. They follow from the decisions above, and the owner confirmed them on 2026-10-17.
 
 - **Rural delivery**: a "Rural address" setting (default off) adds each Store's rural surcharge.
 - **Region pricing**: Stores that price by Auckland / North Island / South Island use the region of the buyer's pickup city.

@@ -10,11 +10,12 @@
   },
   "scripts": {
     "start": "vite build && tsx --disable-warning=ExperimentalWarning src/server/main.ts",
-    "dev": "tsx watch --disable-warning=ExperimentalWarning src/server/main.ts --dev",
+    "dev": "tsx scripts/dev.ts",
     "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check-stores": "tsx scripts/check-stores.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

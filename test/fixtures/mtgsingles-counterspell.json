@@ -1,0 +1,619 @@
+[
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Tempest",
+  "title": "Counterspell (MP)",
+  "condition": "MP",
+  "price": "$3.70",
+  "url": "https://hobbymaster.co.nz/cards/card/753829?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/d/a/dacdd380-71cf-4832-bd02-3697501325f3.jpg?1562056885",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/MagicAtWillis",
+  "tcgType": "MTG",
+  "setName": "Dominaria Remastered",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$5.70",
+  "url": "https://magicatwillis.co.nz/products/counterspell-dominaria-remastered?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/2595/1288/files/84828fff-7730-5331-97e4-6912992c0b7c_370x480.png",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": []
+ },
+ {
+  "store": "NZ/MagicAtWillis",
+  "tcgType": "MTG",
+  "setName": "Revised Edition",
+  "title": "Counterspell",
+  "condition": "SP / LP",
+  "price": "$7.90",
+  "url": "https://magicatwillis.co.nz/products/mtg-counterspellrevised-edition?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/2595/1288/files/1d165e55-5779-5993-90a3-aac671a8c853_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "Dominaria Remastered",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$8.00",
+  "url": "https://goblingames.nz/products/counterspell-dominaria-remastered?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/files/02da8709-4228-4fed-9d2d-781e686661df_d16300f8-6000-41bf-a40c-7fd3d6093961_370x480.png",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "Dominaria Remastered",
+  "title": "Counterspell (Retro) (Release)",
+  "condition": "NM / SP",
+  "price": "$13.50",
+  "url": "https://goblingames.nz/products/counterspell-retro-release-dominaria-remastered?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/files/1b73577a-8ca1-41d7-9b2b-7300286fde43_370x480.png",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil",
+   "Retro"
+  ]
+ },
+ {
+  "store": "NZ/GameRoost",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe Eternal-Legal",
+  "title": "Counterspell (Borderless) (0052) (MAR-052)",
+  "condition": "NM / SP",
+  "price": "$15.00",
+  "url": "https://www.gameroost.co.nz/products/counterspell-borderless-0052-mar-052-marvel-universe-eternal-legal?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0720/4303/6889/files/696413_419b4af5-6ec0-4159-be72-dc351af0e5da_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Strixhaven: Mystical Archive",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$15.00",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-strixhaven-mystical-archive?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/1010bcb3-820c-583f-9269-31fe12474eaf_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe Eternal-Legal",
+  "title": "Counterspell (Borderless) (0052)",
+  "condition": "NM / SP",
+  "price": "$15.70",
+  "url": "https://hobbymaster.co.nz/cards/card/1672795?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/3/7/379f4020-a58c-484d-9b44-72b200884079.jpg?1780412637",
+  "searchUrl": null,
+  "availableQty": 5,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/CardMerchantSilverdale",
+  "tcgType": "MTG",
+  "setName": "Strixhaven: Mystical Archive",
+  "title": "Counterspell (Foil Etched)",
+  "condition": "NM / SP",
+  "price": "$17.20",
+  "url": "https://cardmerchantsilverdale.co.nz/collections/magic-singles-in-stock/products/counterspell-foil-etched-strixhaven-mystical-archive?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0677/1192/6495/files/1010bcb3-820c-583f-9269-31fe12474eaf_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": null,
+  "features": [
+   "Foil-Etched"
+  ]
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe: Eternal-Legal",
+  "title": "Counterspell (Borderless) (0052)",
+  "condition": "NM / SP",
+  "price": "$18.00",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-borderless-0052-marvel-universe-eternal-legal?variant=47739377418403&utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/b5ac0efb-0952-5167-8916-419356c95a96_370x480.png",
+  "searchUrl": null,
+  "availableQty": 9,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe Eternal-Legal",
+  "title": "Counterspell (Borderless)",
+  "condition": "NM / SP",
+  "price": "$20.00",
+  "url": "https://hobbymaster.co.nz/cards/card/1598133?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/6/1/610a7782-ffe4-4b1c-bcc2-b3d89357e3da.jpg?1783905389",
+  "searchUrl": null,
+  "availableQty": 4,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/CardMasters",
+  "tcgType": "MTG",
+  "setName": "",
+  "title": "Counterspell (Borderless) (9) (MAR)",
+  "condition": "NM / SP",
+  "price": "$20.35",
+  "url": "https://cardmasters.co.nz/collections/magic-singles/products/counterspell-borderless-9-mar?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0507/8083/1907/files/651853_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": null,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Secret Lair Drop Series",
+  "title": "Counterspell (331)",
+  "condition": "NM / SP",
+  "price": "$23.20",
+  "url": "https://hobbymaster.co.nz/cards/card/1136266?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/f/3/f35ec9da-f38b-4b7f-9eb5-090ca7755668.jpg?1783924582",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "30th Anniversary Edition",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$23.50",
+  "url": "https://goblingames.nz/products/counterspell-30th-anniversary-edition?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/products/1d8bdad9dc6dcee0247ac0edc2bb2798_d3d9997a-f90a-409d-9466-cda193bf98a0_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Secret Lair Drop Series",
+  "title": "Counterspell (331) (Foil)",
+  "condition": "NM / SP",
+  "price": "$24.60",
+  "url": "https://hobbymaster.co.nz/cards/card/1136269?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/f/3/f35ec9da-f38b-4b7f-9eb5-090ca7755668.jpg?1783924582",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe: Eternal-Legal",
+  "title": "Counterspell (Borderless)",
+  "condition": "NM / SP",
+  "price": "$26.00",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-borderless-marvels-spider-man-eternal-legal?variant=46203100790947&utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/651853_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 12,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/ValkyrieGames",
+  "tcgType": "MTG",
+  "setName": "",
+  "title": "Counterspell (MH2, Foil Borderless)",
+  "condition": "N/A",
+  "price": "$29.00",
+  "url": "https://valkyriegames.co.nz/collections/mtg-singles/products/counterspell-mh2-foil-borderless?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0272/6572/8576/files/rn-image_picker_lib_temp_a9f8b39a-e48d-4e34-8ea3-8e26a72b81e1_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": null,
+  "features": [
+   "Foil",
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe Eternal-Legal",
+  "title": "Counterspell (Borderless) (Foil)",
+  "condition": "NM / SP",
+  "price": "$33.40",
+  "url": "https://hobbymaster.co.nz/cards/card/1598136?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/6/1/610a7782-ffe4-4b1c-bcc2-b3d89357e3da.jpg?1783905389",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": [
+   "Foil",
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "FNM Promos",
+  "title": "Counterspell (Foil) (MP)",
+  "condition": "MP",
+  "price": "$34.90",
+  "url": "https://hobbymaster.co.nz/cards/card/440870?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/3/9/394d65a0-0792-43d5-ab09-354cf8984428.jpg?1562639750",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "Marvel Eternal-Legal",
+  "title": "Counterspell (Borderless) |  Foil (009)",
+  "condition": "NM / SP",
+  "price": "$36.50",
+  "url": "https://goblingames.nz/products/counterspell-borderless-foil-009-marvel-eternal-legal?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/files/651853_b8966f70-dafb-4b8f-8007-a2e41bdc1abe_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/Otakumart",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe: Eternal-Legal",
+  "title": "Counterspell (Borderless) (0052)",
+  "condition": "NM / SP",
+  "price": "$37.00",
+  "url": "https://otakumart.co.nz/products/counterspell-borderless-0052-marvel-universe-eternal-legal?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0558/2114/0029/files/b5ac0efb-0952-5167-8916-419356c95a96_370x480.png",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil",
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe: Eternal-Legal",
+  "title": "Counterspell (Borderless)",
+  "condition": "NM / SP",
+  "price": "$39.00",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-borderless-marvels-spider-man-eternal-legal?variant=46203100954787&utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/651853_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 6,
+  "features": [
+   "Foil",
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/ValkyrieGames",
+  "tcgType": "MTG",
+  "setName": "",
+  "title": "Counterspell (foil)",
+  "condition": "N/A",
+  "price": "$39.00",
+  "url": "https://valkyriegames.co.nz/collections/mtg-singles/products/counterspell-foil?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0272/6572/8576/files/rn-image_picker_lib_temp_00cbab4f-4036-44f4-87ec-593a0982c6b3_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": null,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "FNM Promos",
+  "title": "Counterspell (Foil) (SP)",
+  "condition": "SP / LP",
+  "price": "$42.40",
+  "url": "https://hobbymaster.co.nz/cards/card/440869?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/3/9/394d65a0-0792-43d5-ab09-354cf8984428.jpg?1562639750",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Marvel Universe: Eternal-Legal",
+  "title": "Counterspell (Borderless) (0052)",
+  "condition": "NM / SP",
+  "price": "$44.50",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-borderless-0052-marvel-universe-eternal-legal?variant=47739377582243&utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/b5ac0efb-0952-5167-8916-419356c95a96_370x480.png",
+  "searchUrl": null,
+  "availableQty": 4,
+  "features": [
+   "Foil",
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Strixhaven: Mystical Archive",
+  "title": "Counterspell (JP Alternate Art)",
+  "condition": "NM / SP",
+  "price": "$47.90",
+  "url": "https://hobbymaster.co.nz/cards/card/1035427?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/8/1/8118282a-1473-4c0b-a283-1f58e0d0209a.jpg?1638111985",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Alternate Art",
+   "Non-English"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "FNM Promos",
+  "title": "Counterspell (Foil)",
+  "condition": "NM / SP",
+  "price": "$49.90",
+  "url": "https://hobbymaster.co.nz/cards/card/440868?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/3/9/394d65a0-0792-43d5-ab09-354cf8984428.jpg?1562639750",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Secret Lair Drop Series",
+  "title": "Counterspell (1933)",
+  "condition": "NM / SP",
+  "price": "$53.00",
+  "url": "https://hobbymaster.co.nz/cards/card/1570213?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/0/5/053f724c-c88d-44c0-9902-6400c064640b.jpg?1741641585",
+  "searchUrl": null,
+  "availableQty": 7,
+  "features": []
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Strixhaven: Mystical Archive",
+  "title": "Counterspell (Japanese Foil Etched)",
+  "condition": "NM / SP",
+  "price": "$53.00",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-japanese-etched-foil-strixhaven-mystical-archive?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/45185050-645a-54db-8395-7da73304a8f9_732b280e-f492-4ab6-9911-3f71ecde5ff5_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil-Etched",
+   "Non-English"
+  ]
+ },
+ {
+  "store": "NZ/IronKnightGaming",
+  "tcgType": "MTG",
+  "setName": "FNM Promos",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$65.49",
+  "url": "https://ironknightgaming.co.nz/products/counterspell-fnm-promos-38083?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0400/5003/2799/files/38083_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Arena Promos",
+  "title": "Counterspell (MP)",
+  "condition": "MP",
+  "price": "$73.60",
+  "url": "https://hobbymaster.co.nz/cards/card/443315?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/7/0/7065deea-6117-47d4-9d72-fc67af5bb483.jpg?1561757383",
+  "searchUrl": null,
+  "availableQty": 2,
+  "features": []
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "",
+  "title": "Counterspell (STA-078) - Strixhaven Mystical Archive (Borderless) Etched Foil",
+  "condition": "NM / SP",
+  "price": "$83.50",
+  "url": "https://goblingames.nz/products/counterspell-sta-078-strixhaven-mystical-archive-borderless-etched-foil?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/files/8118282a-1473-4c0b-a283-1f58e0d0209a_370x480.png",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Borderless"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Arena Promos",
+  "title": "Counterspell (SP)",
+  "condition": "SP / LP",
+  "price": "$89.40",
+  "url": "https://hobbymaster.co.nz/cards/card/443314?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/7/0/7065deea-6117-47d4-9d72-fc67af5bb483.jpg?1561757383",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/ShuffleAndCut",
+  "tcgType": "MTG",
+  "setName": "Strixhaven: Mystical Archive",
+  "title": "Counterspell (Japanese)",
+  "condition": "NM / SP",
+  "price": "$94.50",
+  "url": "https://www.shuffleandcutgames.co.nz/products/counterspell-japanese-strixhaven-mystical-archive?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0552/9023/2995/files/45185050-645a-54db-8395-7da73304a8f9_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil",
+   "Non-English"
+  ]
+ },
+ {
+  "store": "NZ/IronKnightGaming",
+  "tcgType": "MTG",
+  "setName": "Arena Promos",
+  "title": "Counterspell",
+  "condition": "SP / LP",
+  "price": "$115.99",
+  "url": "https://ironknightgaming.co.nz/products/counterspell-arena-promos-48138?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0400/5003/2799/files/48138_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/GoblinGames",
+  "tcgType": "MTG",
+  "setName": "DCI Legend Membership",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$116.00",
+  "url": "https://goblingames.nz/products/counterspell-dci-legend-membership?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0068/7190/8425/files/7065deea-6117-47d4-9d72-fc67af5bb483_370x480.png",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": []
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Judge Promos",
+  "title": "Counterspell (Foil) (SP)",
+  "condition": "SP / LP",
+  "price": "$129.30",
+  "url": "https://hobbymaster.co.nz/cards/card/441787?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/7/7/7700d907-e212-4893-8c65-02c8906a803c.jpg?1761043476",
+  "searchUrl": null,
+  "availableQty": 3,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Judge Promos",
+  "title": "Counterspell (Foil)",
+  "condition": "NM / SP",
+  "price": "$152.20",
+  "url": "https://hobbymaster.co.nz/cards/card/441786?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/7/7/7700d907-e212-4893-8c65-02c8906a803c.jpg?1761043476",
+  "searchUrl": null,
+  "availableQty": 3,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/IronKnightGaming",
+  "tcgType": "MTG",
+  "setName": "Judge Promos",
+  "title": "Counterspell",
+  "condition": "NM / SP",
+  "price": "$173.99",
+  "url": "https://ironknightgaming.co.nz/products/counterspell-judge-promos-21702?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0400/5003/2799/files/21702_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 3,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/HobbyMaster",
+  "tcgType": "MTG",
+  "setName": "Mercadian Masques",
+  "title": "Counterspell (Foil)",
+  "condition": "NM / SP",
+  "price": "$229.40",
+  "url": "https://hobbymaster.co.nz/cards/card/737267?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cards.scryfall.io/normal/front/7/b/7bd03c80-7812-4704-9e07-9cf73b49c01f.jpg?1562381815",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil"
+  ]
+ },
+ {
+  "store": "NZ/BayDragon",
+  "tcgType": "MTG",
+  "setName": "FINAL FANTASY: Through the Ages",
+  "title": "Wild Rose Rebellion - Counterspell (Showcase) (foil)",
+  "condition": "NM / SP",
+  "price": "$10.21",
+  "url": "https://baydragon.co.nz/category/01/brand/01/single/01010100627/144101?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.baydragon.co.nz/resources/images/stock/01/single/144101_large.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil",
+   "Showcase"
+  ]
+ },
+ {
+  "store": "NZ/IronKnightGaming",
+  "tcgType": "MTG",
+  "setName": "FINAL FANTASY: Through the Ages",
+  "title": "Wild Rose Rebellion - Counterspell (Showcase)",
+  "condition": "NM / SP",
+  "price": "$12.49",
+  "url": "https://ironknightgaming.co.nz/products/wild-rose-rebellion-counterspell-showcase-final-fantasy-through-the-ages-633126?utm_source=mtgsingles&utm_medium=referral&utm_content=card_details",
+  "imageUrl": "https://cdn.shopify.com/s/files/1/0400/5003/2799/files/633126_370x480.jpg",
+  "searchUrl": null,
+  "availableQty": 1,
+  "features": [
+   "Foil",
+   "Showcase"
+  ]
+ }
+]

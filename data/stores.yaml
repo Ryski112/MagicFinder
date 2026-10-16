@@ -1,0 +1,504 @@
+# MagicFinder Store table: one entry per Store (the seller who is paid and ships the parcel).
+#
+# Hand-maintained. Seeded 2026-10-16/17 from each Store's shipping policy page and Shopify /meta.json
+# (see the store-postage and store-cart-prefill research branches). Fetch TCG sellers are not listed
+# here: MagicFinder builds their entries from the Listings (city, pickup) and uses the default postage.
+#
+# Fields
+#   id            stable slug
+#   name          shown in the app
+#   source_keys   how Listings from each Source map to this Store (mtgsingles: "NZ/<Key>", fetch: seller id)
+#   site          the Store's own website (used for cart links and the monthly change check)
+#   location      city, and region: auckland | north_island | south_island (drives region prices and pickup)
+#   pickup        available: true | false | null (unknown); fee in NZD
+#   postage       list of delivery options. price is either a number or {auckland, north_island, south_island}.
+#                 tracked: true | false | null (not stated). rural_surcharge is added for rural addresses.
+#                 Leave postage out when the Store doesn't publish rates: the default ($7 tracked, +$5 rural) applies
+#                 and the app marks it "est.".
+#   free_postage  threshold (number or per-region map), applies_to: all | singles_only
+#   cart          shopify | open-listings | hobbymaster-deckbuilder   (how "Add all to cart" works)
+#   provenance    where the figures came from, when, and how sure: published | inferred | default
+
+- id: badgers-sett
+  name: Badgers Sett
+  source_keys: { mtgsingles: NZ/BadgersSett }
+  site: https://badgerssettnz.com
+  location: { city: Whanganui, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://badgerssettnz.com/meta.json, checked_on: 2026-10-16, confidence: default }
+
+- id: bay-dragon
+  name: Bay Dragon
+  source_keys: { mtgsingles: NZ/BayDragon }
+  site: https://baydragon.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  cart: open-listings
+  provenance: { url: https://baydragon.co.nz/, checked_on: 2026-10-16, confidence: default }
+
+- id: beadnd-games
+  name: BeaDnD Games
+  source_keys: { mtgsingles: NZ/BeaDnd }
+  site: https://beadndgames.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: bulbastore
+  name: Bulbastore
+  source_keys: { mtgsingles: NZ/Bulbastore }
+  site: https://bulbastore.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: calico-keep
+  name: Calico Keep
+  source_keys: { mtgsingles: NZ/CalicoKeep }
+  site: https://calicokeep.co.nz
+  location: { city: Paraparaumu, region: north_island }
+  pickup: { available: true, fee: 0 }
+  postage:
+    - { name: Trading card singles (overnight), tracked: null, price: 5.00 }
+  cart: shopify
+  provenance: { url: https://calicokeep.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: card-bard
+  name: Card Bard
+  source_keys: { mtgsingles: NZ/CardBard }
+  site: https://cardbard.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: card-baron
+  name: Card Baron
+  source_keys: { mtgsingles: NZ/CardBaron }
+  site: https://cardbaron.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify # storefront was password-protected on 2026-10-17; the pre-check falls back to Open Listings
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: card-masters
+  name: Card Masters
+  source_keys: { mtgsingles: NZ/CardMasters }
+  site: https://cardmasters.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant
+  name: Card Merchant (WestCity)
+  source_keys: { mtgsingles: NZ/CardMerchant }
+  site: https://cardmerchant.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  postage:
+    - { name: Standard post, tracked: null, price: 5.00, rural_surcharge: 5.00 }
+  cart: shopify
+  provenance: { url: https://cardmerchant.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: card-merchant-takapuna
+  name: Card Merchant Takapuna
+  source_keys: { mtgsingles: NZ/CardMerchantTakapuna }
+  site: https://cardmerchanttakapuna.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  postage:
+    - { name: Standard post, tracked: null, price: 5.00, rural_surcharge: 5.00 }
+  cart: shopify
+  provenance: { url: https://cardmerchanttakapuna.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: card-merchant-ponsonby
+  name: Card Merchant Ponsonby
+  source_keys: { mtgsingles: NZ/CardMerchantPonsonby }
+  site: https://cardmerchantponsonby.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantponsonby.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-silverdale
+  name: Card Merchant Silverdale
+  source_keys: { mtgsingles: NZ/CardMerchantSilverdale }
+  site: https://cardmerchantsilverdale.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-hamilton
+  name: Card Merchant Hamilton
+  source_keys: { mtgsingles: NZ/CardMerchantHamilton }
+  site: https://cardmerchanthamilton.co.nz
+  location: { city: Hamilton, region: north_island }
+  pickup: { available: true, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchanthamilton.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: card-merchant-whangarei
+  name: Card Merchant Whangārei
+  source_keys: { mtgsingles: NZ/CardMerchantWhangarei }
+  site: https://cardmerchantwhangarei.co.nz
+  location: { city: Whangārei, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantwhangarei.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-new-plymouth
+  name: Card Merchant New Plymouth
+  source_keys: { mtgsingles: NZ/CardMerchantNewPlymouth }
+  site: https://cardmerchantnewplymouth.co.nz
+  location: { city: New Plymouth, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantnewplymouth.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-taupo
+  name: Card Merchant Taupō
+  source_keys: { mtgsingles: NZ/CardMerchantTaupo }
+  site: https://cardmerchanttaupo.co.nz
+  location: { city: Taupō, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchanttaupo.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-wellington
+  name: Card Merchant Wellington
+  source_keys: { mtgsingles: NZ/CardMerchantWellington }
+  site: https://cardmerchantwellington.co.nz
+  location: { city: Wellington, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantwellington.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-blenheim
+  name: Card Merchant Blenheim
+  source_keys: { mtgsingles: NZ/CardMerchantBlenheim }
+  site: https://cardmerchantblenheim.co.nz
+  location: { city: Blenheim, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantblenheim.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-nelson
+  name: Card Merchant Nelson
+  source_keys: { mtgsingles: NZ/CardMerchantNelson }
+  site: https://cardmerchantnelson.co.nz
+  location: { city: Nelson, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantnelson.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-christchurch
+  name: Card Merchant Christchurch
+  source_keys: { mtgsingles: NZ/CardMerchantChristchurch }
+  site: https://cardmerchantchristchurch.co.nz
+  location: { city: Christchurch, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantchristchurch.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-merchant-dunedin
+  name: Card Merchant Dunedin
+  source_keys: { mtgsingles: NZ/CardMerchantDunedin }
+  site: https://cardmerchantdunedin.co.nz
+  location: { city: Dunedin, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://cardmerchantdunedin.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+
+- id: card-slayer
+  name: Card Slayer
+  source_keys: { mtgsingles: NZ/CardSlayer }
+  site: https://cardslayer.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify # store was paused (HTTP 402) on 2026-10-17
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: card-spot
+  name: Card Spot
+  source_keys: { mtgsingles: NZ/CardSpot }
+  site: https://cardspot.store
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: collectors-guild
+  name: Collectors Guild
+  source_keys: { mtgsingles: NZ/CollectorsGuild }
+  site: https://collectorsguild.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://collectorsguild.co.nz/, checked_on: 2026-10-16, confidence: default }
+
+- id: game-roost
+  name: Game Roost
+  source_keys: { mtgsingles: NZ/GameRoost }
+  site: https://gameroost.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: true, fee: 0 }
+  postage:
+    - { name: Tracked courier, tracked: true, price: { auckland: 8.00, north_island: 8.00, south_island: 10.00 }, rural_surcharge: 4.00 }
+  cart: shopify
+  provenance: { url: https://gameroost.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: games-lab
+  name: Games Lab
+  source_keys: { mtgsingles: NZ/GamesLab }
+  site: https://gameslab.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: open-listings # Ecwid: no cart URL
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: gaming-dna
+  name: Gaming DNA
+  source_keys: { mtgsingles: NZ/GamingDNA }
+  site: https://gamingdna.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: goblin-games
+  name: Goblin Games
+  source_keys: { mtgsingles: NZ/GoblinGames }
+  site: https://goblingames.nz
+  location: { city: Wellington, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://goblingames.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: hobbixchange
+  name: HobbiXchange
+  source_keys: { mtgsingles: NZ/HobbiXchange }
+  site: https://hobbixchange.co.nz
+  location: { city: Christchurch, region: south_island }
+  pickup: { available: true, fee: 0 }
+  cart: shopify
+  provenance: { url: https://hobbixchange.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: hobby-lords
+  name: Hobby Lords
+  source_keys: { mtgsingles: NZ/HobbyLords }
+  site: https://hobbylords.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: open-listings # behind a Cloudflare challenge; platform unknown
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: hobby-master
+  name: Hobby Master
+  source_keys: { mtgsingles: NZ/HobbyMaster }
+  site: https://hobbymaster.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: true, fee: 2.00 }
+  postage:
+    - { name: Tracked courier, tracked: true, price: 6.00, rural_surcharge: 9.00 }
+  free_postage: { threshold: 100.00, applies_to: singles_only }
+  cart: hobbymaster-deckbuilder
+  provenance: { url: "https://hobbymaster.co.nz/page/Order%20Instructions", checked_on: 2026-10-16, confidence: published }
+
+- id: iron-knight-gaming
+  name: Iron Knight Gaming
+  source_keys: { mtgsingles: NZ/IronKnightGaming }
+  site: https://ironknightgaming.co.nz
+  location: { city: Rangiora, region: south_island }
+  pickup: { available: true, fee: 0 }
+  cart: shopify
+  provenance: { url: https://ironknightgaming.co.nz/pages/faq-frequently-asked-questions, checked_on: 2026-10-16, confidence: default }
+
+- id: kanto-corner
+  name: Kanto Corner
+  source_keys: { mtgsingles: NZ/KantoCorner }
+  site: https://kantocorner.nz
+  location: { city: New Plymouth, region: north_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://kantocorner.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: magic-at-willis
+  name: Magic at Willis
+  source_keys: { mtgsingles: NZ/MagicAtWillis }
+  site: https://magicatwillis.co.nz
+  location: { city: Christchurch, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://magicatwillis.co.nz/pages/terms-conditions, checked_on: 2026-10-16, confidence: default }
+
+- id: magic-red-dragon
+  name: Magic Red Dragon
+  source_keys: { mtgsingles: NZ/MagicRedDragon }
+  site: https://magicreddragon.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: open-listings # Wix: no cart URL
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: meta-life
+  name: Meta Life
+  source_keys: { mtgsingles: NZ/MetaLife }
+  site: https://metalife.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: true, fee: 0 }
+  postage:
+    - { name: CourierPost, tracked: true, price: { auckland: 4.80, north_island: 8.80, south_island: 8.80 }, rural_surcharge: { auckland: 2.00, north_island: 4.00, south_island: 4.00 } }
+  free_postage: { threshold: { auckland: 120.00, north_island: 160.00, south_island: 160.00 }, applies_to: all }
+  cart: shopify
+  provenance: { url: https://metalife.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: mtg-magpie
+  name: MTG Magpie
+  source_keys: { mtgsingles: NZ/MagicMagpie }
+  site: https://mtgmagpie.com
+  location: { city: Christchurch, region: south_island }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://mtgmagpie.com/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: nova-games
+  name: Nova Games
+  source_keys: { mtgsingles: NZ/NovaGames }
+  site: https://novagames.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: true, fee: 0 }
+  postage:
+    - { name: Tracked, tracked: true, price: { auckland: 6.00, north_island: 10.00, south_island: 10.00 } }
+  cart: shopify
+  provenance: { url: https://novagames.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: nz-trading-cards
+  name: NZ Trading Cards
+  source_keys: { mtgsingles: NZ/NZTradingCards }
+  site: https://nztradingcards.com
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: otaku-mart
+  name: Otaku Mart
+  source_keys: { mtgsingles: NZ/Otakumart }
+  site: https://otakumart.co.nz
+  location: { city: Pōkeno, region: north_island }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: Urban courier, tracked: true, price: 7.00, rural_surcharge: 5.00 }
+  free_postage: { threshold: 200.00, applies_to: all }
+  cart: shopify
+  provenance: { url: https://otakumart.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: playx
+  name: PlayX
+  source_keys: { mtgsingles: NZ/PlayX }
+  site: https://playx.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  postage:
+    - { name: Standard, tracked: null, price: { auckland: 6.90, north_island: 9.90, south_island: 12.90 }, rural_surcharge: 5.00 }
+  free_postage: { threshold: 99.00, applies_to: all }
+  cart: shopify
+  provenance: { url: https://playx.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: pop-stop
+  name: Pop Stop
+  source_keys: { mtgsingles: NZ/PopStop }
+  site: https://popstop.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: shuffle-and-cut
+  name: Shuffle and Cut
+  source_keys: { mtgsingles: NZ/ShuffleAndCut }
+  site: https://shuffleandcutgames.co.nz
+  location: { city: Auckland, region: auckland }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://shuffleandcutgames.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: spellbound
+  name: Spellbound
+  source_keys: { mtgsingles: NZ/Spellbound }
+  site: https://spellboundgames.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: tcg-collector-nz
+  name: TCG Collector NZ
+  source_keys: { mtgsingles: NZ/TcgCollectorNZ }
+  site: https://tcgcollectornz.com
+  location: { city: Christchurch, region: south_island }
+  pickup: { available: true, fee: 0 }
+  postage:
+    - { name: Tracked, tracked: true, price: 7.50 }
+  free_postage: { threshold: 250.00, applies_to: all }
+  cart: shopify
+  provenance: { url: https://tcgcollectornz.com/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+
+- id: tcg-culture
+  name: TCG Culture
+  source_keys: { mtgsingles: NZ/TCGCulture }
+  site: https://tcgculture.com
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: the-game-tree
+  name: The Game Tree
+  source_keys: { mtgsingles: NZ/TheGameTree }
+  site: https://thegametree.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: https://thegametree.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+
+- id: three-tree-market
+  name: Three Tree Market
+  source_keys: { mtgsingles: NZ/ThreeTreeMarket }
+  site: https://threetreemarket.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: vagabond
+  name: Vagabond
+  source_keys: { mtgsingles: NZ/Vagabond }
+  site: https://vagabond.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: open-listings # BigCommerce: one product per cart URL
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: valkyrie-games
+  name: Valkyrie Games
+  source_keys: { mtgsingles: NZ/ValkyrieGames }
+  site: https://valkyriegames.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+- id: xp-games
+  name: XP Games
+  source_keys: { mtgsingles: NZ/XpGames }
+  site: https://xpgames.co.nz
+  location: { city: null, region: null }
+  pickup: { available: null, fee: 0 }
+  cart: shopify # storefront was password-protected on 2026-10-17; the pre-check falls back to Open Listings
+  provenance: { url: null, checked_on: 2026-10-17, confidence: default }

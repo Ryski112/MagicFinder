@@ -33,15 +33,19 @@ A Want List line the buyer has pinned to one exact Printing, including its finis
 _Avoid_: preferred printing, chosen version
 
 **Plan**:
-An assignment of every obtainable Want List card to Listings, with its total Landed Cost and Store count.
+An assignment of Want List cards to Listings, with its total Landed Cost and Store count. A Plan buys every obtainable card unless it is a Short Plan.
 _Avoid_: solution, basket, route
+
+**Short Plan**:
+A Plan using 1, 2 or 3 Stores when the whole list needs more Stores than that; it leaves out the fewest cards (the cheapest such Plan when several leave out the same number) and says which.
+_Avoid_: partial plan, incomplete plan
 
 **Landed Cost**:
 The total the buyer pays for a Plan: card prices plus each Store's postage.
 _Avoid_: total price, cost
 
 **Trade-off Ladder**:
-The best Plan for each Store count, from the fewest Stores that can supply every obtainable card up to the Store count of the cheapest Plan overall, presented side by side so the buyer chooses how many Stores a saving is worth. Each rung is the cheapest Plan using exactly that many Stores; a rung that saves nothing over the one below it is not shown.
+The best Plan for each Store count, from the fewest Stores that can supply every obtainable card up to the Store count of the cheapest Plan overall, presented side by side so the buyer chooses how many Stores a saving is worth. Each rung is the cheapest Plan using exactly that many Stores; a rung that saves nothing over the one below it is not shown. Below the fewest covering Stores, Short Plans for 1-3 Stores are shown first.
 _Avoid_: options, results
 
 **Not Found**:

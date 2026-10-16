@@ -1,0 +1,953 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Lives on branch prototype/results-gui only.
+  Question: "What should the MagicFinder results GUI look like?" (wayfinder ticket #9)
+  Three structurally different variants of the whole flow (Want List in → live search → Trade-off Ladder → Plan per Store),
+  switchable via ?variant=A|B|C and the floating bar (or ← / → keys).
+  All data is MOCK (fictional Stores, generated Listings). The optimiser is a brute-force stand-in, not the real HiGHS one.
+  Open by double-clicking this file. Needs an internet connection for React/Tailwind CDNs and Scryfall card images.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MagicFinder prototype</title>
+<script src="https://cdn.tailwindcss.com/3.4.5"></script>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .tabnum { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
+
+/* ============================================================
+   MOCK DATA
+   ============================================================ */
+
+// Fictional NZ Stores. postage in NZD; freeOver = free-postage threshold.
+const STORES = [
+  { id: 'kk', name: 'Kiwi Kards',        city: 'Auckland',     source: 'Fetch TCG',  tracked: 6.5, standard: 3.5, freeOver: 150, color: '#2563eb' },
+  { id: 'wg', name: 'Waitematā Games',   city: 'Auckland',     source: 'Fetch TCG',  tracked: 7.0, standard: 4.0, freeOver: 120, color: '#0891b2' },
+  { id: 'tt', name: 'Tron Tavern',       city: 'Wellington',   source: 'Fetch TCG',  tracked: 7.0, standard: 4.0, freeOver: 200, color: '#7c3aed' },
+  { id: 'mm', name: 'Mana Mill',         city: 'Christchurch', source: 'MtgSingles', tracked: 5.5, standard: 3.0, freeOver: 99,  color: '#db2777' },
+  { id: 'gd', name: 'Goblin Den',        city: 'Auckland',     source: 'MtgSingles', tracked: 8.0, standard: 4.5, freeOver: null, color: '#ea580c' },
+  { id: 'ph', name: 'Pōhutukawa Games',  city: 'Hamilton',     source: 'Fetch TCG',  tracked: 6.0, standard: 3.5, freeOver: 250, color: '#16a34a' },
+  { id: 'sd', name: 'Southern Draws',    city: 'Dunedin',      source: 'MtgSingles', tracked: 7.0, standard: 7.0, freeOver: null, color: '#ca8a04', postageUnknown: true },
+  { id: 'fl', name: 'Fernleaf Cards',    city: 'Tauranga',     source: 'MtgSingles', tracked: 6.0, standard: 3.8, freeOver: 100, color: '#475569' },
+];
+const storeById = Object.fromEntries(STORES.map(s => [s.id, s]));
+
+// Cards with Printings. Each Printing includes its finish. nonTourn = gold-bordered etc (alt only).
+const CARDS = [
+  { id: 'solring', name: 'Sol Ring', base: 4, printings: [
+    { id: 'c21-263', set: 'C21', num: '263', setName: 'Commander 2021', finish: 'nonfoil', mult: 1 },
+    { id: 'ltc-284', set: 'LTC', num: '284', setName: 'Tales of Middle-earth Commander', finish: 'nonfoil', mult: 1.15 },
+    { id: 'cmm-410f', set: 'CMM', num: '410', setName: 'Commander Masters', finish: 'foil', mult: 3.2 },
+  ]},
+  { id: 'signet', name: 'Arcane Signet', base: 2.2, printings: [
+    { id: 'cmm-371', set: 'CMM', num: '371', setName: 'Commander Masters', finish: 'nonfoil', mult: 1 },
+    { id: 'm3c-283', set: 'M3C', num: '283', setName: 'Modern Horizons 3 Commander', finish: 'nonfoil', mult: 1.1 },
+    { id: 'cmm-371f', set: 'CMM', num: '371', setName: 'Commander Masters', finish: 'foil', mult: 2.6 },
+  ]},
+  { id: 'rift', name: 'Cyclonic Rift', base: 38, printings: [
+    { id: 'rtr-35', set: 'RTR', num: '35', setName: 'Return to Ravnica', finish: 'nonfoil', mult: 1 },
+    { id: 'cmm-84', set: 'CMM', num: '84', setName: 'Commander Masters', finish: 'nonfoil', mult: 0.95 },
+    { id: 'rtr-35f', set: 'RTR', num: '35', setName: 'Return to Ravnica', finish: 'foil', mult: 2.3 },
+  ]},
+  { id: 'rhystic', name: 'Rhystic Study', base: 55, printings: [
+    { id: 'pcy-45', set: 'PCY', num: '45', setName: 'Prophecy', finish: 'nonfoil', mult: 1.25 },
+    { id: 'jmp-168', set: 'JMP', num: '168', setName: 'Jumpstart', finish: 'nonfoil', mult: 1 },
+    { id: 'wot-15f', set: 'WOT', num: '15', setName: 'Wilds of Eldraine: Enchanting Tales', finish: 'foil', mult: 2.4, treatment: 'Anime borderless' },
+  ]},
+  { id: 'tithe', name: 'Smothering Tithe', base: 32, printings: [
+    { id: 'rna-22', set: 'RNA', num: '22', setName: 'Ravnica Allegiance', finish: 'nonfoil', mult: 1 },
+    { id: 'wot-22', set: 'WOT', num: '22', setName: 'Wilds of Eldraine: Enchanting Tales', finish: 'nonfoil', mult: 1.3, treatment: 'Showcase' },
+  ]},
+  { id: 'swords', name: 'Swords to Plowshares', base: 3, printings: [
+    { id: 'sta-10', set: 'STA', num: '10', setName: 'Strixhaven Mystical Archive', finish: 'nonfoil', mult: 1.4, treatment: 'Mystical Archive' },
+    { id: 'cmm-55', set: 'CMM', num: '55', setName: 'Commander Masters', finish: 'nonfoil', mult: 1 },
+    { id: 'ltc-212', set: 'LTC', num: '212', setName: 'Tales of Middle-earth Commander', finish: 'nonfoil', mult: 1.05 },
+  ]},
+  { id: 'counter', name: 'Counterspell', base: 1.6, printings: [
+    { id: 'mh2-267', set: 'MH2', num: '267', setName: 'Modern Horizons 2', finish: 'nonfoil', mult: 1 },
+    { id: 'dmr-45', set: 'DMR', num: '45', setName: 'Dominaria Remastered', finish: 'nonfoil', mult: 1.1 },
+    { id: 'mh2-267e', set: 'MH2', num: '267', setName: 'Modern Horizons 2', finish: 'etched', mult: 4 },
+    { id: 'wc97-gold', set: 'WC97', num: 'pm62', setName: 'World Championship Decks 1997', finish: 'nonfoil', mult: 0.6, nonTourn: 'gold-bordered' },
+  ]},
+  { id: 'greaves', name: 'Lightning Greaves', base: 4.5, printings: [
+    { id: 'm3c-298', set: 'M3C', num: '298', setName: 'Modern Horizons 3 Commander', finish: 'nonfoil', mult: 1 },
+    { id: 'c21-246', set: 'C21', num: '246', setName: 'Commander 2021', finish: 'nonfoil', mult: 1.1 },
+  ]},
+  { id: 'tower', name: 'Command Tower', base: 0.8, printings: [
+    { id: 'cmm-1013', set: 'CMM', num: '1013', setName: 'Commander Masters', finish: 'nonfoil', mult: 1 },
+    { id: 'c21-284', set: 'C21', num: '284', setName: 'Commander 2021', finish: 'nonfoil', mult: 1.2 },
+  ]},
+  { id: 'fellwar', name: 'Fellwar Stone', base: 1.5, printings: [
+    { id: 'cmm-388', set: 'CMM', num: '388', setName: 'Commander Masters', finish: 'nonfoil', mult: 1 },
+    { id: 'drk-102', set: 'DRK', num: '102', setName: 'The Dark', finish: 'nonfoil', mult: 3 },
+  ]},
+  { id: 'sentinel', name: 'Esper Sentinel', base: 14, printings: [
+    { id: 'mh2-12', set: 'MH2', num: '12', setName: 'Modern Horizons 2', finish: 'nonfoil', mult: 1 },
+    { id: 'mh2-12e', set: 'MH2', num: '12', setName: 'Modern Horizons 2', finish: 'etched', mult: 2.2 },
+  ]},
+  { id: 'fierce', name: 'Fierce Guardianship', base: 42, printings: [
+    { id: 'c20-35', set: 'C20', num: '35', setName: 'Ikoria Commander', finish: 'nonfoil', mult: 1.1 },
+    { id: 'cmm-90', set: 'CMM', num: '90', setName: 'Commander Masters', finish: 'nonfoil', mult: 1 },
+  ]},
+  { id: 'tutor', name: 'Demonic Tutor', base: 48, printings: [
+    { id: 'uma-93', set: 'UMA', num: '93', setName: 'Ultimate Masters', finish: 'nonfoil', mult: 1 },
+    { id: 'cmm-148', set: 'CMM', num: '148', setName: 'Commander Masters', finish: 'nonfoil', mult: 0.92 },
+  ]},
+  { id: 'monolith', name: 'Grim Monolith', base: 60, notFound: true, printings: [
+    { id: 'ulg-126', set: 'ULG', num: '126', setName: "Urza's Legacy", finish: 'nonfoil', mult: 1 },
+  ]},
+];
+const cardById = Object.fromEntries(CARDS.map(c => [c.id, c]));
+const cardByName = Object.fromEntries(CARDS.map(c => [c.name.toLowerCase(), c]));
+const printingById = {};
+CARDS.forEach(c => c.printings.forEach(p => { printingById[p.id] = { ...p, cardId: c.id }; }));
+const BASICS = ['plains', 'island', 'swamp', 'mountain', 'forest', 'wastes'];
+
+// Deterministic Listing generator
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rand = mulberry32(42);
+const round2 = n => Math.round(n * 100) / 100;
+const LISTINGS = [];
+STORES.forEach(store => CARDS.forEach(card => {
+  if (card.notFound) return;
+  card.printings.forEach(p => {
+    if (rand() < 0.5) {
+      LISTINGS.push({
+        id: 'L' + LISTINGS.length, cardId: card.id, printingId: p.id, storeId: store.id,
+        cond: ['NM', 'NM', 'LP', 'LP', 'LP', 'MP'][Math.floor(rand() * 6)],
+        qty: 1 + Math.floor(rand() * 3),
+        price: round2(card.base * p.mult * (0.65 + rand() * 0.9)),
+        confirmed: card.id === 'tower' ? rand() > 0.4 : true,
+      });
+    }
+  });
+}));
+// guarantee Counterspell has 4+ copies of a default Printing somewhere
+LISTINGS.push({ id: 'Lx1', cardId: 'counter', printingId: 'mh2-267', storeId: 'mm', cond: 'NM', qty: 4, price: 1.95, confirmed: true });
+LISTINGS.push({ id: 'Lx2', cardId: 'tutor', printingId: 'cmm-148', storeId: 'kk', cond: 'NM', qty: 1, price: 46.5, confirmed: true });
+
+const DEFAULT_LIST = `1x Sol Ring (c21) 263 [Ramp]
+1x Arcane Signet (cmm) 371 [Ramp]
+1x Cyclonic Rift (rtr) 35 [Interaction]
+1x Rhystic Study (jmp) 168 [Draw]
+1x Smothering Tithe (rna) 22 [Ramp]
+1x Swords to Plowshares (sta) 10 [Removal]
+4x Counterspell (mh2) 267 [Interaction]
+1x Lightning Greaves [Protection]
+1x Command Tower
+1x Fellwar Stone
+1x Esper Sentinel (mh2) 12 *F*
+1x Fierce Guardianship
+1x Demonic Tutor
+1x Grim Monolith (ulg) 126
+1x Jace's Erasur
+12x Island (dmu) 263
+10x Plains`;
+
+const COND_RANK = { NM: 0, LP: 1, MP: 2, HP: 3 };
+const DEFAULT_SETTINGS = { postageType: 'tracked', pickupCity: 'Auckland', minCond: 'LP', allowFoils: true, useListPrintings: false, fetchOn: true, mtgsOn: true };
+const MTGS_BLOCK_AFTER = 6; // demo: MtgSingles stops answering after this many cards
+
+/* ============================================================
+   PARSING  (stand-in for the real forgiving paste parser)
+   ============================================================ */
+function parseList(text) {
+  const lines = {}; const unrecognised = []; const basics = []; const order = [];
+  text.split('\n').forEach(raw => {
+    const s = raw.trim(); if (!s || s.startsWith('//')) return;
+    const m = s.match(/^(\d+)\s*x?\s+(.+?)(?:\s+\(([A-Za-z0-9]+)\)\s*([\w-]+)?)?(\s*\*[FE]\*)?(?:\s*\[.*\])?\s*$/);
+    if (!m) { unrecognised.push(s); return; }
+    const qty = +m[1]; const name = m[2].trim();
+    if (BASICS.includes(name.toLowerCase())) { basics.push(`${qty} ${name}`); return; }
+    const card = cardByName[name.toLowerCase()];
+    if (!card) { unrecognised.push(s); return; }
+    let hint = null;
+    if (m[3]) {
+      const finish = m[5] ? (m[5].includes('E') ? 'etched' : 'foil') : 'nonfoil';
+      const p = card.printings.find(p => p.set.toLowerCase() === m[3].toLowerCase() && (!m[4] || p.num === m[4]) && p.finish === finish)
+             || card.printings.find(p => p.set.toLowerCase() === m[3].toLowerCase());
+      hint = { text: `${m[3].toUpperCase()}${m[4] ? ' #' + m[4] : ''}${m[5] ? ' foil' : ''}`, printingId: p ? p.id : null };
+    }
+    if (lines[card.id]) lines[card.id].qty += qty;
+    else { lines[card.id] = { cardId: card.id, qty, hint }; order.push(card.id); }
+  });
+  return { lines: order.map(id => lines[id]), unrecognised, basics };
+}
+
+/* ============================================================
+   OPTIMISER  (brute force over Store subsets; stand-in for HiGHS)
+   ============================================================ */
+function eligible(line, lock, ctx) {
+  return LISTINGS.filter(l => {
+    if (l.cardId !== line.cardId) return false;
+    if (!ctx.storeOk(l, line)) return false;
+    if (COND_RANK[l.cond] > COND_RANK[ctx.settings.minCond]) return false;
+    const p = printingById[l.printingId];
+    if (lock) return l.printingId === lock && l.confirmed;
+    if (p.nonTourn) return false;
+    if (!ctx.settings.allowFoils && p.finish !== 'nonfoil') return false;
+    return true;
+  }).sort((a, b) => a.price - b.price);
+}
+
+function postageFor(store, subtotal, ctx) {
+  if (ctx.pickup[store.id] && store.city === ctx.settings.pickupCity) return 0;
+  if (store.freeOver && subtotal >= store.freeOver) return 0;
+  return ctx.settings.postageType === 'tracked' ? store.tracked : store.standard;
+}
+
+function planFor(storeSet, lines, ctx) {
+  const assignments = [];
+  for (const line of lines) {
+    let need = line.qty;
+    for (const l of line.pool) {
+      if (!storeSet.has(l.storeId)) continue;
+      const take = Math.min(need, l.qty);
+      assignments.push({ cardId: line.cardId, listing: l, qty: take });
+      need -= take; if (!need) break;
+    }
+    if (need) return null;
+  }
+  const byStore = {};
+  assignments.forEach(a => { (byStore[a.listing.storeId] ||= []).push(a); });
+  const parcels = Object.entries(byStore).map(([sid, items]) => {
+    const store = storeById[sid];
+    const subtotal = round2(items.reduce((s, a) => s + a.qty * a.listing.price, 0));
+    const postage = postageFor(store, subtotal, ctx);
+    return { store, items, subtotal, postage, total: round2(subtotal + postage) };
+  }).sort((a, b) => b.total - a.total);
+  return { parcels, k: parcels.length, total: round2(parcels.reduce((s, p) => s + p.total, 0)) };
+}
+
+function optimise(parsed, excluded, locks, ctx) {
+  const active = parsed.lines.filter(l => !excluded[l.cardId]);
+  const withPools = active.map(l => ({ ...l, lock: locks[l.cardId] || null, pool: eligible(l, locks[l.cardId], ctx) }));
+  const notFound = withPools.filter(l => l.pool.reduce((s, x) => s + x.qty, 0) < l.qty);
+  const obtainable = withPools.filter(l => !notFound.includes(l));
+  const storeIds = [...new Set(obtainable.flatMap(l => l.pool.map(x => x.storeId)))];
+  const best = {};
+  for (let mask = 1; mask < (1 << storeIds.length); mask++) {
+    const set = new Set(storeIds.filter((_, i) => mask & (1 << i)));
+    const plan = planFor(set, obtainable, ctx);
+    if (!plan) continue;
+    if (!best[plan.k] || plan.total < best[plan.k].total) best[plan.k] = plan;
+  }
+  const ks = Object.keys(best).map(Number).sort((a, b) => a - b);
+  const rungs = []; let kmin = ks[0];
+  let cheapest = Infinity; ks.forEach(k => { cheapest = Math.min(cheapest, best[k].total); });
+  for (const k of ks) {
+    const prev = rungs[rungs.length - 1];
+    if (prev && best[k].total >= prev.total) continue;
+    rungs.push({ k, ...best[k], saves: prev ? round2(prev.total - best[k].total) : null });
+    if (best[k].total === cheapest) break;
+  }
+  if (rungs.length) rungs[rungs.length - 1].cheapestOverall = true;
+  // pickup hints
+  rungs.forEach(r => {
+    r.pickupHints = r.parcels.filter(p => p.store.city === ctx.settings.pickupCity && !ctx.pickup[p.store.id] && p.postage > 0)
+      .map(p => ({ store: p.store, saves: p.postage }));
+  });
+  return { rungs, kmin, notFound, obtainable, lines: withPools };
+}
+
+// Cheapest price per Printing of a line (ignoring the line's own lock), for the alternatives list
+function printingOptions(line, ctx) {
+  const card = cardById[line.cardId];
+  return card.printings.map(p => {
+    const ls = LISTINGS.filter(l => l.printingId === p.id && ctx.storeOk(l, line) && COND_RANK[l.cond] <= COND_RANK[ctx.settings.minCond]);
+    const cheapest = ls.length ? Math.min(...ls.map(l => l.price)) : null;
+    return { printing: p, cheapest, count: ls.length, stores: new Set(ls.map(l => l.storeId)).size };
+  });
+}
+
+/* ============================================================
+   APP STATE HOOK  (shared by every variant)
+   ============================================================ */
+function useMagicFinder(demo) {
+  const [text, setText] = useState(DEFAULT_LIST);
+  const [deckName, setDeckName] = useState(null);
+  const [excluded, setExcluded] = useState({});
+  const [manualLocks, setManualLocks] = useState({});
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [pickup, setPickup] = useState({});
+  const [phase, setPhase] = useState('input'); // input | searching | results
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [rungStatus, setRungStatus] = useState({});
+  const [selectedK, setSelectedK] = useState(null);
+  const timers = useRef([]);
+
+  const parsed = useMemo(() => parseList(text), [text]);
+  const locks = useMemo(() => {
+    const l = {};
+    if (settings.useListPrintings) parsed.lines.forEach(x => { if (x.hint?.printingId) l[x.cardId] = x.hint.printingId; });
+    Object.entries(manualLocks).forEach(([k, v]) => { if (v) l[k] = v; else delete l[k]; });
+    return l;
+  }, [parsed, manualLocks, settings.useListPrintings]);
+
+  const lineIndex = useMemo(() => Object.fromEntries(parsed.lines.map((l, i) => [l.cardId, i])), [parsed]);
+  const ctx = useMemo(() => ({
+    settings, pickup,
+    storeOk: (l, line) => {
+      const s = storeById[l.storeId];
+      if (s.source === 'Fetch TCG' && !settings.fetchOn) return false;
+      if (s.source === 'MtgSingles') {
+        if (!settings.mtgsOn) return false;
+        if (demo.blocked && line && lineIndex[line.cardId] >= MTGS_BLOCK_AFTER) return false;
+      }
+      return true;
+    },
+  }), [settings, pickup, demo.blocked, lineIndex]);
+
+  const result = useMemo(() => phase === 'input' ? null : optimise(parsed, excluded, locks, ctx), [phase, parsed, excluded, locks, ctx]);
+
+  const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  const refine = useCallback((res) => {
+    clear();
+    const ks = res.rungs.map(r => r.k);
+    setRungStatus(Object.fromEntries(ks.map(k => [k, 'refining'])));
+    [...ks].reverse().forEach((k, i) => {
+      timers.current.push(setTimeout(() => setRungStatus(s => ({ ...s, [k]: (demo.timeout && i === 1) ? 'timedout' : 'exact' })), 700 + i * 650));
+    });
+  }, [demo.timeout]);
+
+  const search = () => {
+    clear(); setPhase('searching');
+    const total = parsed.lines.filter(l => !excluded[l.cardId]).length;
+    setProgress({ done: 0, total });
+    for (let i = 1; i <= total; i++) timers.current.push(setTimeout(() => setProgress({ done: i, total }), i * 260));
+    timers.current.push(setTimeout(() => { setPhase('results'); setSelectedK(null); }, total * 260 + 300));
+  };
+
+  // re-run refinement whenever the inputs to the Ladder change after results are in
+  useEffect(() => { if (phase === 'results' && result) refine(result); }, [phase, result, refine]);
+  useEffect(() => clear, []);
+
+  const rungs = useMemo(() => (result?.rungs || []).map(r => {
+    const status = rungStatus[r.k] || 'refining';
+    const draft = round2(r.total * (1.03 + 0.025 * (r.k % 3)));
+    return { ...r, status, shownTotal: status === 'refining' ? draft : r.total, bound: status === 'timedout' ? round2(r.total * 0.012 + 1.4) : null };
+  }), [result, rungStatus]);
+  const refining = rungs.some(r => r.status === 'refining');
+  const selected = rungs.find(r => r.k === selectedK) || rungs[rungs.length - 1] || null;
+
+  return {
+    text, setText, deckName, parsed, excluded, locks, settings, pickup, phase, progress, result, rungs, refining, selected, ctx, demo,
+    loadArchidekt: (url) => { setText(DEFAULT_LIST); setDeckName(url ? 'Esper Tithes' : null); },
+    toggleExcluded: id => setExcluded(e => ({ ...e, [id]: !e[id] })),
+    lock: (cardId, printingId) => setManualLocks(l => ({ ...l, [cardId]: printingId })),
+    unlock: (cardId) => setManualLocks(l => ({ ...l, [cardId]: null })),
+    setSetting: (k, v) => setSettings(s => ({ ...s, [k]: v })),
+    togglePickup: id => setPickup(p => ({ ...p, [id]: !p[id] })),
+    selectK: setSelectedK, search, backToInput: () => { clear(); setPhase('input'); },
+    tryLonger: (k) => setRungStatus(s => ({ ...s, [k]: 'exact' })),
+  };
+}
+
+/* ============================================================
+   SHARED SMALL PIECES
+   ============================================================ */
+const $ = n => n == null ? '—' : '$' + n.toFixed(2);
+const mockLink = e => { e.preventDefault(); alert('Mock link — in the real app this opens the Listing/Store on its Source.'); };
+const cardImg = (p, version = 'normal') => `https://api.scryfall.com/cards/${p.set.toLowerCase()}/${p.num}?format=image&version=${version}`;
+const finishLabel = p => p.finish === 'nonfoil' ? '' : p.finish === 'etched' ? 'Etched foil' : 'Foil';
+const printingLabel = p => [p.setName, '#' + p.num, p.treatment, finishLabel(p)].filter(Boolean).join(' · ');
+
+function SourceBadge({ source }) {
+  const c = source === 'Fetch TCG' ? 'bg-sky-100 text-sky-800' : 'bg-fuchsia-100 text-fuchsia-800';
+  return <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${c}`}>{source}</span>;
+}
+function Toggle({ on, onChange, label }) {
+  return (
+    <button type="button" onClick={onChange} className="inline-flex items-center gap-2 text-sm">
+      <span className={`w-9 h-5 rounded-full p-0.5 transition ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+        <span className={`block w-4 h-4 bg-white rounded-full shadow transition ${on ? 'translate-x-4' : ''}`} />
+      </span>{label}
+    </button>
+  );
+}
+function PickupToggle({ mf, store }) {
+  if (store.city !== mf.settings.pickupCity) return null;
+  return <Toggle on={!!mf.pickup[store.id]} onChange={() => mf.togglePickup(store.id)} label="I'll pick up" />;
+}
+function StatusBadge({ r, mf }) {
+  if (r.status === 'refining') return <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">refining…</span>;
+  if (r.status === 'timedout') return <span className="text-xs text-orange-800 bg-orange-100 px-2 py-0.5 rounded-full" title="Solver hit its time limit">might be up to {$(r.bound)} cheaper <button className="underline ml-1" onClick={e => { e.stopPropagation(); mf.tryLonger(r.k); }}>Try longer</button></span>;
+  return null;
+}
+function Banners({ mf, compact }) {
+  const res = mf.result; if (!res) return null;
+  const items = [];
+  if (mf.demo.blocked && mf.settings.mtgsOn) items.push({ tone: 'warn', text: `MtgSingles stopped answering after ${MTGS_BLOCK_AFTER} cards (it showed a "checking your browser" page). Plans below use Fetch TCG only for the rest of your list, so they may not be the cheapest. [Behaviour pending: "What happens when a Source blocks MagicFinder?"]` });
+  if (res.notFound.length) items.push({ tone: 'bad', text: `Not Found (${res.notFound.length}): ${res.notFound.map(l => cardById[l.cardId].name + (l.lock ? ' (locked Printing — try unlocking)' : '')).join(', ')}. Left out of every Plan.` });
+  if (mf.parsed.unrecognised.length) items.push({ tone: 'bad', text: `Couldn't recognise: ${mf.parsed.unrecognised.join(' · ')}` });
+  if (mf.parsed.basics.length) items.push({ tone: 'info', text: `Skipped basic lands: ${mf.parsed.basics.join(', ')}` });
+  items.push({ tone: 'info', text: '7 Listings couldn\'t be identified and were ignored.' });
+  const tone = { warn: 'bg-amber-50 border-amber-300 text-amber-900', bad: 'bg-rose-50 border-rose-200 text-rose-900', info: 'bg-slate-100 border-slate-200 text-slate-600' };
+  return <div className={compact ? 'space-y-1' : 'space-y-2'}>{items.map((x, i) => <div key={i} className={`border rounded-lg ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'} ${tone[x.tone]}`}>{x.text}</div>)}</div>;
+}
+function PrintingList({ mf, cardId, dense }) {
+  const line = mf.parsed.lines.find(l => l.cardId === cardId);
+  const opts = printingOptions(line, mf.ctx);
+  const locked = mf.locks[cardId];
+  return (
+    <div className="space-y-1">
+      {line.hint && <div className="text-xs text-slate-500">Your list said <b>{line.hint.text}</b>{line.hint.printingId && locked !== line.hint.printingId && <button className="ml-2 text-indigo-600 underline" onClick={() => mf.lock(cardId, line.hint.printingId)}>lock that</button>}</div>}
+      {opts.map(o => (
+        <div key={o.printing.id} className={`flex items-center gap-2 rounded ${dense ? 'px-1 py-0.5' : 'px-2 py-1.5'} ${locked === o.printing.id ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`}>
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="truncate">{printingLabel(o.printing)}</div>
+            {o.printing.nonTourn && <div className="text-[11px] text-slate-500">{o.printing.nonTourn} — not used unless locked</div>}
+          </div>
+          <div className="text-sm tabnum text-right w-24">{o.cheapest == null ? <span className="text-slate-400">none</span> : <>from {$(o.cheapest)}<div className="text-[11px] text-slate-500">{o.stores} Store{o.stores > 1 ? 's' : ''}</div></>}</div>
+          {locked === o.printing.id
+            ? <button className="text-xs px-2 py-1 rounded bg-indigo-600 text-white" onClick={() => mf.unlock(cardId)}>🔒 Unlock</button>
+            : <button className="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-white disabled:opacity-40" disabled={!o.count} onClick={() => mf.lock(cardId, o.printing.id)}>Lock</button>}
+        </div>
+      ))}
+    </div>
+  );
+}
+function SettingsForm({ mf }) {
+  const s = mf.settings;
+  return (
+    <div className="space-y-3 text-sm">
+      <label className="block">Postage type
+        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.postageType} onChange={e => mf.setSetting('postageType', e.target.value)}>
+          <option value="tracked">Tracked (default)</option><option value="standard">Standard</option>
+        </select>
+      </label>
+      <label className="block">Pickup city
+        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.pickupCity} onChange={e => mf.setSetting('pickupCity', e.target.value)}>
+          {['Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Tauranga', 'Dunedin'].map(c => <option key={c}>{c}</option>)}
+        </select>
+      </label>
+      <label className="block">Minimum condition
+        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.minCond} onChange={e => mf.setSetting('minCond', e.target.value)}>
+          <option value="NM">Near Mint</option><option value="LP">Lightly Played (default)</option><option value="MP">Moderately Played</option>
+        </select>
+      </label>
+      <div className="flex flex-col gap-2 pt-1">
+        <Toggle on={s.allowFoils} onChange={() => mf.setSetting('allowFoils', !s.allowFoils)} label="Allow foils" />
+        <Toggle on={s.useListPrintings} onChange={() => mf.setSetting('useListPrintings', !s.useListPrintings)} label="Use the Printings from my list" />
+        <Toggle on={s.fetchOn} onChange={() => mf.setSetting('fetchOn', !s.fetchOn)} label="Search Fetch TCG" />
+        <Toggle on={s.mtgsOn} onChange={() => mf.setSetting('mtgsOn', !s.mtgsOn)} label="Search MtgSingles" />
+      </div>
+    </div>
+  );
+}
+function ParcelFooter({ mf, parcel }) {
+  const { store, subtotal, postage } = parcel;
+  const picked = mf.pickup[store.id] && store.city === mf.settings.pickupCity;
+  return (
+    <div className="text-sm tabnum space-y-0.5">
+      <div className="flex justify-between"><span>Cards</span><span>{$(subtotal)}</span></div>
+      <div className="flex justify-between"><span>{picked ? 'Pickup' : `Postage (${mf.settings.postageType})`}{store.postageUnknown && !picked && <span title="This Store doesn't publish postage; using the editable default" className="ml-1 text-amber-600">est.</span>}</span><span>{postage === 0 ? (picked ? '$0.00' : 'Free') : $(postage)}</span></div>
+      {!picked && store.freeOver && subtotal < store.freeOver && <div className="text-[11px] text-slate-500">Free postage over {$(store.freeOver)} ({$(store.freeOver - subtotal)} away)</div>}
+      <div className="flex justify-between font-semibold border-t pt-1"><span>Store total</span><span>{$(parcel.total)}</span></div>
+    </div>
+  );
+}
+function PickupHints({ r }) {
+  if (!r.pickupHints.length) return null;
+  return <div className="text-xs text-emerald-700">{r.pickupHints.map(h => `Pickup available at ${h.store.name}, saves ${$(h.saves)}`).join(' · ')}</div>;
+}
+function cardLabel(a) { const p = printingById[a.listing.printingId]; return printingLabel(p); }
+function ListingTags({ a }) {
+  return <>
+    <span className="text-[11px] px-1 rounded bg-slate-100 text-slate-600">{a.listing.cond}</span>
+    {!a.listing.confirmed && <span className="text-[11px] px-1 rounded bg-amber-100 text-amber-800" title="Matched the card but not the exact Printing">Printing not confirmed</span>}
+  </>;
+}
+function Footer() {
+  return <p className="text-[11px] text-slate-400 text-center py-4">Card images © Wizards of the Coast, via Scryfall. MagicFinder is unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.</p>;
+}
+
+/* ============================================================
+   VARIANT A — Guided steps
+   ============================================================ */
+function VariantA({ mf }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openPrintings, setOpenPrintings] = useState(null);
+  const [url, setUrl] = useState('');
+  const step = mf.phase === 'input' ? 0 : mf.phase === 'searching' ? 1 : 2;
+  return (
+    <div className="min-h-screen pb-24">
+      <header className="bg-white border-b">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
+          <div className="font-bold text-lg">🔮 MagicFinder</div>
+          <ol className="flex gap-4 text-sm flex-1">
+            {['Want List', 'Search', 'Choose a Plan'].map((s, i) => (
+              <li key={s} className={`flex items-center gap-2 ${i === step ? 'text-indigo-700 font-semibold' : i < step ? 'text-slate-700' : 'text-slate-400'}`}>
+                <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i <= step ? 'bg-indigo-600 text-white' : 'bg-slate-200'}`}>{i < step ? '✓' : i + 1}</span>{s}
+              </li>))}
+          </ol>
+          <button className="text-sm px-3 py-1.5 rounded border" onClick={() => setSettingsOpen(true)}>⚙ Settings</button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        {step === 0 && (
+          <div className="grid md:grid-cols-2 gap-6">
+            <section className="bg-white rounded-xl border p-4 space-y-3">
+              <h2 className="font-semibold">Add your Want List</h2>
+              <div className="flex gap-2">
+                <input className="flex-1 border rounded px-2 py-1.5 text-sm" placeholder="https://archidekt.com/decks/…" value={url} onChange={e => setUrl(e.target.value)} />
+                <button className="px-3 py-1.5 rounded bg-slate-800 text-white text-sm" onClick={() => mf.loadArchidekt(url)}>Import</button>
+              </div>
+              <div className="text-xs text-slate-500">…or paste a list (Archidekt, Moxfield, Arena/MTGO or plain text)</div>
+              <textarea className="w-full h-80 border rounded p-2 font-mono text-xs" value={mf.text} onChange={e => mf.setText(e.target.value)} />
+            </section>
+            <section className="bg-white rounded-xl border p-4 flex flex-col">
+              <h2 className="font-semibold">{mf.deckName ? `“${mf.deckName}” from Archidekt` : 'What we read'} <span className="text-slate-400 font-normal text-sm">{mf.parsed.lines.length} cards</span></h2>
+              <ul className="mt-2 divide-y text-sm flex-1 overflow-auto max-h-80">
+                {mf.parsed.lines.map(l => (
+                  <li key={l.cardId} className="py-1.5 flex items-center gap-2">
+                    <input type="checkbox" checked={!mf.excluded[l.cardId]} onChange={() => mf.toggleExcluded(l.cardId)} />
+                    <span className="w-6 text-right tabnum text-slate-500">{l.qty}</span>
+                    <span className={mf.excluded[l.cardId] ? 'line-through text-slate-400' : ''}>{cardById[l.cardId].name}</span>
+                    {mf.locks[l.cardId] && <span className="text-xs text-indigo-700">🔒</span>}
+                    {l.hint && !mf.locks[l.cardId] && <span className="ml-auto text-[11px] text-slate-500">your list said {l.hint.text} {l.hint.printingId && <button className="text-indigo-600 underline" onClick={() => mf.lock(l.cardId, l.hint.printingId)}>lock</button>}</span>}
+                  </li>))}
+              </ul>
+              {mf.parsed.unrecognised.length > 0 && <div className="mt-2 text-sm text-rose-700">Couldn't recognise: {mf.parsed.unrecognised.join(', ')}</div>}
+              {mf.parsed.basics.length > 0 && <div className="mt-1 text-sm text-slate-500">Skipped basic lands: {mf.parsed.basics.join(', ')} <button className="underline" disabled title="prototype">include</button></div>}
+              <button className="mt-4 self-end px-5 py-2 rounded-lg bg-indigo-600 text-white font-semibold" onClick={mf.search}>Find prices →</button>
+            </section>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="max-w-xl mx-auto bg-white border rounded-xl p-6 mt-10 text-center space-y-4">
+            <div className="text-lg font-semibold">Searching NZ Stores…</div>
+            <div className="h-2 bg-slate-200 rounded"><div className="h-2 bg-indigo-600 rounded transition-all" style={{ width: `${100 * mf.progress.done / mf.progress.total}%` }} /></div>
+            <div className="text-sm text-slate-600 tabnum">{mf.progress.done}/{mf.progress.total}: {cardById[mf.parsed.lines.filter(l => !mf.excluded[l.cardId])[Math.min(mf.progress.done, mf.progress.total - 1)]?.cardId]?.name}</div>
+            <div className="flex justify-center gap-4 text-sm">
+              <span>Fetch TCG ✓</span>
+              <span className={mf.demo.blocked && mf.progress.done > MTGS_BLOCK_AFTER ? 'text-amber-700' : ''}>MtgSingles {mf.demo.blocked && mf.progress.done > MTGS_BLOCK_AFTER ? '⚠ stopped (checking-your-browser page)' : '✓'}</span>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <button className="text-sm text-slate-600 underline" onClick={mf.backToInput}>← Edit Want List</button>
+              <div className="text-sm text-slate-500">{mf.refining ? 'Finding cheaper Plans…' : 'Final'} · Fewest Stores that cover your list: {mf.result.kmin}</div>
+            </div>
+            <Banners mf={mf} />
+            <section>
+              <h2 className="font-semibold mb-2">How many Stores do you want to order from?</h2>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {mf.rungs.map(r => (
+                  <button key={r.k} onClick={() => mf.selectK(r.k)} className={`min-w-[170px] text-left rounded-xl border-2 p-3 bg-white transition ${mf.selected?.k === r.k ? 'border-indigo-600 shadow-md' : 'border-transparent ring-1 ring-slate-200 hover:ring-slate-400'}`}>
+                    <div className="text-sm text-slate-500">{r.k} Store{r.k > 1 ? 's' : ''}{r.cheapestOverall && <span className="ml-1 text-emerald-700 font-semibold">· Cheapest overall</span>}</div>
+                    <div className="text-2xl font-bold tabnum">{$(r.shownTotal)}</div>
+                    <div className="text-xs text-slate-600 tabnum h-4">{r.saves != null ? `saves ${$(r.saves)} vs ${r.k - 1}` : 'fewest Stores'}</div>
+                    <div className="mt-1"><StatusBadge r={r} mf={mf} /></div>
+                  </button>))}
+              </div>
+            </section>
+            {mf.selected && (
+              <section className="space-y-4">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-semibold">Your {mf.selected.k}-Store Plan</h2>
+                  <PickupHints r={mf.selected} />
+                </div>
+                {mf.selected.parcels.map(p => (
+                  <div key={p.store.id} className="bg-white border rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 py-2 border-b bg-slate-50">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.store.color }} />
+                      <a href="#" onClick={mockLink} className="font-semibold hover:underline">{p.store.name} ↗</a>
+                      <span className="text-sm text-slate-500">{p.store.city}</span><SourceBadge source={p.store.source} />
+                      <div className="ml-auto"><PickupToggle mf={mf} store={p.store} /></div>
+                    </div>
+                    <div className="grid md:grid-cols-[1fr_220px]">
+                      <ul className="divide-y">
+                        {p.items.map(a => (
+                          <li key={a.listing.id} className="px-4 py-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="tabnum w-6 text-slate-500">{a.qty}×</span>
+                              <span className="font-medium">{cardById[a.cardId].name}</span>
+                              {mf.locks[a.cardId] && <span title="Locked Printing">🔒</span>}
+                              <ListingTags a={a} />
+                              <span className="ml-auto tabnum">{$(a.listing.price)}</span>
+                              <a href="#" onClick={mockLink} className="text-xs text-indigo-600 hover:underline">View listing ↗</a>
+                            </div>
+                            <div className="flex items-center gap-2 pl-8 text-xs text-slate-500">
+                              {cardLabel(a)}
+                              <button className="text-indigo-600 underline" onClick={() => setOpenPrintings(openPrintings === a.cardId ? null : a.cardId)}>{openPrintings === a.cardId ? 'hide Printings' : 'other Printings'}</button>
+                            </div>
+                            {openPrintings === a.cardId && <div className="mt-2 ml-8 border rounded-lg p-2 bg-white"><PrintingList mf={mf} cardId={a.cardId} /></div>}
+                          </li>))}
+                      </ul>
+                      <div className="p-4 border-l bg-slate-50/50"><ParcelFooter mf={mf} parcel={p} /></div>
+                    </div>
+                  </div>))}
+                <div className="text-right text-lg font-bold tabnum">Landed Cost {$(mf.selected.shownTotal)}</div>
+              </section>
+            )}
+          </div>
+        )}
+      </main>
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={() => setSettingsOpen(false)}>
+          <div className="w-80 bg-white h-full p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-4"><h3 className="font-semibold">Settings</h3><button onClick={() => setSettingsOpen(false)}>✕</button></div>
+            <SettingsForm mf={mf} />
+          </div>
+        </div>
+      )}
+      <Footer />
+    </div>
+  );
+}
+VariantA.label = 'Guided steps';
+
+/* ============================================================
+   VARIANT B — Workbench (everything on one screen)
+   ============================================================ */
+function LadderChart({ mf }) {
+  const rs = mf.rungs; if (!rs.length) return null;
+  const W = 520, H = 190, P = 36;
+  const max = Math.max(...rs.map(r => r.shownTotal)), min = Math.min(...rs.map(r => r.shownTotal));
+  const span = Math.max(max - min, 10);
+  const x = i => P + (rs.length === 1 ? (W - 2 * P) / 2 : i * (W - 2 * P) / (rs.length - 1));
+  const y = v => P / 2 + (max - v) / span * (H - P * 1.6);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      <polyline fill="none" stroke="#c7d2fe" strokeWidth="3" points={rs.map((r, i) => `${x(i)},${y(r.shownTotal)}`).join(' ')} />
+      {rs.map((r, i) => (
+        <g key={r.k} className="cursor-pointer" onClick={() => mf.selectK(r.k)}>
+          <circle cx={x(i)} cy={y(r.shownTotal)} r={mf.selected?.k === r.k ? 9 : 6} fill={r.status === 'refining' ? '#fbbf24' : '#4f46e5'} stroke="white" strokeWidth="2" />
+          <text x={x(i)} y={y(r.shownTotal) - 14} textAnchor="middle" fontSize="12" fontWeight="600">{$(r.shownTotal)}</text>
+          <text x={x(i)} y={H - 6} textAnchor="middle" fontSize="11" fill="#64748b">{r.k} Store{r.k > 1 ? 's' : ''}</text>
+        </g>))}
+    </svg>
+  );
+}
+function VariantB({ mf }) {
+  const [inspect, setInspect] = useState(null);
+  const [editing, setEditing] = useState(true);
+  const res = mf.result;
+  const searchedIdx = mf.phase === 'searching' ? mf.progress.done : mf.phase === 'results' ? 999 : -1;
+  const lineStatus = (l, i) => {
+    if (mf.excluded[l.cardId]) return <span className="text-slate-300">–</span>;
+    if (i >= searchedIdx) return mf.phase === 'searching' && i === searchedIdx ? <span className="animate-spin inline-block">◌</span> : <span className="text-slate-300">·</span>;
+    if (res?.notFound.some(n => n.cardId === l.cardId)) return <span className="text-rose-600" title="Not Found">✕</span>;
+    return <span className="text-emerald-600">✓</span>;
+  };
+  const ordered = mf.parsed.lines.filter(l => !mf.excluded[l.cardId]);
+  return (
+    <div className="h-screen flex flex-col text-sm">
+      <header className="h-11 bg-slate-900 text-slate-100 flex items-center px-3 gap-4 shrink-0">
+        <b>MagicFinder</b>
+        <button className="px-3 py-1 rounded bg-indigo-500 text-white font-semibold" onClick={() => { setEditing(false); mf.search(); }}>{mf.phase === 'input' ? '▶ Find prices' : '↻ Search again'}</button>
+        {mf.phase === 'searching' && <div className="flex items-center gap-2 flex-1"><div className="w-48 h-1.5 bg-slate-700 rounded"><div className="h-1.5 bg-indigo-400 rounded" style={{ width: `${100 * mf.progress.done / mf.progress.total}%` }} /></div><span className="tabnum">Searching {mf.progress.done}/{mf.progress.total}: {cardById[ordered[Math.min(mf.progress.done, ordered.length - 1)]?.cardId]?.name}</span></div>}
+        {mf.phase === 'results' && <span className="text-slate-300">{mf.refining ? '⏳ refining Ladder…' : '✓ Ladder final'} · fewest covering Stores: {res.kmin}</span>}
+        <span className="ml-auto text-xs text-slate-400">Fetch TCG {mf.settings.fetchOn ? '●' : '○'} · MtgSingles {mf.settings.mtgsOn ? (mf.demo.blocked && mf.phase !== 'input' ? <span className="text-amber-400">▲ blocked</span> : '●') : '○'}</span>
+      </header>
+      <div className="flex-1 grid grid-cols-[300px_1fr_340px] min-h-0">
+        {/* Left: Want List */}
+        <aside className="border-r bg-white flex flex-col min-h-0">
+          <div className="p-2 border-b flex items-center gap-2">
+            <b className="flex-1">Want List {mf.deckName && <span className="font-normal text-slate-500">· {mf.deckName}</span>}</b>
+            <button className="text-xs underline" onClick={() => setEditing(!editing)}>{editing ? 'done' : 'edit'}</button>
+          </div>
+          {editing ? (
+            <div className="p-2 flex flex-col gap-2 flex-1 min-h-0">
+              <div className="flex gap-1"><input className="flex-1 border rounded px-2 py-1 text-xs" placeholder="Archidekt deck URL" id="bUrl" /><button className="text-xs px-2 rounded bg-slate-800 text-white" onClick={() => mf.loadArchidekt(document.getElementById('bUrl').value)}>Import</button></div>
+              <textarea className="flex-1 border rounded p-2 font-mono text-[11px]" value={mf.text} onChange={e => mf.setText(e.target.value)} />
+            </div>
+          ) : (
+            <ul className="flex-1 overflow-auto">
+              {mf.parsed.lines.map(l => {
+                const i = ordered.indexOf(l);
+                return (
+                  <li key={l.cardId} onClick={() => setInspect(l.cardId)} className={`flex items-center gap-2 px-2 py-1 cursor-pointer border-b border-slate-100 ${inspect === l.cardId ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                    <input type="checkbox" checked={!mf.excluded[l.cardId]} onClick={e => e.stopPropagation()} onChange={() => mf.toggleExcluded(l.cardId)} />
+                    <span className="w-4 text-center">{lineStatus(l, i)}</span>
+                    <span className="w-5 text-right tabnum text-slate-500">{l.qty}</span>
+                    <span className="flex-1 truncate">{cardById[l.cardId].name}</span>
+                    {mf.locks[l.cardId] && <span title="Locked Printing">🔒</span>}
+                    {l.hint && !mf.locks[l.cardId] && <span className="text-[10px] text-slate-400">{l.hint.text}</span>}
+                  </li>);
+              })}
+              {mf.parsed.unrecognised.map(u => <li key={u} className="px-2 py-1 text-rose-600 text-xs">? {u}</li>)}
+              {mf.parsed.basics.length > 0 && <li className="px-2 py-1 text-slate-400 text-xs">skipped basics: {mf.parsed.basics.join(', ')}</li>}
+            </ul>
+          )}
+          <details className="border-t p-2"><summary className="cursor-pointer font-semibold">Settings</summary><div className="pt-2"><SettingsForm mf={mf} /></div></details>
+        </aside>
+
+        {/* Centre: Ladder + Plan table */}
+        <main className="overflow-auto bg-slate-50 p-3 space-y-3">
+          {mf.phase !== 'results' && <div className="h-full grid place-items-center text-slate-400">{mf.phase === 'input' ? 'Edit your Want List on the left, then ▶ Find prices.' : 'Collecting Listings…'}</div>}
+          {mf.phase === 'results' && <>
+            <section className="bg-white border rounded-lg p-3">
+              <div className="flex items-baseline justify-between"><b>Trade-off Ladder</b><span className="text-xs text-slate-500">Landed Cost by number of Stores — click a point</span></div>
+              <LadderChart mf={mf} />
+              <table className="w-full text-xs tabnum">
+                <thead className="text-slate-500"><tr><th className="text-left">Stores</th><th className="text-right">Landed Cost</th><th className="text-right">Saves vs one fewer</th><th className="text-left pl-3">Status</th></tr></thead>
+                <tbody>{mf.rungs.map(r => (
+                  <tr key={r.k} onClick={() => mf.selectK(r.k)} className={`cursor-pointer ${mf.selected?.k === r.k ? 'bg-indigo-50 font-semibold' : 'hover:bg-slate-50'}`}>
+                    <td>{r.k}{r.cheapestOverall && ' (cheapest overall)'}</td><td className="text-right">{$(r.shownTotal)}</td><td className="text-right">{r.saves != null ? $(r.saves) : '—'}</td><td className="pl-3"><StatusBadge r={r} mf={mf} /></td>
+                  </tr>))}</tbody>
+              </table>
+            </section>
+            {mf.selected && <section className="bg-white border rounded-lg">
+              <div className="flex items-center justify-between px-3 py-2 border-b"><b>Plan: {mf.selected.k} Stores · {$(mf.selected.shownTotal)}</b><PickupHints r={mf.selected} /></div>
+              <table className="w-full tabnum">
+                <thead className="text-xs text-slate-500 bg-slate-50"><tr><th className="text-left px-3 py-1">Card</th><th className="text-left">Printing</th><th>Cond</th><th className="text-right">Qty</th><th className="text-right">Each</th><th className="text-right px-3">Line</th><th /></tr></thead>
+                {mf.selected.parcels.map(p => (
+                  <tbody key={p.store.id} className="border-t-2 border-slate-200">
+                    <tr className="bg-slate-50"><td colSpan="7" className="px-3 py-1">
+                      <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{ background: p.store.color }} /><a href="#" onClick={mockLink} className="font-semibold hover:underline">{p.store.name} ↗</a><span className="text-xs text-slate-500">{p.store.city}</span><SourceBadge source={p.store.source} /><span className="ml-auto"><PickupToggle mf={mf} store={p.store} /></span></div>
+                    </td></tr>
+                    {p.items.map(a => (
+                      <tr key={a.listing.id} className="border-t border-slate-100 hover:bg-indigo-50/40 cursor-pointer" onClick={() => setInspect(a.cardId)}>
+                        <td className="px-3 py-1">{cardById[a.cardId].name} {mf.locks[a.cardId] && '🔒'}</td>
+                        <td className="text-xs text-slate-600 max-w-[200px] truncate">{cardLabel(a)} {!a.listing.confirmed && <span className="text-amber-700">(not confirmed)</span>}</td>
+                        <td className="text-center text-xs">{a.listing.cond}</td><td className="text-right">{a.qty}</td><td className="text-right">{$(a.listing.price)}</td><td className="text-right px-3">{$(a.qty * a.listing.price)}</td>
+                        <td className="pr-2"><a href="#" onClick={mockLink} className="text-indigo-600 text-xs">↗</a></td>
+                      </tr>))}
+                    <tr className="text-xs text-slate-600"><td colSpan="5" className="text-right px-3">{mf.pickup[p.store.id] && p.store.city === mf.settings.pickupCity ? 'pickup' : `postage (${mf.settings.postageType})${p.store.postageUnknown ? ' est.' : ''}`}{!mf.pickup[p.store.id] && p.store.freeOver && p.subtotal < p.store.freeOver ? ` · free over ${$(p.store.freeOver)}` : ''}</td><td className="text-right px-3">{$(p.postage)}</td><td /></tr>
+                    <tr className="font-semibold"><td colSpan="5" className="text-right px-3">Store total</td><td className="text-right px-3">{$(p.total)}</td><td /></tr>
+                  </tbody>))}
+              </table>
+            </section>}
+            <section><b className="text-xs text-slate-500 uppercase">Run log</b><div className="mt-1"><Banners mf={mf} compact /></div></section>
+          </>}
+        </main>
+
+        {/* Right: Inspector */}
+        <aside className="border-l bg-white overflow-auto p-3 space-y-3">
+          {inspect ? <>
+            <div className="flex items-center justify-between"><b>{cardById[inspect].name}</b><button className="text-xs underline" onClick={() => setInspect(null)}>close</button></div>
+            <PrintingList mf={mf} cardId={inspect} dense />
+            <div className="text-xs text-slate-500">Locking a Printing reruns the Ladder.</div>
+          </> : <>
+            <b>Stores</b>
+            <div className="text-xs text-slate-500">Postage from the Store table. Pickup only for Stores in {mf.settings.pickupCity}.</div>
+            <ul className="divide-y">
+              {STORES.map(s => {
+                const inPlan = mf.selected?.parcels.some(p => p.store.id === s.id);
+                return <li key={s.id} className="py-1.5 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                  <div className="flex-1"><div className={inPlan ? 'font-semibold' : ''}>{s.name}</div><div className="text-[11px] text-slate-500">{s.city} · {$(mf.settings.postageType === 'tracked' ? s.tracked : s.standard)}{s.postageUnknown ? ' (est.)' : ''}{s.freeOver ? ` · free over ${$(s.freeOver)}` : ''}</div></div>
+                  <PickupToggle mf={mf} store={s} />
+                </li>;
+              })}
+            </ul>
+            <div className="text-xs text-slate-400">Click any card to see its Printings.</div>
+          </>}
+        </aside>
+      </div>
+    </div>
+  );
+}
+VariantB.label = 'Workbench';
+
+/* ============================================================
+   VARIANT C — Visual cart (card images + Store slider)
+   ============================================================ */
+function CardImage({ printing, className }) {
+  const [err, setErr] = useState(false);
+  if (err) return <div className={`bg-gradient-to-br from-slate-700 to-slate-900 text-white text-xs p-2 grid place-items-center text-center ${className}`}>{cardById[printing.cardId]?.name}</div>;
+  return <img src={cardImg(printing)} loading="lazy" onError={() => setErr(true)} className={`bg-slate-200 ${className}`} alt="" />;
+}
+function VariantC({ mf }) {
+  const [modal, setModal] = useState(null);
+  const [gear, setGear] = useState(false);
+  const [openParcel, setOpenParcel] = useState(null);
+  const res = mf.result;
+  const ordered = mf.parsed.lines.filter(l => !mf.excluded[l.cardId]);
+  const sel = mf.selected;
+  const assignment = {};
+  sel?.parcels.forEach(p => p.items.forEach(a => { (assignment[a.cardId] ||= []).push({ ...a, store: p.store }); }));
+
+  if (mf.phase === 'input') return (
+    <div className="min-h-screen bg-gradient-to-b from-indigo-950 to-slate-900 text-white grid place-items-center p-6">
+      <div className="w-full max-w-2xl space-y-4">
+        <h1 className="text-4xl font-black tracking-tight">Cheapest way to buy your list in NZ.</h1>
+        <p className="text-indigo-200">Paste a list or an Archidekt link. We'll search Fetch TCG and MtgSingles and show what each extra Store saves you.</p>
+        <input className="w-full rounded-lg px-4 py-3 text-slate-900" placeholder="https://archidekt.com/decks/…" onBlur={e => e.target.value && mf.loadArchidekt(e.target.value)} />
+        <textarea className="w-full h-56 rounded-lg p-3 font-mono text-xs text-slate-900" value={mf.text} onChange={e => mf.setText(e.target.value)} />
+        <div className="flex items-center gap-4">
+          <button className="px-6 py-3 rounded-lg bg-amber-400 text-slate-900 font-bold text-lg" onClick={mf.search}>Find my cards</button>
+          <span className="text-sm text-indigo-200">{mf.parsed.lines.length} cards recognised{mf.parsed.unrecognised.length ? `, ${mf.parsed.unrecognised.length} not` : ''}{mf.parsed.basics.length ? `, basics skipped` : ''}</span>
+          <button className="ml-auto text-sm underline text-indigo-200" onClick={() => setGear(true)}>settings</button>
+        </div>
+      </div>
+      {gear && <SettingsModal mf={mf} close={() => setGear(false)} />}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen pb-24 bg-slate-100">
+      <div className="sticky top-0 z-30 bg-slate-900 text-white shadow-lg">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
+          <button className="text-sm text-slate-300" onClick={mf.backToInput}>←</button>
+          {mf.phase === 'searching' ? (
+            <div className="flex-1"><div className="text-sm text-slate-300 tabnum">Searching {mf.progress.done}/{mf.progress.total}…</div><div className="h-1 bg-slate-700 rounded mt-1"><div className="h-1 bg-amber-400 rounded transition-all" style={{ width: `${100 * mf.progress.done / mf.progress.total}%` }} /></div></div>
+          ) : <>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-slate-400">Stores to order from</div>
+              <div className="flex mt-1 rounded-lg bg-slate-800 p-1">
+                {mf.rungs.map(r => (
+                  <button key={r.k} onClick={() => mf.selectK(r.k)} className={`px-4 py-1.5 rounded-md text-center transition ${sel?.k === r.k ? 'bg-amber-400 text-slate-900' : 'hover:bg-slate-700'}`}>
+                    <div className="font-bold">{r.k}</div><div className={`text-[11px] tabnum ${r.status === 'refining' ? 'animate-pulse' : ''}`}>{$(r.shownTotal)}</div>
+                  </button>))}
+              </div>
+            </div>
+            <div className="ml-auto text-right">
+              <div className="text-3xl font-black tabnum">{$(sel?.shownTotal)}</div>
+              <div className="text-xs text-slate-300">{sel?.cheapestOverall ? 'Cheapest overall' : `${$(mf.rungs[mf.rungs.length - 1]?.shownTotal)} with ${mf.rungs[mf.rungs.length - 1]?.k} Stores`}{sel?.saves != null ? ` · saves ${$(sel.saves)} vs ${sel.k - 1}` : ''}</div>
+              {sel && <div className="mt-0.5"><StatusBadge r={sel} mf={mf} /></div>}
+            </div>
+            <button onClick={() => setGear(true)} className="text-xl">⚙</button>
+          </>}
+        </div>
+      </div>
+
+      <main className="max-w-6xl mx-auto px-4 py-5 space-y-6">
+        {mf.phase === 'results' && <Banners mf={mf} />}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {ordered.map((l, i) => {
+            const card = cardById[l.cardId];
+            const searched = mf.phase === 'results' || i < mf.progress.done;
+            const nf = res?.notFound.some(n => n.cardId === l.cardId);
+            const as = assignment[l.cardId] || [];
+            const shown = as[0] ? printingById[as[0].listing.printingId] : printingById[(mf.locks[l.cardId] || card.printings[0].id)];
+            return (
+              <button key={l.cardId} onClick={() => searched && mf.phase === 'results' && setModal(l.cardId)} className={`text-left bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition ${!searched ? 'opacity-40' : ''}`}>
+                <div className="relative">
+                  <CardImage printing={shown} className={`w-full aspect-[5/7] object-cover ${nf ? 'grayscale opacity-50' : ''}`} />
+                  {l.qty > 1 && <span className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold rounded px-1.5">×{l.qty}</span>}
+                  {mf.locks[l.cardId] && <span className="absolute top-2 right-2 bg-indigo-600 text-white text-xs rounded px-1">🔒</span>}
+                  {nf && <span className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center bg-rose-600 text-white font-bold text-sm py-1 -rotate-6">NOT FOUND</span>}
+                  {!searched && <span className="absolute inset-0 grid place-items-center text-2xl animate-pulse">…</span>}
+                </div>
+                <div className="p-2">
+                  <div className="text-xs font-semibold truncate">{card.name}</div>
+                  {as.map(a => (
+                    <div key={a.listing.id} className="flex items-center gap-1 text-[11px] mt-0.5">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.store.color }} />
+                      <span className="truncate flex-1">{a.store.name}</span>
+                      <span className="tabnum">{a.qty > 1 ? `${a.qty}×` : ''}{$(a.listing.price)}</span>
+                    </div>))}
+                  {as.some(a => !a.listing.confirmed) && <div className="text-[10px] text-amber-700">Printing not confirmed</div>}
+                </div>
+              </button>);
+          })}
+        </div>
+
+        {sel && mf.phase === 'results' && (
+          <section>
+            <div className="flex items-baseline justify-between mb-2"><h2 className="text-lg font-bold">Your parcels</h2><PickupHints r={sel} /></div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sel.parcels.map(p => (
+                <div key={p.store.id} className="bg-white rounded-xl shadow-sm border-t-4 p-3 space-y-2" style={{ borderColor: p.store.color }}>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1"><div className="font-bold">{p.store.name}</div><div className="text-xs text-slate-500">{p.store.city} · <SourceBadge source={p.store.source} /></div></div>
+                    <a href="#" onClick={mockLink} className="text-xs px-2 py-1 rounded bg-slate-900 text-white">Open Store ↗</a>
+                  </div>
+                  <PickupToggle mf={mf} store={p.store} />
+                  <button className="text-xs text-indigo-600 underline" onClick={() => setOpenParcel(openParcel === p.store.id ? null : p.store.id)}>{p.items.reduce((s, a) => s + a.qty, 0)} cards {openParcel === p.store.id ? '▴' : '▾'}</button>
+                  {openParcel === p.store.id && <ul className="text-xs space-y-0.5">{p.items.map(a => <li key={a.listing.id} className="flex gap-1"><span>{a.qty}× {cardById[a.cardId].name}</span><span className="text-slate-400">{a.listing.cond}</span><a href="#" onClick={mockLink} className="ml-auto text-indigo-600">{$(a.listing.price)} ↗</a></li>)}</ul>}
+                  <ParcelFooter mf={mf} parcel={p} />
+                </div>))}
+            </div>
+          </section>
+        )}
+      </main>
+
+      {modal && (
+        <div className="fixed inset-0 z-40 bg-black/50 grid place-items-center p-4" onClick={() => setModal(null)}>
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-5 max-h-[85vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-3"><h3 className="text-xl font-bold">{cardById[modal].name}</h3><button onClick={() => setModal(null)}>✕</button></div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {printingOptions(mf.parsed.lines.find(l => l.cardId === modal), mf.ctx).map(o => {
+                const locked = mf.locks[modal] === o.printing.id;
+                return (
+                  <div key={o.printing.id} className={`rounded-xl p-2 ${locked ? 'ring-2 ring-indigo-600 bg-indigo-50' : 'bg-slate-50'}`}>
+                    <CardImage printing={{ ...o.printing, cardId: modal }} className="w-full aspect-[5/7] object-cover rounded-lg" />
+                    <div className="text-[11px] mt-1 h-8 overflow-hidden">{printingLabel(o.printing)}</div>
+                    {o.printing.nonTourn && <div className="text-[10px] text-slate-500">{o.printing.nonTourn}</div>}
+                    <div className="text-sm font-semibold tabnum">{o.cheapest == null ? <span className="text-slate-400">none in stock</span> : `from ${$(o.cheapest)}`}</div>
+                    {locked ? <button className="w-full mt-1 text-xs py-1 rounded bg-indigo-600 text-white" onClick={() => mf.unlock(modal)}>🔒 Locked — unlock</button>
+                      : <button disabled={!o.count} className="w-full mt-1 text-xs py-1 rounded border disabled:opacity-40" onClick={() => mf.lock(modal, o.printing.id)}>Lock this one</button>}
+                  </div>);
+              })}
+            </div>
+            {mf.parsed.lines.find(l => l.cardId === modal).hint && <p className="text-xs text-slate-500 mt-3">Your list said {mf.parsed.lines.find(l => l.cardId === modal).hint.text}.</p>}
+          </div>
+        </div>
+      )}
+      {gear && <SettingsModal mf={mf} close={() => setGear(false)} />}
+      <Footer />
+    </div>
+  );
+}
+function SettingsModal({ mf, close }) {
+  return <div className="fixed inset-0 z-40 bg-black/50 grid place-items-center text-slate-900" onClick={close}><div className="bg-white rounded-2xl w-96 p-5" onClick={e => e.stopPropagation()}><div className="flex justify-between mb-3"><h3 className="font-bold">Settings</h3><button onClick={close}>✕</button></div><SettingsForm mf={mf} /></div></div>;
+}
+VariantC.label = 'Visual cart';
+
+/* ============================================================
+   PROTOTYPE SWITCHER + STATE PANEL
+   ============================================================ */
+const VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
+const KEYS = Object.keys(VARIANTS);
+
+function App() {
+  const initial = new URLSearchParams(location.search).get('variant');
+  const [variant, setVariant] = useState(KEYS.includes(initial) ? initial : 'A');
+  const [demo, setDemo] = useState({ blocked: false, timeout: false });
+  const [showState, setShowState] = useState(false);
+  const mf = useMagicFinder(demo);
+  const go = useCallback(d => setVariant(v => {
+    const n = KEYS[(KEYS.indexOf(v) + d + KEYS.length) % KEYS.length];
+    const u = new URL(location.href); u.searchParams.set('variant', n); history.replaceState(null, '', u);
+    return n;
+  }), []);
+  useEffect(() => {
+    const h = e => { const t = e.target; if (t.closest && t.closest('input,textarea,select,[contenteditable]')) return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1); };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [go]);
+  const V = VARIANTS[variant];
+  const stateDump = {
+    phase: mf.phase, selectedRung: mf.selected?.k ?? null, locks: mf.locks, pickup: mf.pickup, excluded: mf.excluded, settings: mf.settings, demo,
+    ladder: mf.rungs.map(r => ({ k: r.k, total: r.total, shown: r.shownTotal, status: r.status, saves: r.saves })),
+    notFound: mf.result?.notFound.map(l => cardById[l.cardId].name) ?? [],
+  };
+  return <>
+    <V mf={mf} />
+    {showState && <pre className="fixed right-3 bottom-20 z-50 w-96 max-h-[60vh] overflow-auto bg-black/85 text-emerald-300 text-[11px] p-3 rounded-lg">{JSON.stringify(stateDump, null, 2)}</pre>}
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-fuchsia-700 text-white rounded-full shadow-2xl px-3 py-1.5 text-sm ring-4 ring-fuchsia-300/50">
+      <button onClick={() => go(-1)} className="px-2 text-lg">←</button>
+      <span className="font-semibold min-w-[150px] text-center">{variant} ({V.label})</span>
+      <button onClick={() => go(1)} className="px-2 text-lg">→</button>
+      <span className="opacity-50">|</span>
+      <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={demo.blocked} onChange={e => setDemo(d => ({ ...d, blocked: e.target.checked }))} />MtgSingles blocked</label>
+      <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={demo.timeout} onChange={e => setDemo(d => ({ ...d, timeout: e.target.checked }))} />rung times out</label>
+      <button className="text-xs underline" onClick={() => setShowState(s => !s)}>state</button>
+    </div>
+  </>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

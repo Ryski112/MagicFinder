@@ -76,9 +76,8 @@ export interface ItemView {
   url: string;
   source: SourceId;
   locked: boolean;
-  /** Shopify product handle and condition hints for the cart pre-check. */
+  /** Source-specific details (e.g. MtgSingles' raw condition), used by the cart pre-check. */
   extra?: Record<string, string>;
-  offerOnly?: boolean;
 }
 
 export interface StoreView {

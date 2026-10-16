@@ -9,8 +9,8 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "start": "vite build && tsx src/server/main.ts",
-    "dev": "tsx watch src/server/main.ts --dev",
+    "start": "vite build && tsx --disable-warning=ExperimentalWarning src/server/main.ts",
+    "dev": "tsx watch --disable-warning=ExperimentalWarning src/server/main.ts --dev",
     "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest",

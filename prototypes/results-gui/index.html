@@ -13,6 +13,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>MagicFinder prototype</title>
 <script src="https://cdn.tailwindcss.com/3.4.5"></script>
+<script>tailwind.config = { darkMode: 'class' };</script>
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
@@ -364,13 +365,13 @@ const finishLabel = p => p.finish === 'nonfoil' ? '' : p.finish === 'etched' ? '
 const printingLabel = p => [p.setName, '#' + p.num, p.treatment, finishLabel(p)].filter(Boolean).join(' · ');
 
 function SourceBadge({ source }) {
-  const c = source === 'Fetch TCG' ? 'bg-sky-100 text-sky-800' : 'bg-fuchsia-100 text-fuchsia-800';
+  const c = source === 'Fetch TCG' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200' : 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/60 dark:text-fuchsia-200';
   return <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${c}`}>{source}</span>;
 }
 function Toggle({ on, onChange, label }) {
   return (
     <button type="button" onClick={onChange} className="inline-flex items-center gap-2 text-sm">
-      <span className={`w-9 h-5 rounded-full p-0.5 transition ${on ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+      <span className={`w-9 h-5 rounded-full p-0.5 transition ${on ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
         <span className={`block w-4 h-4 bg-white rounded-full shadow transition ${on ? 'translate-x-4' : ''}`} />
       </span>{label}
     </button>
@@ -381,8 +382,8 @@ function PickupToggle({ mf, store }) {
   return <Toggle on={!!mf.pickup[store.id]} onChange={() => mf.togglePickup(store.id)} label="I'll pick up" />;
 }
 function StatusBadge({ r, mf }) {
-  if (r.status === 'refining') return <span className="text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">refining…</span>;
-  if (r.status === 'timedout') return <span className="text-xs text-orange-800 bg-orange-100 px-2 py-0.5 rounded-full" title="Solver hit its time limit">might be up to {$(r.bound)} cheaper <button className="underline ml-1" onClick={e => { e.stopPropagation(); mf.tryLonger(r.k); }}>Try longer</button></span>;
+  if (r.status === 'refining') return <span className="text-xs text-amber-700 bg-amber-100 dark:bg-amber-900/50 dark:text-amber-200 px-2 py-0.5 rounded-full animate-pulse">refining…</span>;
+  if (r.status === 'timedout') return <span className="text-xs text-orange-800 bg-orange-100 dark:bg-orange-900/50 dark:text-orange-200 px-2 py-0.5 rounded-full" title="Solver hit its time limit">might be up to {$(r.bound)} cheaper <button className="underline ml-1" onClick={e => { e.stopPropagation(); mf.tryLonger(r.k); }}>Try longer</button></span>;
   return null;
 }
 function Banners({ mf, compact }) {
@@ -393,7 +394,7 @@ function Banners({ mf, compact }) {
   if (mf.parsed.unrecognised.length) items.push({ tone: 'bad', text: `Couldn't recognise: ${mf.parsed.unrecognised.join(' · ')}` });
   if (mf.parsed.basics.length) items.push({ tone: 'info', text: `Skipped basic lands: ${mf.parsed.basics.join(', ')}` });
   items.push({ tone: 'info', text: '7 Listings couldn\'t be identified and were ignored.' });
-  const tone = { warn: 'bg-amber-50 border-amber-300 text-amber-900', bad: 'bg-rose-50 border-rose-200 text-rose-900', info: 'bg-slate-100 border-slate-200 text-slate-600' };
+  const tone = { warn: 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200', bad: 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/50 dark:border-rose-900 dark:text-rose-200', info: 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-300' };
   return <div className={compact ? 'space-y-1' : 'space-y-2'}>{items.map((x, i) => <div key={i} className={`border rounded-lg ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'} ${tone[x.tone]}`}>{x.text}</div>)}</div>;
 }
 function PrintingList({ mf, cardId, dense }) {
@@ -404,7 +405,7 @@ function PrintingList({ mf, cardId, dense }) {
     <div className="space-y-1">
       {line.hint && <div className="text-xs text-slate-500">Your list said <b>{line.hint.text}</b>{line.hint.printingId && locked !== line.hint.printingId && <button className="ml-2 text-indigo-600 underline" onClick={() => mf.lock(cardId, line.hint.printingId)}>lock that</button>}</div>}
       {opts.map(o => (
-        <div key={o.printing.id} className={`flex items-center gap-2 rounded ${dense ? 'px-1 py-0.5' : 'px-2 py-1.5'} ${locked === o.printing.id ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`}>
+        <div key={o.printing.id} className={`flex items-center gap-2 rounded ${dense ? 'px-1 py-0.5' : 'px-2 py-1.5'} ${locked === o.printing.id ? 'bg-indigo-50 ring-1 ring-indigo-300 dark:bg-indigo-950 dark:ring-indigo-700' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
           <div className="flex-1 min-w-0 text-sm">
             <div className="truncate">{printingLabel(o.printing)}</div>
             {o.printing.nonTourn && <div className="text-[11px] text-slate-500">{o.printing.nonTourn} — not used unless locked</div>}
@@ -412,7 +413,7 @@ function PrintingList({ mf, cardId, dense }) {
           <div className="text-sm tabnum text-right w-24">{o.cheapest == null ? <span className="text-slate-400">none</span> : <>from {$(o.cheapest)}<div className="text-[11px] text-slate-500">{o.stores} Store{o.stores > 1 ? 's' : ''}</div></>}</div>
           {locked === o.printing.id
             ? <button className="text-xs px-2 py-1 rounded bg-indigo-600 text-white" onClick={() => mf.unlock(cardId)}>🔒 Unlock</button>
-            : <button className="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-white disabled:opacity-40" disabled={!o.count} onClick={() => mf.lock(cardId, o.printing.id)}>Lock</button>}
+            : <button className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-40" disabled={!o.count} onClick={() => mf.lock(cardId, o.printing.id)}>Lock</button>}
         </div>
       ))}
     </div>
@@ -423,17 +424,17 @@ function SettingsForm({ mf }) {
   return (
     <div className="space-y-3 text-sm">
       <label className="block">Postage type
-        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.postageType} onChange={e => mf.setSetting('postageType', e.target.value)}>
+        <select className="mt-1 block w-full border rounded px-2 py-1 dark:bg-slate-800 dark:border-slate-600" value={s.postageType} onChange={e => mf.setSetting('postageType', e.target.value)}>
           <option value="tracked">Tracked (default)</option><option value="standard">Standard</option>
         </select>
       </label>
       <label className="block">Pickup city
-        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.pickupCity} onChange={e => mf.setSetting('pickupCity', e.target.value)}>
+        <select className="mt-1 block w-full border rounded px-2 py-1 dark:bg-slate-800 dark:border-slate-600" value={s.pickupCity} onChange={e => mf.setSetting('pickupCity', e.target.value)}>
           {['Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Tauranga', 'Dunedin'].map(c => <option key={c}>{c}</option>)}
         </select>
       </label>
       <label className="block">Minimum condition
-        <select className="mt-1 block w-full border rounded px-2 py-1" value={s.minCond} onChange={e => mf.setSetting('minCond', e.target.value)}>
+        <select className="mt-1 block w-full border rounded px-2 py-1 dark:bg-slate-800 dark:border-slate-600" value={s.minCond} onChange={e => mf.setSetting('minCond', e.target.value)}>
           <option value="NM">Near Mint</option><option value="LP">Lightly Played (default)</option><option value="MP">Moderately Played</option>
         </select>
       </label>
@@ -454,7 +455,7 @@ function ParcelFooter({ mf, parcel }) {
       <div className="flex justify-between"><span>Cards</span><span>{$(subtotal)}</span></div>
       <div className="flex justify-between"><span>{picked ? 'Pickup' : `Postage (${mf.settings.postageType})`}{store.postageUnknown && !picked && <span title="This Store doesn't publish postage; using the editable default" className="ml-1 text-amber-600">est.</span>}</span><span>{postage === 0 ? (picked ? '$0.00' : 'Free') : $(postage)}</span></div>
       {!picked && store.freeOver && subtotal < store.freeOver && <div className="text-[11px] text-slate-500">Free postage over {$(store.freeOver)} ({$(store.freeOver - subtotal)} away)</div>}
-      <div className="flex justify-between font-semibold border-t pt-1"><span>Store total</span><span>{$(parcel.total)}</span></div>
+      <div className="flex justify-between font-semibold border-t dark:border-slate-700 pt-1"><span>Store total</span><span>{$(parcel.total)}</span></div>
     </div>
   );
 }
@@ -465,7 +466,7 @@ function PickupHints({ r }) {
 function cardLabel(a) { const p = printingById[a.listing.printingId]; return printingLabel(p); }
 function ListingTags({ a }) {
   return <>
-    <span className="text-[11px] px-1 rounded bg-slate-100 text-slate-600">{a.listing.cond}</span>
+    <span className="text-[11px] px-1 rounded bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{a.listing.cond}</span>
     {!a.listing.confirmed && <span className="text-[11px] px-1 rounded bg-amber-100 text-amber-800" title="Matched the card but not the exact Printing">Printing not confirmed</span>}
   </>;
 }
@@ -906,14 +907,206 @@ function SettingsModal({ mf, close }) {
 VariantC.label = 'Visual cart';
 
 /* ============================================================
+   VARIANT D — A's flow + C's landing and card images, dark mode
+   ============================================================ */
+function PrintingGrid({ mf, cardId }) {
+  const line = mf.parsed.lines.find(l => l.cardId === cardId);
+  return (
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+        {printingOptions(line, mf.ctx).map(o => {
+          const locked = mf.locks[cardId] === o.printing.id;
+          return (
+            <div key={o.printing.id} className={`rounded-xl p-2 ${locked ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-950' : 'bg-slate-50 dark:bg-slate-800'}`}>
+              <CardImage printing={{ ...o.printing, cardId }} className="w-full aspect-[5/7] object-cover rounded-lg" />
+              <div className="text-[11px] mt-1 h-8 overflow-hidden text-slate-600 dark:text-slate-300">{printingLabel(o.printing)}</div>
+              {o.printing.nonTourn && <div className="text-[10px] text-slate-500">{o.printing.nonTourn}, used only if locked</div>}
+              <div className="text-sm font-semibold tabnum">{o.cheapest == null ? <span className="text-slate-400">none in stock</span> : <>from {$(o.cheapest)} <span className="text-[11px] font-normal text-slate-500">{o.stores} Store{o.stores > 1 ? 's' : ''}</span></>}</div>
+              {locked ? <button className="w-full mt-1 text-xs py-1 rounded bg-indigo-600 text-white" onClick={() => mf.unlock(cardId)}>🔒 Locked, unlock</button>
+                : <button disabled={!o.count} className="w-full mt-1 text-xs py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-40" onClick={() => mf.lock(cardId, o.printing.id)}>Lock this one</button>}
+            </div>);
+        })}
+      </div>
+      {line.hint && <p className="text-xs text-slate-500 mt-2">Your list said {line.hint.text}.</p>}
+    </div>
+  );
+}
+function Thumb({ printing }) {
+  return (
+    <span className="relative group shrink-0">
+      <CardImage printing={printing} className="w-10 aspect-[5/7] object-cover rounded" />
+      <span className="hidden group-hover:block absolute left-12 top-0 z-30 w-56 shadow-2xl rounded-xl overflow-hidden pointer-events-none">
+        <CardImage printing={printing} className="w-full aspect-[5/7] object-cover" />
+      </span>
+    </span>
+  );
+}
+function VariantD({ mf }) {
+  const [dark, setDark] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [openPrintings, setOpenPrintings] = useState(null);
+  const [review, setReview] = useState(false);
+  const [url, setUrl] = useState('');
+  useEffect(() => { document.documentElement.classList.toggle('dark', dark); return () => document.documentElement.classList.remove('dark'); }, [dark]);
+  const step = mf.phase === 'input' ? 0 : mf.phase === 'searching' ? 1 : 2;
+  const ordered = mf.parsed.lines.filter(l => !mf.excluded[l.cardId]);
+  const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
+  return (
+    <div className="min-h-screen pb-24 bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-6">
+          <div className="font-bold text-lg">🔮 MagicFinder</div>
+          <ol className="flex gap-4 text-sm flex-1">
+            {['Want List', 'Search', 'Choose a Plan'].map((s, i) => (
+              <li key={s} className={`flex items-center gap-2 ${i === step ? 'text-indigo-600 dark:text-indigo-300 font-semibold' : i < step ? '' : 'text-slate-400 dark:text-slate-600'}`}>
+                <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i <= step ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800'}`}>{i < step ? '✓' : i + 1}</span>{s}
+              </li>))}
+          </ol>
+          <button title="Toggle dark mode" className="text-sm px-2 py-1.5 rounded border border-slate-300 dark:border-slate-700" onClick={() => setDark(!dark)}>{dark ? '☀' : '🌙'}</button>
+          <button className="text-sm px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700" onClick={() => setSettingsOpen(true)}>⚙ Settings</button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        {step === 0 && (
+          <div className="max-w-2xl mx-auto space-y-4 pt-6">
+            <h1 className="text-4xl font-black tracking-tight">Cheapest way to buy your list in NZ.</h1>
+            <p className="text-slate-500 dark:text-slate-400">Paste a list or an Archidekt link. We'll search Fetch TCG and MtgSingles and show what each extra Store saves you.</p>
+            <div className="flex gap-2">
+              <input className="flex-1 rounded-lg px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700" placeholder="https://archidekt.com/decks/…" value={url} onChange={e => setUrl(e.target.value)} />
+              <button className="px-4 rounded-lg bg-slate-800 dark:bg-slate-700 text-white" onClick={() => mf.loadArchidekt(url)}>Import</button>
+            </div>
+            <textarea className="w-full h-56 rounded-lg p-3 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700" value={mf.text} onChange={e => mf.setText(e.target.value)} />
+            <div className="flex items-center gap-4">
+              <button className="px-6 py-3 rounded-lg bg-amber-400 text-slate-900 font-bold text-lg" onClick={mf.search}>Find my cards</button>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{mf.deckName ? `“${mf.deckName}”: ` : ''}{mf.parsed.lines.length} cards recognised{mf.parsed.unrecognised.length ? `, ${mf.parsed.unrecognised.length} not` : ''}{mf.parsed.basics.length ? ', basics skipped' : ''}</span>
+              <button className="ml-auto text-sm underline text-slate-500" onClick={() => setReview(!review)}>{review ? 'hide' : 'review'} list ▾</button>
+            </div>
+            {review && (
+              <div className={`${panel} rounded-xl p-3`}>
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  {mf.parsed.lines.map(l => (
+                    <li key={l.cardId} className="py-1.5 flex items-center gap-2">
+                      <input type="checkbox" checked={!mf.excluded[l.cardId]} onChange={() => mf.toggleExcluded(l.cardId)} />
+                      <span className="w-6 text-right tabnum text-slate-500">{l.qty}</span>
+                      <span className={mf.excluded[l.cardId] ? 'line-through text-slate-400' : ''}>{cardById[l.cardId].name}</span>
+                      {mf.locks[l.cardId] && <span className="text-xs">🔒</span>}
+                      {l.hint && !mf.locks[l.cardId] && <span className="ml-auto text-[11px] text-slate-500">your list said {l.hint.text} {l.hint.printingId && <button className="text-indigo-500 underline" onClick={() => mf.lock(l.cardId, l.hint.printingId)}>lock</button>}</span>}
+                    </li>))}
+                </ul>
+                {mf.parsed.unrecognised.length > 0 && <div className="mt-2 text-sm text-rose-500">Couldn't recognise: {mf.parsed.unrecognised.join(', ')}</div>}
+                {mf.parsed.basics.length > 0 && <div className="mt-1 text-sm text-slate-500">Skipped basic lands: {mf.parsed.basics.join(', ')}</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-6 mt-6">
+            <div className={`max-w-xl mx-auto ${panel} rounded-xl p-6 text-center space-y-4`}>
+              <div className="text-lg font-semibold">Searching NZ Stores…</div>
+              <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded"><div className="h-2 bg-indigo-500 rounded transition-all" style={{ width: `${100 * mf.progress.done / mf.progress.total}%` }} /></div>
+              <div className="text-sm text-slate-500 tabnum">{mf.progress.done}/{mf.progress.total}: {cardById[ordered[Math.min(mf.progress.done, ordered.length - 1)]?.cardId]?.name}</div>
+              <div className="flex justify-center gap-4 text-sm">
+                <span>Fetch TCG ✓</span>
+                <span className={mf.demo.blocked && mf.progress.done > MTGS_BLOCK_AFTER ? 'text-amber-500' : ''}>MtgSingles {mf.demo.blocked && mf.progress.done > MTGS_BLOCK_AFTER ? '⚠ stopped (checking-your-browser page)' : '✓'}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+              {ordered.map((l, i) => (
+                <div key={l.cardId} className={`transition duration-500 ${i < mf.progress.done ? 'opacity-100' : 'opacity-20'}`}>
+                  <CardImage printing={printingById[mf.locks[l.cardId] || cardById[l.cardId].printings[0].id]} className="w-full aspect-[5/7] object-cover rounded-lg" />
+                </div>))}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <button className="text-sm text-slate-500 underline" onClick={mf.backToInput}>← Edit Want List</button>
+              <div className="text-sm text-slate-500">{mf.refining ? 'Finding cheaper Plans…' : 'Final'} · Fewest Stores that cover your list: {mf.result.kmin}</div>
+            </div>
+            <Banners mf={mf} />
+            <section>
+              <h2 className="font-semibold mb-2">How many Stores do you want to order from?</h2>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {mf.rungs.map(r => (
+                  <button key={r.k} onClick={() => mf.selectK(r.k)} className={`min-w-[170px] text-left rounded-xl border-2 p-3 bg-white dark:bg-slate-900 transition ${mf.selected?.k === r.k ? 'border-indigo-500 shadow-md' : 'border-transparent ring-1 ring-slate-200 dark:ring-slate-800 hover:ring-slate-400'}`}>
+                    <div className="text-sm text-slate-500">{r.k} Store{r.k > 1 ? 's' : ''}{r.cheapestOverall && <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">· Cheapest overall</span>}</div>
+                    <div className="text-2xl font-bold tabnum">{$(r.shownTotal)}</div>
+                    <div className="text-xs text-slate-500 tabnum h-4">{r.saves != null ? `saves ${$(r.saves)} vs ${r.k - 1}` : 'fewest Stores'}</div>
+                    <div className="mt-1"><StatusBadge r={r} mf={mf} /></div>
+                  </button>))}
+              </div>
+            </section>
+            {mf.selected && (
+              <section className="space-y-4">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-semibold">Your {mf.selected.k}-Store Plan</h2>
+                  <PickupHints r={mf.selected} />
+                </div>
+                {mf.selected.parcels.map(p => (
+                  <div key={p.store.id} className={`${panel} rounded-xl`}>
+                    <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl" style={{ boxShadow: `inset 4px 0 0 ${p.store.color}` }}>
+                      <a href="#" onClick={mockLink} className="font-semibold hover:underline">{p.store.name} ↗</a>
+                      <span className="text-sm text-slate-500">{p.store.city}</span><SourceBadge source={p.store.source} />
+                      <div className="ml-auto"><PickupToggle mf={mf} store={p.store} /></div>
+                    </div>
+                    <div className="grid md:grid-cols-[1fr_220px]">
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {p.items.map(a => (
+                          <li key={a.listing.id} className="px-4 py-2">
+                            <div className="flex items-center gap-3 text-sm">
+                              <Thumb printing={printingById[a.listing.printingId]} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="tabnum text-slate-500">{a.qty}×</span>
+                                  <span className="font-medium">{cardById[a.cardId].name}</span>
+                                  {mf.locks[a.cardId] && <span title="Locked Printing">🔒</span>}
+                                  <ListingTags a={a} />
+                                </div>
+                                <div className="text-xs text-slate-500">{cardLabel(a)} · <button className="text-indigo-500 underline" onClick={() => setOpenPrintings(openPrintings === a.cardId ? null : a.cardId)}>{openPrintings === a.cardId ? 'hide Printings' : 'other Printings'}</button></div>
+                              </div>
+                              <span className="tabnum">{$(a.listing.price)}</span>
+                              <a href="#" onClick={mockLink} className="text-xs text-indigo-500 hover:underline">View listing ↗</a>
+                            </div>
+                            {openPrintings === a.cardId && <div className="mt-3"><PrintingGrid mf={mf} cardId={a.cardId} /></div>}
+                          </li>))}
+                      </ul>
+                      <div className="p-4 border-l border-slate-200 dark:border-slate-800"><ParcelFooter mf={mf} parcel={p} /></div>
+                    </div>
+                  </div>))}
+                <div className="text-right text-lg font-bold tabnum">Landed Cost {$(mf.selected.shownTotal)}</div>
+              </section>
+            )}
+          </div>
+        )}
+      </main>
+
+      {settingsOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={() => setSettingsOpen(false)}>
+          <div className="w-80 bg-white dark:bg-slate-900 h-full p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between mb-4"><h3 className="font-semibold">Settings</h3><button onClick={() => setSettingsOpen(false)}>✕</button></div>
+            <SettingsForm mf={mf} />
+          </div>
+        </div>
+      )}
+      <Footer />
+    </div>
+  );
+}
+VariantD.label = 'A + C, dark';
+
+/* ============================================================
    PROTOTYPE SWITCHER + STATE PANEL
    ============================================================ */
-const VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
+const VARIANTS = { A: VariantA, B: VariantB, C: VariantC, D: VariantD };
 const KEYS = Object.keys(VARIANTS);
 
 function App() {
   const initial = new URLSearchParams(location.search).get('variant');
-  const [variant, setVariant] = useState(KEYS.includes(initial) ? initial : 'A');
+  const [variant, setVariant] = useState(KEYS.includes(initial) ? initial : 'D');
   const [demo, setDemo] = useState({ blocked: false, timeout: false });
   const [showState, setShowState] = useState(false);
   const mf = useMagicFinder(demo);

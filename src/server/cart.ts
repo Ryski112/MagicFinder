@@ -73,10 +73,12 @@ export async function checkShopifyCart(
   items: { listing: Listing; qty: number; name: string }[],
   get: ProductFetcher = fetchProduct,
   throttle = new Throttle(1000),
+  onProgress?: (done: number, total: number, name: string) => void,
 ): Promise<CartCheckResponse> {
   const lines: CartLineCheck[] = [];
   let host: string | null = null;
-  for (const { listing, qty, name } of items) {
+  for (const [index, { listing, qty, name }] of items.entries()) {
+    onProgress?.(index, items.length, name);
     const base: CartLineCheck = { listingId: listing.id, name, qty, expectedPrice: listing.price, status: 'unconfirmed', url: listing.url };
     let u: URL;
     try {

@@ -1,9 +1,9 @@
 // HTTP API for the UI. Everything that talks to Sources, Archidekt or Scryfall happens here, not in the browser.
 import { Hono } from 'hono';
-import { streamSSE } from 'hono/streaming';
+import { stream, streamSSE } from 'hono/streaming';
 import type { CatalogueStore } from '../catalogue/updater';
 import { resolveWantList } from '../core/wantList';
-import type { ArchidektResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, StartRunRequest, StatusResponse } from '../shared/api';
+import type { ArchidektResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, StartRunRequest, StatusResponse } from '../shared/api';
 import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
 import { checkShopifyCart } from './cart';
@@ -133,7 +133,18 @@ export function createApp(d: AppDeps) {
       const listing = byId.get(i.listingId);
       return listing ? [{ listing, qty: i.qty, name: i.name }] : [];
     });
-    return c.json(await checkShopifyCart(store.id, store.name, items));
+    // Stream progress so the dialog can show which card is being checked (about one a second).
+    return stream(c, async out => {
+      const send = (e: CartCheckEvent) => out.write(JSON.stringify(e) + '\n');
+      try {
+        const result = await checkShopifyCart(store.id, store.name, items, undefined, undefined, (done, total, name) => {
+          void send({ type: 'progress', done, total, name });
+        });
+        await send({ type: 'result', result });
+      } catch (e) {
+        await send({ type: 'error', message: (e as Error).message });
+      }
+    });
   });
 
   return app;

@@ -1,6 +1,6 @@
 // Calls to the local MagicFinder server.
 import type {
-  ArchidektResponse, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, Settings, StatusResponse,
+  ArchidektResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, Settings, StatusResponse,
 } from '../shared/api';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -25,7 +25,31 @@ export const api = {
   replan: (runId: string, choices: PlanChoices) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices }),
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),
   printings: (runId: string, lineId: string) => call<PrintingsResponse>('GET', `/api/runs/${runId}/printings/${encodeURIComponent(lineId)}`),
-  cart: (runId: string, storeId: string, k: number) => call<CartCheckResponse>('POST', `/api/runs/${runId}/cart`, { storeId, k }),
+  /** Runs the cart pre-check, reporting each card as it is checked. */
+  cart: async (runId: string, storeId: string, k: number, onProgress: (done: number, total: number, name: string) => void): Promise<CartCheckResponse> => {
+    const res = await fetch(`/api/runs/${runId}/cart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, k }) });
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+    }
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const lines = buffer.split('\n');
+      buffer = lines.pop()!;
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const e = JSON.parse(line) as CartCheckEvent;
+        if (e.type === 'progress') onProgress(e.done, e.total, e.name);
+        else if (e.type === 'result') return e.result;
+        else throw new Error(e.message);
+      }
+    }
+    throw new Error('The cart check stopped before finishing. Try again.');
+  },
 };
 
 /** Follows a run's live updates. Returns a function that stops listening. */

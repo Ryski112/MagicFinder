@@ -98,8 +98,9 @@ function DeckBuilder({ store, items, onClose }: { store: StoreView; items: { nam
 function ShopifyCart({ runId, store, k, onClose }: { runId: string; store: StoreView; k: number; onClose: () => void }) {
   const [check, setCheck] = useState<CartCheckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; name: string } | null>(null);
   useEffect(() => {
-    api.cart(runId, store.id, k).then(setCheck, e => setError((e as Error).message));
+    api.cart(runId, store.id, k, (done, total, name) => setProgress({ done, total, name })).then(setCheck, e => setError((e as Error).message));
   }, [runId, store.id, k]);
   const bad = check?.lines.filter(l => l.status === 'unavailable' || l.status === 'unconfirmed') ?? [];
   const changed = check?.lines.filter(l => l.status === 'price-changed') ?? [];
@@ -107,7 +108,7 @@ function ShopifyCart({ runId, store, k, onClose }: { runId: string; store: Store
   return (
     <Dialog open onClose={onClose} title={`Add all to cart at ${store.name}`}>
       {error && <Notice tone="bad">{error}</Notice>}
-      {!check && !error && <p className="text-sm text-slate-500">Checking {store.name} still has these cards at these prices…</p>}
+      {!check && !error && <CheckProgress storeName={store.name} progress={progress} total={store.items.length} />}
       {check && (
         <div className="space-y-3 text-sm">
           {check.fallbackReason && <Notice tone="warn">{check.fallbackReason} Open the Listings instead.</Notice>}
@@ -139,5 +140,24 @@ function ShopifyCart({ runId, store, k, onClose }: { runId: string; store: Store
         </div>
       )}
     </Dialog>
+  );
+}
+
+function CheckProgress({ storeName, progress, total }: { storeName: string; progress: { done: number; total: number; name: string } | null; total: number }) {
+  const n = progress?.total ?? total;
+  const done = progress?.done ?? 0;
+  return (
+    <div className="space-y-3 py-2" role="status" aria-live="polite">
+      <div className="flex items-center gap-3 text-sm">
+        <span className="inline-block w-4 h-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" aria-hidden />
+        <span>Checking {storeName} still has these cards at these prices…</span>
+      </div>
+      <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded overflow-hidden">
+        <div className="h-2 bg-indigo-500 rounded transition-all duration-700" style={{ width: `${n ? Math.max(4, (100 * (done + 0.5)) / n) : 4}%` }} />
+      </div>
+      <div className="text-xs text-slate-500 tabnum">
+        {progress ? `${Math.min(done + 1, n)} of ${n}: ${progress.name}` : `0 of ${n}`} · about {Math.max(1, n - done)} s left
+      </div>
+    </div>
   );
 }

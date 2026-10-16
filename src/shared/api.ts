@@ -201,3 +201,9 @@ export interface CartCheckResponse {
   /** Why the whole Store fell back (e.g. password-protected storefront). */
   fallbackReason?: string;
 }
+
+/** Lines streamed (as JSON, one per line) while the cart pre-check runs. */
+export type CartCheckEvent =
+  | { type: 'progress'; done: number; total: number; name: string }
+  | { type: 'result'; result: CartCheckResponse }
+  | { type: 'error'; message: string };

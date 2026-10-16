@@ -101,21 +101,17 @@ export class MtgSinglesSource implements Source {
     const seen = new Set<string>();
     for (let page = 1; page <= MAX_PAGES; page++) {
       const url = `${API}?query=${encodeURIComponent(cardName)}&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
-      const rows = await withRetries(async () => {
-        await this.throttle.wait();
-        const a = await this.get(url);
-        classify(a);
-        // No Listings at all comes back as "204 No Content" with an empty body, not as an empty list.
-        if (a.status === 204 || !a.body.trim()) return [];
-        let body: unknown;
-        try {
-          body = JSON.parse(a.body);
-        } catch {
-          throw new SourceError('changed', 'MtgSingles answered with something that is not JSON');
+      let rows: unknown[];
+      try {
+        rows = await this.fetchPage(url, signal);
+      } catch (e) {
+        // Results come cheapest first, so earlier pages are still worth keeping if a later one fails.
+        if (page > 1 && e instanceof SourceError && e.status === 'down') {
+          console.warn(`MtgSingles: page ${page} of "${cardName}" failed (${e.message}); keeping the ${out.length} cheapest Listings`);
+          break;
         }
-        if (!Array.isArray(body)) throw new SourceError('changed', 'MtgSingles answer is not a list of Listings');
-        return body;
-      }, { signal });
+        throw e;
+      }
       for (const m of mapRows(rows, r => mapMtgSinglesListing(r, this.opts.storeName))) {
         if (!seen.has(m.id)) {
           seen.add(m.id);
@@ -125,6 +121,24 @@ export class MtgSinglesSource implements Source {
       if (rows.length < PAGE_SIZE) break;
     }
     return out;
+  }
+
+  private fetchPage(url: string, signal?: AbortSignal): Promise<unknown[]> {
+    return withRetries(async () => {
+      await this.throttle.wait();
+      const a = await this.get(url);
+      classify(a);
+      // No Listings at all comes back as "204 No Content" with an empty body, not as an empty list.
+      if (a.status === 204 || !a.body.trim()) return [];
+      let body: unknown;
+      try {
+        body = JSON.parse(a.body);
+      } catch {
+        throw new SourceError('changed', 'MtgSingles answered with something that is not JSON');
+      }
+      if (!Array.isArray(body)) throw new SourceError('changed', 'MtgSingles answer is not a list of Listings');
+      return body;
+    }, { signal });
   }
 
   async close() {

@@ -97,11 +97,18 @@ describe('searchAll', () => {
     expect(r.listings).toHaveLength(6);
   });
 
-  it('skips one card the Source has a server error on, and keeps searching the rest', async () => {
-    const mts = fakeSource('mtgsingles', { failOn: [3] });
-    const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't' }, () => {});
+  it('skips one card the Source has a server error on, keeps searching, and tries it again at the end', async () => {
+    const mts = fakeSource('mtgsingles', { failOn: [3, cards.length + 1] });
+    const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't', retryPause: async () => {} }, () => {});
     expect(r.sources[0]).toMatchObject({ status: 'ok', searched: cards.length - 1, failedCards: 1 });
     expect(r.sources[0].notSearched).toEqual([cards[2].oracleId]);
+    expect(mts.calls.at(-1)).toBe(queryFor('mtgsingles', cards[2].name));
+  });
+
+  it('recovers a skipped card when the second try works', async () => {
+    const mts = fakeSource('mtgsingles', { failOn: [3] });
+    const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't', retryPause: async () => {} }, () => {});
+    expect(r.sources[0]).toMatchObject({ status: 'ok', searched: cards.length, failedCards: 0, notSearched: [] });
   });
 
   it('treats server errors on several cards in a row as the Source being down', async () => {

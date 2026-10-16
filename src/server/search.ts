@@ -10,6 +10,8 @@ import type { Settings } from './settings';
 export const COOLDOWN_MS = 30 * 60 * 1000;
 /** Server errors on this many cards in a row mean the Source itself is down for this run. */
 export const MAX_DOWN_IN_A_ROW = 3;
+/** Pause before retrying cards that hit a server error. */
+export const RETRY_PAUSE_MS = 10_000;
 
 export interface SearchCard {
   oracleId: string;
@@ -59,6 +61,8 @@ export interface SearchDeps {
   /** Called when the run learns something about a Source's health (blocked or answered normally). */
   onHealth?: (source: SourceId, blocked: boolean) => void;
   now?: () => number;
+  /** Injectable for tests: the pause before retrying failed cards. */
+  retryPause?: () => Promise<void>;
 }
 
 /** The name sent to a Source. MtgSingles titles often carry only the front face of double-faced cards. */
@@ -168,6 +172,31 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
       }
     }),
   );
+
+  // Server errors are usually brief: after a short pause, give each skipped card one more try.
+  for (const src of active) {
+    const st = statuses.get(src.id)!;
+    const failed = cards.filter(c => st.notSearched.includes(c.oracleId) && !raw.get(src.id)!.has(c.oracleId));
+    if (st.status !== 'ok' || !failed.length) continue;
+    await (deps.retryPause ?? (() => new Promise(r => setTimeout(r, RETRY_PAUSE_MS))))();
+    for (const card of failed) {
+      signal?.throwIfAborted();
+      const q = queryFor(src.id, card.name);
+      try {
+        const listings = await src.search(q, signal);
+        deps.cache.put(src.id, q, listings);
+        raw.get(src.id)!.set(card.oracleId, listings);
+        st.notSearched = st.notSearched.filter(id => id !== card.oracleId);
+        st.searched++;
+        st.failedCards = Math.max(0, (st.failedCards ?? 1) - 1);
+        console.warn(`${src.name}: "${card.name}" worked on the second try`);
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        console.warn(`${src.name}: "${card.name}" failed again: ${(e as Error).message}`);
+      }
+    }
+    report();
+  }
 
   // Match everything to the catalogue, once per Listing.
   const seen = new Set<string>();

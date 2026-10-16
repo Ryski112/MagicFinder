@@ -66,6 +66,14 @@ describe('MtgSinglesSource.search', () => {
     expect(n).toBe(3);
   });
 
+  it('keeps the cheapest pages when a later page has a server error', async () => {
+    let n = 0;
+    const src = new MtgSinglesSource({ pageGet: async () => (n++ === 0
+      ? { status: 200, body: JSON.stringify(pages[0]), contentType: 'application/json' }
+      : { status: 504, body: 'Gateway Timeout', contentType: 'text/html' }) });
+    expect(await src.search('Counterspell')).toHaveLength(20);
+  }, 30_000);
+
   it('reads an empty "204 No Content" answer as no Listings', async () => {
     const src = new MtgSinglesSource({ pageGet: async () => ({ status: 204, body: '', contentType: null }) });
     expect(await src.search('Black Waltz No 3')).toEqual([]);

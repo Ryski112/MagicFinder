@@ -909,7 +909,7 @@ VariantC.label = 'Visual cart';
 /* ============================================================
    VARIANT D — A's flow + C's landing and card images, dark mode
    ============================================================ */
-function PrintingGrid({ mf, cardId }) {
+function PrintingGrid({ mf, cardId, onLocked }) {
   const line = mf.parsed.lines.find(l => l.cardId === cardId);
   return (
     <div>
@@ -923,7 +923,7 @@ function PrintingGrid({ mf, cardId }) {
               {o.printing.nonTourn && <div className="text-[10px] text-slate-500">{o.printing.nonTourn}, used only if locked</div>}
               <div className="text-sm font-semibold tabnum">{o.cheapest == null ? <span className="text-slate-400">none in stock</span> : <>from {$(o.cheapest)} <span className="text-[11px] font-normal text-slate-500">{o.stores} Store{o.stores > 1 ? 's' : ''}</span></>}</div>
               {locked ? <button className="w-full mt-1 text-xs py-1 rounded bg-indigo-600 text-white" onClick={() => mf.unlock(cardId)}>🔒 Locked, unlock</button>
-                : <button disabled={!o.count} className="w-full mt-1 text-xs py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-40" onClick={() => mf.lock(cardId, o.printing.id)}>Lock this one</button>}
+                : <button disabled={!o.count} className="w-full mt-1 text-xs py-1 rounded border border-slate-300 dark:border-slate-600 disabled:opacity-40" onClick={() => { mf.lock(cardId, o.printing.id); onLocked && onLocked(); }}>Lock this one</button>}
             </div>);
         })}
       </div>
@@ -1051,7 +1051,8 @@ function VariantD({ mf }) {
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl" style={{ boxShadow: `inset 4px 0 0 ${p.store.color}` }}>
                       <a href="#" onClick={mockLink} className="font-semibold hover:underline">{p.store.name} ↗</a>
                       <span className="text-sm text-slate-500">{p.store.city}</span><SourceBadge source={p.store.source} />
-                      <div className="ml-auto"><PickupToggle mf={mf} store={p.store} /></div>
+                      <div className="ml-auto flex items-center gap-3"><PickupToggle mf={mf} store={p.store} />
+                        <a href="#" onClick={e => { e.preventDefault(); alert('Mock: opens ' + p.store.name + ' with these ' + p.items.length + ' Listings already in its cart (feasibility pending research).'); }} className="text-xs px-2.5 py-1 rounded bg-amber-400 text-slate-900 font-semibold">🛒 Add all to cart ↗</a></div>
                     </div>
                     <div className="grid md:grid-cols-[1fr_220px]">
                       <ul className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1071,7 +1072,7 @@ function VariantD({ mf }) {
                               <span className="tabnum">{$(a.listing.price)}</span>
                               <a href="#" onClick={mockLink} className="text-xs text-indigo-500 hover:underline">View listing ↗</a>
                             </div>
-                            {openPrintings === a.cardId && <div className="mt-3"><PrintingGrid mf={mf} cardId={a.cardId} /></div>}
+                            {openPrintings === a.cardId && <div className="mt-3"><PrintingGrid mf={mf} cardId={a.cardId} onLocked={() => setOpenPrintings(null)} /></div>}
                           </li>))}
                       </ul>
                       <div className="p-4 border-l border-slate-200 dark:border-slate-800"><ParcelFooter mf={mf} parcel={p} /></div>

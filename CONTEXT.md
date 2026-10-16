@@ -12,6 +12,10 @@ _Avoid_: deck, decklist, cart
 A website searched for stock (Fetch TCG, MtgSingles). A Source is where Listings are found, never who is paid.
 _Avoid_: site, store, provider
 
+**Source Status**:
+How a Source answered during a run: OK, Blocked (it refused MagicFinder), Slowed down (it asked MagicFinder to wait), Down (it is broken for everyone) or Changed (it answers in a form MagicFinder no longer understands). A card a Source simply has no Listings for is not a Source Status; it may be Not Found.
+_Avoid_: error, failure, outage
+
 **Store**:
 The individual seller who takes payment and supplies the cards, either by shipping a parcel (with its own postage charge) or by the buyer picking up in person. One Source can surface many Stores; minimising Stores means minimising the separate sellers the buyer deals with. Pickup is never assumed: a Store is costed with postage unless the buyer has chosen pickup for it.
 _Avoid_: shop, vendor, seller account
@@ -41,5 +45,5 @@ The best Plan for each Store count, from the fewest Stores that can supply every
 _Avoid_: options, results
 
 **Not Found**:
-Want List cards with no Listing at any Store; reported, and excluded from every Plan.
+Want List cards with no Listing at any Store on the Sources that were searched; reported, and excluded from every Plan. When a Source could not be searched, the card is reported as Not Found on the Sources that were, so the buyer knows it may still exist.
 _Avoid_: missing, unavailable

@@ -101,6 +101,8 @@ export class LadderKnowledge {
 
 export interface LadderOptions {
   solve: RungSolver;
+  /** Where results are collected; pass one in to keep it for "Try longer". */
+  knowledge?: LadderKnowledge;
   /** Seconds per exact rung. */
   timeLimitS?: number;
   /** Exact rungs solved at once. */
@@ -110,7 +112,7 @@ export interface LadderOptions {
 }
 
 export async function buildLadder(p: Problem, opts: LadderOptions): Promise<LadderState> {
-  const know = new LadderKnowledge();
+  const know = opts.knowledge ?? new LadderKnowledge();
   const emit = (final = false) => {
     const s = know.state(final);
     opts.onUpdate(s);
@@ -148,9 +150,4 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
     }),
   );
   return emit(true);
-}
-
-/** Re-solves one rung with a longer time limit ("Try longer"). */
-export async function retryRung(p: Problem, k: number, start: Plan | null, solve: RungSolver, timeLimitS: number): Promise<RungOutcome> {
-  return solve(p, k, { timeLimitS, start: start ?? undefined });
 }

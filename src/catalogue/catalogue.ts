@@ -191,9 +191,16 @@ export class Catalogue {
     return ps;
   }
 
+  private byId = new Map<string, Printing | null>();
+
   getPrinting(id: string): Printing | null {
-    const row = this.db.prepare('SELECT * FROM printings WHERE id = ?').get(id);
-    return row ? toPrinting(row) : null;
+    let p = this.byId.get(id);
+    if (p === undefined) {
+      const row = this.db.prepare('SELECT * FROM printings WHERE id = ?').get(id);
+      p = row ? toPrinting(row) : null;
+      this.byId.set(id, p);
+    }
+    return p;
   }
 
   /** Resolves a set name or code to a set code, or null. */

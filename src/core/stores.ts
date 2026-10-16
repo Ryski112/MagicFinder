@@ -47,7 +47,7 @@ export interface StoreCost {
 }
 
 const AUCKLAND = ['auckland', 'manukau', 'north shore', 'waitakere', 'albany', 'takapuna', 'henderson', 'silverdale', 'pukekohe', 'papakura', 'flat bush', 'newmarket', 'penrose', 'remuera', 'ponsonby'];
-const SOUTH_ISLAND = ['christchurch', 'dunedin', 'invercargill', 'nelson', 'blenheim', 'timaru', 'queenstown', 'rangiora', 'ashburton', 'greymouth', 'oamaru', 'wanaka', 'rolleston', 'picton', 'motueka', 'gore'];
+const SOUTH_ISLAND = ['christchurch', 'dunedin', 'invercargill', 'nelson', 'blenheim', 'timaru', 'queenstown', 'rangiora', 'ashburton', 'greymouth', 'oamaru', 'wanaka', 'rolleston', 'picton', 'motueka', 'gore', 'waimate', 'canterbury', 'otago', 'southland', 'tasman', 'marlborough', 'west coast'];
 
 export function normaliseCity(city: string): string {
   return city.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();

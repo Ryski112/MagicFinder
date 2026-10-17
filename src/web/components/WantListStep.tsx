@@ -28,13 +28,17 @@ export function isLineIncluded(l: ParseResponse['lines'][number], choices: PlanC
 
 export function WantListStep(p: Props) {
   const [url, setUrl] = useState('');
-  const [review, setReview] = useState(false);
+  const [review, setReview] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const lines = p.parsed?.lines ?? [];
   const included = lines.filter(l => isLineIncluded(l, p.choices, p.settings));
   const basics = lines.filter(l => l.isBasic);
-  const lockOf = (id: string): Lock | null | undefined => p.choices.locks[id];
+  // What will actually apply: the buyer's own choice, else the list's Printing when "Use the Printings from my list" is on.
+  const lockOf = (l: ParseResponse['lines'][number]): Lock | null =>
+    l.id in p.choices.locks ? p.choices.locks[l.id] : p.settings.useListPrintings ? l.hint?.lock ?? null : null;
+  const setLock = (id: string, lock: Lock | null) => p.onChoices({ ...p.choices, locks: { ...p.choices.locks, [id]: lock } });
+  const sameLock = (a: Lock | null | undefined, b: Lock | null | undefined) => !!a && !!b && a.printingId === b.printingId && a.finish === b.finish;
 
   const doImport = async () => {
     setImporting(true);
@@ -84,10 +88,15 @@ export function WantListStep(p: Props) {
       </div>
       {review && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
+          {lines.some(l => l.hint || lockOf(l)) && (
+            <p className="mb-2 text-xs text-slate-500">
+              MagicFinder buys the cheapest printing of each card. Where your list names a printing, you can lock the line to buy only that printing: it may cost more or be out of stock.
+            </p>
+          )}
           <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-sm">
             {lines.map(l => {
               const on = isLineIncluded(l, p.choices, p.settings);
-              const lock = lockOf(l.id);
+              const lock = lockOf(l);
               return (
                 <li key={l.id} className="py-1.5 flex items-center gap-2">
                   <input type="checkbox" checked={on} disabled={l.isBasic && !p.settings.includeBasics}
@@ -95,14 +104,28 @@ export function WantListStep(p: Props) {
                   <span className="w-6 text-right tabnum text-slate-500">{l.quantity}</span>
                   <span className={cx(!on && 'line-through text-slate-400')}>{l.name}</span>
                   {l.section !== 'main' && <span className="text-[11px] text-slate-400">{l.section}</span>}
-                  {lock && <span title="Locked Printing">🔒</span>}
-                  {l.hint && !lock && (
-                    <span className="ml-auto text-[11px] text-slate-500">
-                      your list said {l.hint.text}{' '}
-                      {l.hint.lock && <Button variant="link" className="text-[11px]" onClick={() => p.onChoices({ ...p.choices, locks: { ...p.choices.locks, [l.id]: l.hint!.lock } })}>lock</Button>}
+                  {lock ? (
+                    <span className="ml-auto flex items-center gap-2 text-[11px]">
+                      <span className="rounded px-1.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200"
+                        title="Locked: only this exact printing (and finish) can fill this line, even if another printing is cheaper.">
+                        🔒 only {sameLock(lock, l.hint?.lock) ? l.hint!.text : 'one printing'}
+                      </span>
+                      <Button variant="link" className="text-[11px]" title="Let any printing fill this line, cheapest first." onClick={() => setLock(l.id, null)}>
+                        allow any printing
+                      </Button>
                     </span>
-                  )}
-                  {lock && <Button variant="link" className="ml-auto text-[11px]" onClick={() => p.onChoices({ ...p.choices, locks: { ...p.choices.locks, [l.id]: null } })}>unlock</Button>}
+                  ) : l.hint ? (
+                    <span className="ml-auto flex items-center gap-2 text-[11px] text-slate-500">
+                      <span title={l.hint.lock ? 'Your list names this printing. For now any printing can fill the line, cheapest first.' : "Your list names a printing MagicFinder couldn't pin down, so any printing can fill the line."}>
+                        list says {l.hint.text}{l.hint.lock ? '' : ' (no exact match)'} · any printing
+                      </span>
+                      {l.hint.lock && (
+                        <Button variant="link" className="text-[11px]" title={`Lock: only ${l.hint.text} can fill this line, even if another printing is cheaper.`} onClick={() => setLock(l.id, l.hint!.lock)}>
+                          🔒 only buy {l.hint.text}
+                        </Button>
+                      )}
+                    </span>
+                  ) : null}
                 </li>
               );
             })}

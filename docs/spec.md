@@ -247,7 +247,7 @@ Decided in [What should the results GUI look like?](https://github.com/Ryski112/
 **1. Want List**
 - A simple start screen: a headline, an Archidekt URL box with **Import**, the card searcher, a large paste box, and one primary **Find my cards** button.
 - Beside the button, a one-line summary ("14 cards recognised, 1 not, basics skipped").
-- **Review list** expands the parsed lines: include checkboxes, "your list said … · lock" hints, unrecognised lines and skipped basics.
+- **Review list** (open by default) shows the parsed lines: include checkboxes, unrecognised lines and skipped basics. A line whose list names a Printing reads "list says C21 #263 · any printing" with **🔒 only buy C21 #263**. Locked, it reads "🔒 only C21 #263" with **allow any printing**. A one-line note explains that MagicFinder buys the cheapest printing unless a line is locked. The lock shown is the one that will apply, including "Use the Printings from my list".
 
 **2. Search**
 - A progress card ("Searching 7/14: Rhystic Study…") with each Source's status, including Blocked and other warnings.

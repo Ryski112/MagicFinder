@@ -190,7 +190,7 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
               n.missing < n.wanted ? `only ${n.wanted - n.missing} of ${n.wanted} available` : '',
               n.notSearchedOn.length ? `${n.notSearchedOn.join(' and ')} not searched` : '',
             ].filter(Boolean).join(' · '),
-            action: n.locked ? { label: 'locked Printing: unlock', onClick: () => onUnlock(n.lineIds) } : undefined,
+            action: n.locked ? { label: 'locked to one printing: allow any printing', onClick: () => onUnlock(n.lineIds) } : undefined,
           }))}
         />
       )}
@@ -309,8 +309,8 @@ function PrintingGrid({ runId, lineId, onLock }: { runId: string; lineId: string
               {o.cheapest == null ? <span className="text-slate-400">none in stock</span> : <>from {money(o.cheapest)}<div className="text-[11px] font-normal text-slate-500">at {o.stores} Store{o.stores > 1 ? 's' : ''}</div></>}
             </div>
             {o.locked
-              ? <Button variant="primary" className="w-full mt-1 text-xs py-1" onClick={() => onLock(null)}>🔒 Locked, unlock</Button>
-              : <Button className="w-full mt-1 text-xs py-1" disabled={o.cheapest == null} onClick={() => onLock({ printingId: o.printing.id, finish: o.printing.finish })}>Lock this one</Button>}
+              ? <Button variant="primary" className="w-full mt-1 text-xs py-1" title="Let any printing fill this line, cheapest first." onClick={() => onLock(null)}>🔒 Only this · allow any</Button>
+              : <Button className="w-full mt-1 text-xs py-1" disabled={o.cheapest == null} title="Lock: buy only this printing, even if another is cheaper." onClick={() => onLock({ printingId: o.printing.id, finish: o.printing.finish })}>🔒 Only buy this one</Button>}
           </div>
         ))}
       </div>

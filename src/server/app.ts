@@ -8,6 +8,7 @@ import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
 import { checkShopifyCart } from './cart';
 import { cardImage } from './planner';
+import { registerCardSearchPrototype } from './prototypeCardSearch';
 import type { RunManager } from './runs';
 import type { Settings, SettingsStore } from './settings';
 
@@ -44,6 +45,8 @@ export function createApp(d: AppDeps) {
     d.settings.update({ sourceHealth: { ...s.sourceHealth, [id]: { ...s.sourceHealth[id], blockedAt: null } } });
     return c.json({ ok: true });
   });
+
+  registerCardSearchPrototype(app, d.catalogue);
 
   app.post('/api/parse', async c => {
     if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);

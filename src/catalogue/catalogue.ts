@@ -182,6 +182,12 @@ export class Catalogue {
     return { oracleId: row.oracle_id, name: row.card_name, isBasic: this.printingsOf(row.oracle_id).some(p => p.isBasic) };
   }
 
+  /** PROTOTYPE (card searcher, issue #18): every name alias, for an in-memory autocomplete index. */
+  prototypeAllNames(): { alias: string; kind: string; oracleId: string; cardName: string }[] {
+    return (this.db.prepare('SELECT exact, kind, oracle_id, card_name FROM names').all() as unknown as NameRow[])
+      .map(r => ({ alias: r.exact, kind: r.kind, oracleId: r.oracle_id, cardName: r.card_name }));
+  }
+
   printingsOf(oracleId: string): Printing[] {
     let ps = this.printingCache.get(oracleId);
     if (!ps) {

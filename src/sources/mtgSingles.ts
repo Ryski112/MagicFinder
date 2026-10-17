@@ -1,14 +1,23 @@
-// MtgSingles: an aggregator over ~40-50 NZ Stores. Its search API only answers real browsers, so it is read
-// from inside a headless Chrome page, about one request a second. There is no stealth and no challenge-solving:
-// if a bot check appears, the Source is Blocked. See "How can MtgSingles listings be searched and read?".
+// MtgSingles: an aggregator over ~40-50 NZ Stores. Its search API sits behind Cloudflare, which refuses requests
+// without a mtgsingles.co.nz Referer; with one, plain HTTP works, about one request a second. There is no stealth
+// and no challenge-solving: if a bot check appears, the Source is Blocked. See "How can MtgSingles listings be searched and read?".
 import type { Condition } from '../core/types';
-import { classify, mapRows, Throttle, withRetries, type HttpAnswer } from './policy';
+import { USER_AGENT } from '../server/paths';
+import { classify, mapRows, Throttle, withRetries } from './policy';
 import { SourceError, type Source, type SourceListing } from './types';
-import { openBrowserPage, type BrowserPage } from './browser';
+import type { HttpGet } from './fetchTcg';
 
 const API = 'https://api.mtgsingles.co.nz/MtgSingle';
 const PAGE_SIZE = 20;
 const MAX_PAGES = 15;
+
+export const httpGet: HttpGet = async (url, signal) => {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', Referer: 'https://www.mtgsingles.co.nz/' },
+    signal,
+  });
+  return { status: res.status, body: await res.text(), retryAfter: res.headers.get('retry-after'), contentType: res.headers.get('content-type') };
+};
 
 // Combined grades count as their worse half; SP is treated as Lightly Played.
 const CONDITIONS: Record<string, Condition | null> = {
@@ -74,27 +83,16 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
 
 export interface MtgSinglesOptions {
   storeName?: (key: string) => string | undefined;
-  /** Injectable for tests: performs a GET from inside the MtgSingles page. */
-  pageGet?: (url: string) => Promise<HttpAnswer>;
+  /** Injectable for tests. */
+  get?: HttpGet;
 }
 
 export class MtgSinglesSource implements Source {
   readonly id = 'mtgsingles' as const;
   readonly name = 'MtgSingles';
   private throttle = new Throttle(1000);
-  private page: Promise<BrowserPage> | null = null;
 
   constructor(private readonly opts: MtgSinglesOptions = {}) {}
-
-  private async get(url: string): Promise<HttpAnswer> {
-    if (this.opts.pageGet) return this.opts.pageGet(url);
-    this.page ??= openBrowserPage('https://mtgsingles.co.nz/').catch(e => {
-      this.page = null;
-      throw e;
-    });
-    const page = await this.page;
-    return page.fetchFromPage(url);
-  }
 
   async search(cardName: string, signal?: AbortSignal): Promise<SourceListing[]> {
     const out: SourceListing[] = [];
@@ -126,7 +124,7 @@ export class MtgSinglesSource implements Source {
   private fetchPage(url: string, signal?: AbortSignal): Promise<unknown[]> {
     return withRetries(async () => {
       await this.throttle.wait();
-      const a = await this.get(url);
+      const a = await (this.opts.get ?? httpGet)(url, signal);
       classify(a);
       // No Listings at all comes back as "204 No Content" with an empty body, not as an empty list.
       if (a.status === 204 || !a.body.trim()) return [];
@@ -139,11 +137,5 @@ export class MtgSinglesSource implements Source {
       if (!Array.isArray(body)) throw new SourceError('changed', 'MtgSingles answer is not a list of Listings');
       return body;
     }, { signal });
-  }
-
-  async close() {
-    const p = this.page;
-    this.page = null;
-    if (p) await (await p.catch(() => null))?.close();
   }
 }

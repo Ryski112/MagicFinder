@@ -21,8 +21,6 @@ npm start
 
 **First run:** MagicFinder downloads the card list from Scryfall (about 80 MB, once a day after that). The Want List screen shows progress.
 
-**MtgSingles needs Chrome:** MtgSingles only answers real browsers, so MagicFinder reads it through a hidden Chrome, Chromium or Edge window using the one you already have. If none is installed it downloads Chromium once. You can switch MtgSingles off in Settings and use Fetch TCG alone.
-
 ## Using it
 
 1. **Want List.** Paste a list (Archidekt, Moxfield, Arena, MTGO or plain `4 Lightning Bolt` lines) or paste an Archidekt deck link and press Import. "Review list" shows what was recognised; untick anything you don't want. Basic lands and the maybeboard are left out by default.
@@ -45,7 +43,7 @@ Settings, the card list and the search cache live in your user data folder:
 - macOS: `~/Library/Application Support/MagicFinder`
 - Linux: `~/.local/share/magicfinder`
 
-Set `MAGICFINDER_DATA_DIR` to use another folder, `MAGICFINDER_BROWSER` to point at a specific Chrome, or `MAGICFINDER_NO_OPEN=1` to stop it opening a browser tab.
+Set `MAGICFINDER_DATA_DIR` to use another folder or `MAGICFINDER_NO_OPEN=1` to stop it opening a browser tab.
 
 ## For developers
 

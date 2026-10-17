@@ -119,7 +119,7 @@ The owner decided not to ask the Sources for permission ([Ask MtgSingles for per
 - **Store** = the individual seller (`listedByUserId`, `sellerBusinessName`). Location and pickup come from `regionAddress`.
 
 ### 5.2 MtgSingles
-- Playwright drives the user's installed Chrome/Chromium (it downloads one only if none is found). It loads `mtgsingles.co.nz`, then calls `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1` from the page context, about 1 request/second.
+- Plain HTTP: `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1`, about 1 request/second, with the identifying User-Agent. Cloudflare refuses (403) any request without `Referer: https://www.mtgsingles.co.nz/`; the User-Agent doesn't matter. No browser is needed.
 - Paging: 20 results per page. Keep paging until fewer than 20 come back. A card with no Listings comes back as `204 No Content` with an empty body.
 - Don't use exact match. Normalise names ourselves, because double-faced card titles differ.
 - `includeMarketplaces=false`: Fetch sellers are handled by the Fetch Source.

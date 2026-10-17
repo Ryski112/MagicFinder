@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { mapMtgSinglesListing, MtgSinglesSource, parsePrice, storeNameFromKey } from './mtgSingles';
+import { httpGet, mapMtgSinglesListing, MtgSinglesSource, parsePrice, storeNameFromKey } from './mtgSingles';
 import { SourceError } from './types';
 
 const rows: any[] = JSON.parse(readFileSync('test/fixtures/mtgsingles-counterspell.json', 'utf8'));
@@ -61,34 +61,47 @@ describe('MtgSinglesSource.search', () => {
 
   it('pages until a short page and returns every Listing', async () => {
     let n = 0;
-    const src = new MtgSinglesSource({ pageGet: async () => ({ status: 200, body: JSON.stringify(pages[n++]), contentType: 'application/json' }) });
+    const src = new MtgSinglesSource({ get: async () => ({ status: 200, body: JSON.stringify(pages[n++]), contentType: 'application/json' }) });
     expect(await src.search('Counterspell')).toHaveLength(rows.length);
     expect(n).toBe(3);
   });
 
   it('keeps the cheapest pages when a later page has a server error', async () => {
     let n = 0;
-    const src = new MtgSinglesSource({ pageGet: async () => (n++ === 0
+    const src = new MtgSinglesSource({ get: async () => (n++ === 0
       ? { status: 200, body: JSON.stringify(pages[0]), contentType: 'application/json' }
       : { status: 504, body: 'Gateway Timeout', contentType: 'text/html' }) });
     expect(await src.search('Counterspell')).toHaveLength(20);
   }, 30_000);
 
   it('reads an empty "204 No Content" answer as no Listings', async () => {
-    const src = new MtgSinglesSource({ pageGet: async () => ({ status: 204, body: '', contentType: null }) });
+    const src = new MtgSinglesSource({ get: async () => ({ status: 204, body: '', contentType: null }) });
     expect(await src.search('Black Waltz No 3')).toEqual([]);
   });
 
   it('skips a malformed Listing instead of giving up on the Source', async () => {
     const page = [...rows.slice(0, 5), { store: 'NZ/Odd', title: 'Broken' }];
-    const src = new MtgSinglesSource({ pageGet: async () => ({ status: 200, body: JSON.stringify(page), contentType: 'application/json' }) });
+    const src = new MtgSinglesSource({ get: async () => ({ status: 200, body: JSON.stringify(page), contentType: 'application/json' }) });
     expect(await src.search('Counterspell')).toHaveLength(5);
   });
 
   it('is Blocked by a bot check page, without retrying', async () => {
     let n = 0;
-    const src = new MtgSinglesSource({ pageGet: async () => { n++; return { status: 403, body: 'Sorry, you have been blocked', contentType: 'text/html' }; } });
+    const src = new MtgSinglesSource({ get: async () => { n++; return { status: 403, body: 'Sorry, you have been blocked', contentType: 'text/html' }; } });
     await expect(src.search('Counterspell')).rejects.toMatchObject({ status: 'blocked' });
     expect(n).toBe(1);
+  });
+});
+
+describe('httpGet', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the mtgsingles.co.nz Referer the API needs, under our own User-Agent', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await httpGet('https://api.mtgsingles.co.nz/MtgSingle?query=x')).toMatchObject({ status: 200, body: '[]' });
+    const headers = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers.Referer).toBe('https://www.mtgsingles.co.nz/');
+    expect(headers['User-Agent']).toMatch(/^MagicFinder\//);
   });
 });

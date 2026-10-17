@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ItemView, LadderView, Lock, PlanChoices, PrintingsResponse, RungView, Settings, StoreView } from '../../shared/api';
+import type { CardKingdomView, Exclusion, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, RungView, Settings, StoreView } from '../../shared/api';
 import { api } from '../api';
 import { CartDialog, type CartTarget } from './CartDialog';
+import { cardsElsewhere, costAtStore, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
-import { Button, CardImage, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo } from './ui';
+import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo } from './ui';
 
 interface Props {
   runId: string;
@@ -23,15 +24,25 @@ const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-sl
 export function PlanStep(p: Props) {
   const rung = p.ladder.rungs.find(r => r.k === p.selectedK) ?? p.ladder.rungs.find(r => r.cheapestOverall) ?? null;
   const [cart, setCart] = useState<CartTarget | null>(null);
+  const [view, setView] = useState<'stores' | 'cards'>('stores');
   // Toggling pickup changes a Store's total, which would re-sort it; hold the order it had when the switch was flipped.
   const [heldOrder, setHeldOrder] = useState<{ k: number; ids: string[] } | null>(null);
   const stores = rung ? keepOrder(rung.stores, heldOrder?.k === rung.k ? heldOrder.ids : null) : [];
+  const cards = planCards(stores);
   const onStoreSettings = (patch: Partial<Settings>) => {
     if (rung && patch.pickupStores) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
     p.onSettings(patch);
   };
   const refining = !p.ladder.final;
   const fetchItems = rung?.stores.filter(s => s.cart === 'fetch').flatMap(s => s.items) ?? [];
+
+  const setPin = (buyKey: string, storeId: string | null) => {
+    if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    const pins = { ...p.choices.pins };
+    if (storeId) pins[buyKey] = storeId;
+    else delete pins[buyKey];
+    p.onChoices({ ...p.choices, pins });
+  };
 
   const setLock = (lineIds: string[], lock: Lock | null) =>
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(lineIds.map(id => [id, lock])) } });
@@ -59,6 +70,8 @@ export function PlanStep(p: Props) {
         </section>
       )}
 
+      {p.ladder.cardKingdom && <CardKingdomPanel ck={p.ladder.cardKingdom} planTotal={rung?.total ?? null} />}
+
       {rung && rung.total !== null && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -66,6 +79,14 @@ export function PlanStep(p: Props) {
               Your {rung.k}-Store Plan
               {rung.short && <span className="font-normal text-amber-600 dark:text-amber-400"> · leaves out {rung.short.wanted - rung.short.covered} of {rung.short.wanted} cards</span>}
             </h2>
+            <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Group by">
+              {(['stores', 'cards'] as const).map(v => (
+                <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
+                  className={cx('px-3 py-1', view === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                  By {v === 'stores' ? 'Store' : 'card'}
+                </button>
+              ))}
+            </div>
             {rung.pickupHints.length > 0 && (
               <div className="text-xs text-emerald-700 dark:text-emerald-400">
                 {rung.pickupHints.map(h => `Pickup available at ${h.name}, saves ${money(h.saves)}`).join(' · ')}
@@ -87,8 +108,10 @@ export function PlanStep(p: Props) {
               <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: rung.k })}>Open {fetchItems.length} Fetch Listings ↗</Button>
             </div>
           )}
-          {stores.map(s => (
+          {view === 'cards' && <CardsView stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} />}
+          {view === 'stores' && stores.map(s => (
             <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
+              elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin}
               onCart={() => setCart(s.cart === 'fetch' ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name } : { kind: 'store', store: s, k: rung.k })}
               onLock={setLock} />
           ))}
@@ -100,6 +123,127 @@ export function PlanStep(p: Props) {
       )}
       {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(null)} />}
     </div>
+  );
+}
+
+function CardsView({ stores, leftOut, notFound, offers, pins, onPin }: { stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const cards = planCards(stores, leftOut, notFound);
+  return (
+    <ul className={cx(panel, 'rounded-xl divide-y divide-slate-100 dark:divide-slate-800')}>
+      {cards.map(c => {
+        const all = offers[c.buyKey] ?? [];
+        const chosen = new Set(c.bought.map(b => b.item.listingId));
+        const worst = c.bought.map(b => b.item).filter(i => i.overCardKingdom && i.cardKingdomNzd !== null).sort((a, b) => b.price / b.cardKingdomNzd! - a.price / a.cardKingdomNzd!)[0];
+        return (
+          <li key={c.buyKey} className="px-4 py-2 text-sm">
+            <div className="flex items-start gap-3">
+              <CardImage src={c.image} alt={c.name} className="w-10 aspect-[5/7] rounded shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="tabnum text-slate-500">{c.qty}×</span>
+                  <span className="font-medium">{c.name}</span>
+                  {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} />}
+                  {c.notFound && <Tag tone="warn">{c.bought.length ? `${c.missing} not found` : 'Not found'}</Tag>}
+                  {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  {c.bought.map(({ store, item }) => (
+                    <li key={item.listingId} className="flex flex-wrap items-center gap-2">
+                      <span>{item.qty}× from <span className="font-medium">{store.name}</span></span>
+                      <span className="text-xs text-slate-500 truncate">{item.printing?.label ?? item.title}</span>
+                      <span className="tabnum ml-auto">{money(item.price)}</span>
+                      <a href={item.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
+                    </li>
+                  ))}
+                </ul>
+                {pins[c.buyKey] && (
+                  <div className="text-xs mt-1 text-indigo-600 dark:text-indigo-400">
+                    📌 You chose this Store. <Button variant="link" className="text-xs" onClick={() => onPin(c.buyKey, null)}>Let MagicFinder choose</Button>
+                  </div>
+                )}
+                {all.length > chosen.size && (
+                  <Button variant="link" className="text-xs mt-1" onClick={() => setOpen(open === c.buyKey ? null : c.buyKey)}>
+                    {open === c.buyKey ? 'hide other Stores' : `${all.length - chosen.size} other Listing${all.length - chosen.size > 1 ? 's' : ''}`}
+                  </Button>
+                )}
+              </div>
+            </div>
+            {open === c.buyKey && (
+              <div className="mt-3 grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {all.filter(o => !chosen.has(o.listingId)).map(o => {
+                  const canCover = costAtStore(all, o.storeId, c.qty) !== null;
+                  return (
+                    <div key={o.listingId} className="flex flex-col min-w-0 rounded-xl p-2 bg-slate-50 dark:bg-slate-800 text-xs">
+                      <CardImage src={o.image} alt={c.name} className="w-full aspect-[5/7] rounded-lg" />
+                      <div className="mt-1 font-semibold text-sm leading-tight break-words" title={o.storeName}>{o.storeName}</div>
+                      <div className="h-8 overflow-hidden text-[11px] text-slate-600 dark:text-slate-300">{o.label}</div>
+                      <div className="flex flex-wrap items-center gap-1 my-1">
+                        {o.condition && <Tag>{o.condition}</Tag>}
+                        {o.finish !== 'nonfoil' && <Tag>{o.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
+                        {o.overCardKingdom && o.cardKingdomNzd !== null && <CardKingdomChip price={o.price} cardKingdomNzd={o.cardKingdomNzd} />}
+                      </div>
+                      <div className="text-sm font-semibold tabnum">{money(o.price)}</div>
+                      <div className="text-[11px] text-slate-500">{o.qty} in stock</div>
+                      <a href={o.url} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline">View listing ↗</a>
+                      <Button className="w-full mt-auto text-xs py-1" disabled={!canCover} title={canCover ? undefined : `${o.storeName} doesn't have all ${c.qty}`}
+                        onClick={() => onPin(c.buyKey, o.storeId)}>Buy here</Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+const usd = (n: number) => `US$${n.toFixed(2)}`;
+
+function CardKingdomPanel({ ck, planTotal }: { ck: CardKingdomView; planTotal: number | null }) {
+  const [open, setOpen] = useState(false);
+  if (!ck.items.length) return null;
+  // A CardKingdom total that leaves cards out isn't comparable with the Plan's, so no "less/more" then.
+  const diff = planTotal === null || ck.missing.length ? null : Math.round((ck.totalNzd - planTotal) * 100) / 100;
+  return (
+    <section className={cx(panel, 'rounded-xl')}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
+        <div className="font-semibold">Compare: CardKingdom (USA)</div>
+        <div className="text-xl font-bold tabnum">{money(ck.totalNzd)}</div>
+        <div className="text-xs text-slate-500 tabnum">
+          cards {usd(ck.subtotalUsd)} + shipping {usd(ck.shippingUsd)} = {usd(ck.totalUsd)} at {ck.usdToNzd.toFixed(4)} NZD/USD
+          {ck.gstNzd > 0 && <>, + {money(ck.gstNzd)} GST</>}
+        </div>
+        {diff !== null && diff !== 0 && (
+          <div className={cx('text-sm tabnum', diff < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
+            {money(Math.abs(diff))} {diff < 0 ? 'less' : 'more'} than the selected Plan
+          </div>
+        )}
+        <Button variant="link" className="ml-auto text-sm" onClick={() => setOpen(!open)}>{open ? 'hide cards' : 'show cards'}</Button>
+      </div>
+      {ck.missing.length > 0 && (
+        <div className="px-4 pb-2 text-xs text-amber-700 dark:text-amber-400">
+          Not available at CardKingdom: {ck.missing.map(m => `${m.missing}× ${m.name}`).join(', ')}. Its total leaves these out, so it isn't compared with the Plan.
+        </div>
+      )}
+      {open && (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-200 dark:border-slate-800">
+          {ck.items.map(i => (
+            <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="px-4 py-2 flex items-center gap-3 text-sm">
+              <span className="tabnum text-slate-500">{i.qty}×</span>
+              <span className="font-medium">{i.name}</span>
+              {i.finish !== 'nonfoil' && <Tag>Foil</Tag>}
+              <span className="text-xs text-slate-500 truncate flex-1">{i.label}</span>
+              <span className="tabnum text-slate-500">{usd(i.priceUsd)}</span>
+              <span className="tabnum">{money(i.priceNzd)}</span>
+              <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View ↗</a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -189,6 +333,7 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
             note: [
               n.missing < n.wanted ? `only ${n.wanted - n.missing} of ${n.wanted} available` : '',
               n.notSearchedOn.length ? `${n.notSearchedOn.join(' and ')} not searched` : '',
+              excludedNote(n, settings),
             ].filter(Boolean).join(' · '),
             action: n.locked ? { label: 'locked to one printing: allow any printing', onClick: () => onUnlock(n.lineIds) } : undefined,
           }))}
@@ -206,10 +351,11 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock }: {
-  store: StoreView; runId: string; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void;
+function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, elsewhere, pins, onPin }: {
+  store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [elsewhereOpen, setElsewhereOpen] = useState(false);
   const setPickup = (on: boolean) => {
     const next = new Set(settings.pickupStores);
     if (on) next.add(s.id); else next.delete(s.id);
@@ -240,12 +386,35 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock }:
         <ul className="divide-y divide-slate-100 dark:divide-slate-800 min-w-0">
           {s.items.map(i => (
             <li key={i.listingId} className="px-4 py-2">
-              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} />
+              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} />
               {open === i.listingId && (
                 <PrintingGrid runId={runId} lineId={i.lineIds[0]} onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} />
               )}
             </li>
           ))}
+          {elsewhere.length > 0 && (
+            <li className="px-4 py-2">
+              <Button variant="link" className="text-xs" onClick={() => setElsewhereOpen(!elsewhereOpen)} aria-expanded={elsewhereOpen}>
+                {elsewhereOpen ? 'hide' : 'show'} {elsewhere.length} other card{elsewhere.length > 1 ? 's' : ''} from your order this Store has
+              </Button>
+              {elsewhereOpen && (
+                <ul className="mt-2 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  {elsewhere.map(e => (
+                    <li key={e.card.buyKey} className="flex flex-wrap items-center gap-2 py-1">
+                      <span className="tabnum text-slate-500">{e.card.qty}×</span>
+                      <span className="font-medium">{e.card.name}</span>
+                      <span className="text-xs text-slate-500">now from {e.card.bought.map(b => b.store.name).join(', ')}</span>
+                      <span className="tabnum ml-auto">{money(e.cost)}</span>
+                      <span className={cx('tabnum text-xs w-16 text-right', e.cost < e.current ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
+                        {e.cost === e.current ? 'same' : `${e.cost < e.current ? '−' : '+'}${money(Math.abs(e.cost - e.current))}`}
+                      </span>
+                      <Button className="text-xs py-0.5" onClick={() => onPin(e.card.buyKey, s.id)}>Buy here instead</Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          )}
         </ul>
         <div className="p-4 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800">
           <StoreTotals store={s} settings={settings} onSettings={onSettings} />
@@ -255,7 +424,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock }:
   );
 }
 
-function ItemRow({ item: i, open, onToggle }: { item: ItemView; open: boolean; onToggle: () => void }) {
+function ItemRow({ item: i, open, onToggle, pinned, onUnpin }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void }) {
   const img = i.printing?.image ?? i.fallbackImage;
   return (
     <div className="flex items-center gap-3 text-sm">
@@ -272,9 +441,11 @@ function ItemRow({ item: i, open, onToggle }: { item: ItemView; open: boolean; o
           <span className="tabnum text-slate-500">{i.qty}×</span>
           <span className="font-medium">{i.name}</span>
           {i.locked && <span title="Locked Printing">🔒</span>}
+          {pinned && <button type="button" className="text-xs" title="You chose this Store for this card. Click to let MagicFinder choose again" onClick={onUnpin}>📌 ✕</button>}
           <Tag title={i.condition ? undefined : 'The Store did not state a condition'}>{i.condition ?? 'condition not stated'}</Tag>
           {i.finish !== 'nonfoil' && <Tag>{i.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
           {!i.printing && <Tag tone="warn" title="Matched the card but not the exact Printing">Printing not confirmed</Tag>}
+          {i.overCardKingdom && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} />}
         </div>
         <div className="text-xs text-slate-500 truncate">
           {i.printing?.label ?? i.title} · <Button variant="link" className="text-xs" onClick={onToggle}>{open ? 'hide Printings' : 'other Printings'}</Button>
@@ -358,6 +529,24 @@ interface CardListItem {
   image: string | null;
   note?: string;
   action?: { label: string; onClick: () => void };
+}
+
+const CONDITION_NAME: Record<Settings['minCondition'], string> = { NM: 'Near Mint', LP: 'Lightly Played', MP: 'Moderately Played', HP: 'Heavily Played', DMG: 'Damaged' };
+
+/** Says which Listings of a Not Found card were found but left out, e.g. "found but left out: 4 below Near Mint". */
+function excludedNote(n: NotFoundView, settings: Settings): string {
+  const reasons: Record<Exclusion, string> = {
+    condition: `below ${CONDITION_NAME[settings.minCondition]}`,
+    'not-buyable': 'not for sale right now',
+    'sold-out': 'sold out',
+    'non-english': 'not in English',
+    unmatched: "couldn't be matched to a Printing",
+    'other-printing': 'other Printings (this one is locked)',
+    foil: 'foil (foils are off)',
+    'non-tournament': 'not tournament legal',
+  };
+  const parts = (Object.entries(n.excluded) as [Exclusion, number][]).sort((a, b) => b[1] - a[1]).map(([why, count]) => `${count} ${reasons[why]}`);
+  return parts.length ? `found but left out: ${parts.join(', ')}` : '';
 }
 
 /** A collapsible list of cards with their images, for Not Found and for cards a Short Plan leaves out. */

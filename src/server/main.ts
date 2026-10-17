@@ -12,6 +12,8 @@ import { SolverPool } from '../optimiser/pool';
 import { FetchTcgSource } from '../sources/fetchTcg';
 import { MtgSinglesSource } from '../sources/mtgSingles';
 import { createApp } from './app';
+import { CardKingdom, CardKingdomPrices } from './cardKingdom';
+import { ExchangeRate } from './exchangeRate';
 import { choosePort } from './instance';
 import { APP_VERSION, dataDir } from './paths';
 import { RunManager } from './runs';
@@ -44,6 +46,7 @@ const catalogue = new CatalogueStore(dir);
 const cache = new SearchCache(dir);
 const stores: StoreRecord[] = parse(readFileSync(storesFile, 'utf8'));
 let directory = new StoreDirectory(stores);
+const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), new ExchangeRate(dir));
 const pool = new SolverPool();
 const mtgsingles = new MtgSinglesSource({ storeName: key => stores.find(s => s.source_keys.mtgsingles === key)?.name });
 const sources = [new FetchTcgSource(), mtgsingles];
@@ -52,6 +55,7 @@ const runs = new RunManager({
   catalogue: () => catalogue.get(),
   sources,
   cache,
+  cardKingdom,
   settings,
   // A fresh directory per run picks up Fetch sellers' details from that run's Listings.
   directory: () => directory,
@@ -60,7 +64,7 @@ const runs = new RunManager({
   appVersion: version,
 });
 
-const app = createApp({ catalogue, settings, runs, version, update: () => (dev ? null : availableUpdate(settings, version)) });
+const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev ? null : availableUpdate(settings, version)) });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));

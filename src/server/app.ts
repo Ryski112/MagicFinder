@@ -13,6 +13,7 @@ import { importArchidekt } from './archidekt';
 import { checkShopifyCart } from './cart';
 import { cardImage } from './planner';
 import type { RunManager } from './runs';
+import type { SearchCache } from './searchCache';
 import type { Settings, SettingsStore } from './settings';
 import type { UpdateInfo } from './updates';
 
@@ -20,6 +21,7 @@ export interface AppDeps {
   catalogue: CatalogueStore;
   settings: SettingsStore;
   runs: RunManager;
+  cache: SearchCache;
   version: string;
   /** A newer release to offer, if any. */
   update?: () => UpdateInfo | null;
@@ -56,6 +58,8 @@ export function createApp(d: AppDeps) {
     d.settings.update({ sourceHealth: { ...s.sourceHealth, [id]: { ...s.sourceHealth[id], blockedAt: null } } });
     return c.json({ ok: true });
   });
+
+  app.post('/api/cache/clear', c => c.json({ cleared: d.cache.clear() }));
 
   app.post('/api/parse', async c => {
     if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);

@@ -1,8 +1,30 @@
+import { useState } from 'react';
 import type { Settings, SourceId } from '../../shared/api';
+import { api } from '../api';
 import { Button, Notice, Sheet, SOURCE_NAME, Switch } from './ui';
 
 const CITIES = ['Auckland', 'Hamilton', 'Tauranga', 'Wellington', 'Palmerston North', 'Napier', 'New Plymouth', 'Whangārei', 'Christchurch', 'Dunedin', 'Nelson', 'Queenstown', 'Invercargill'];
 const field = 'mt-1 block w-full border rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600';
+
+/** Searches are reused for an hour; this forgets them so the next search asks the Sources again. */
+function ClearCache() {
+  const [state, setState] = useState<{ busy?: boolean; message?: string }>({});
+  const clear = async () => {
+    setState({ busy: true });
+    try {
+      const { cleared } = await api.clearCache();
+      setState({ message: cleared ? `Cleared ${cleared} saved search${cleared > 1 ? 'es' : ''}. Search again to get fresh stock.` : 'Nothing saved to clear.' });
+    } catch (e) {
+      setState({ message: (e as Error).message });
+    }
+  };
+  return (
+    <div>
+      <Button variant="link" disabled={state.busy} onClick={clear}>Clear saved searches</Button>
+      <span className="block text-xs text-slate-500">{state.message ?? 'Searches are reused for an hour. Clear them to see stock that changed since.'}</span>
+    </div>
+  );
+}
 
 export function SettingsDrawer({ open, onClose, settings, onChange }: { open: boolean; onClose: () => void; settings: Settings; onChange: (patch: Partial<Settings>) => void }) {
   const s = settings;
@@ -51,6 +73,17 @@ export function SettingsDrawer({ open, onClose, settings, onChange }: { open: bo
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
           <Switch checked={s.sources.fetch} onChange={v => onChange({ sources: { ...s.sources, fetch: v } })} label="Search Fetch TCG" />
           <Switch checked={s.sources.mtgsingles} onChange={v => onChange({ sources: { ...s.sources, mtgsingles: v } })} label="Search MtgSingles" />
+          <ClearCache />
+        </div>
+
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
+          <Switch checked={s.cardKingdom.enabled} onChange={v => onChange({ cardKingdom: { ...s.cardKingdom, enabled: v } })} label="Compare with CardKingdom" />
+          <label className="block">CardKingdom shipping to NZ (US$)
+            <input type="number" min={0} step={1} className={field} value={s.cardKingdom.shippingUsd}
+              onChange={e => onChange({ cardKingdom: { ...s.cardKingdom, shippingUsd: Number(e.target.value) } })} />
+            <span className="text-xs text-slate-500">A flat estimate; CardKingdom only quotes the real figure at checkout.</span>
+          </label>
+          <Switch checked={s.cardKingdom.addGst} onChange={v => onChange({ cardKingdom: { ...s.cardKingdom, addGst: v } })} label="Add 15% GST to CardKingdom prices" />
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 grid grid-cols-2 gap-3">

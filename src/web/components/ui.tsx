@@ -104,6 +104,22 @@ export function Tag({ children, tone = 'plain', title }: { children: ReactNode; 
   );
 }
 
+export function CardKingdomChip({ price, cardKingdomNzd }: { price: number; cardKingdomNzd: number }) {
+  const pct = Math.round((price / cardKingdomNzd - 1) * 100);
+  const severe = pct >= 60;
+  return (
+    <span
+      title={`${money(price)} here vs ${money(cardKingdomNzd)} at CardKingdom, before shipping`}
+      className={cx(
+        'text-[11px] font-bold px-1.5 rounded-full tabnum cursor-help whitespace-nowrap shrink-0',
+        severe ? 'bg-rose-600 text-white' : 'bg-orange-500 text-white',
+      )}
+    >
+      +{pct}%
+    </span>
+  );
+}
+
 /** A full, unaltered card image (Scryfall rules), with a plain fallback. */
 export function CardImage({ src, alt, className }: { src: string | null | undefined; alt: string; className?: string }) {
   const [broken, setBroken] = useState(false);

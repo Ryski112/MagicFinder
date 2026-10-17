@@ -41,7 +41,7 @@ function useParams() {
   }, []);
   return {
     variant: param('variant', 'A'),
-    match: param('match', 'words') as Match,
+    match: param('match', 'fuzzy') as Match,
     add: param('add', 'bump') as AddMode,
     loading: param('catalogue', 'ready') === 'loading',
     limit: Number(param('limit', '8')),
@@ -181,12 +181,15 @@ function VariantA(p: SearcherProps & { ready: boolean }) {
   const [chosen, setChosen] = useState<Hit | null>(null);
   const [printings, setPrintings] = useState<PrintingOpt[]>([]);
   const [printing, setPrinting] = useState('');
+  const [preview, setPreview] = useState('');
+  const strip = useRef<HTMLDivElement>(null);
   const [msg, setMsg] = useFlash();
   const { hits, meta } = useCardSearch(chosen ? '' : q, match, limit);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => setActive(0), [hits]);
   useEffect(() => {
     setPrinting('');
+    setPreview('');
     setPrintings([]);
     if (chosen) fetch(`/api/prototype/printings/${chosen.oracleId}`).then(r => r.json()).then(r => setPrintings(r.printings));
   }, [chosen]);
@@ -241,24 +244,49 @@ function VariantA(p: SearcherProps & { ready: boolean }) {
           <Button variant="primary" tabIndex={chosen ? -1 : undefined} disabled={!chosen && !hits.length} onClick={() => chosen ? addCard(chosen, printing) : hits[active] && addCard(hits[active], '')}>Add</Button>
         </div>
         {chosen && (
-          <div className="mt-2 flex items-center gap-2 text-sm">
-            <CardImage src={shown?.image ?? chosen.image} alt="" className="w-10 h-14 rounded object-cover" />
-            <label className="flex-1 min-w-0">
-              <span className="block text-xs text-slate-500">Printing</span>
-              <select value={printing} onChange={e => setPrinting(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addCard(chosen, printing); if (e.key === 'Escape') reset(); }}
-                className="w-full rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700">
-                <option value="">Any printing (cheapest wins)</option>
-                {printings.map(o => <option key={o.id} value={o.id}>{printingLabel(o)}</option>)}
-              </select>
-            </label>
-            <Button variant="link" className="text-xs" onClick={reset}>cancel</Button>
+          <div className="mt-2 flex gap-3 text-sm">
+            <CardImage src={(printings.find(x => x.id === preview) ?? shown)?.image ?? chosen.image} alt="" className="w-32 rounded-md shrink-0 self-start" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between text-xs text-slate-500 mb-1">
+                <span>Printing: <span className="text-slate-800 dark:text-slate-200">{shown ? printingLabel(shown) : 'Any printing (cheapest wins)'}</span></span>
+                <Button variant="link" className="text-xs" tabIndex={-1} onClick={reset}>cancel (Esc)</Button>
+              </div>
+              <div ref={strip} tabIndex={0} data-keys role="listbox" aria-label="Printing"
+                onKeyDown={e => {
+                  const ids = ['', ...printings.map(x => x.id)];
+                  const at = ids.indexOf(printing);
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const next = ids[Math.min(ids.length - 1, Math.max(0, at + (e.key === 'ArrowRight' ? 1 : -1)))];
+                    setPrinting(next);
+                    setPreview(next);
+                    strip.current?.querySelector(`[data-id="${next}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                  }
+                  if (e.key === 'Enter') addCard(chosen, printing);
+                  if (e.key === 'Escape') reset();
+                }}
+                onMouseLeave={() => setPreview(printing)}
+                className="flex gap-2 overflow-x-auto pb-2 rounded-lg outline-none focus-visible:ring-2 ring-indigo-500">
+                <button type="button" data-id="" tabIndex={-1} onClick={() => setPrinting('')} onMouseEnter={() => setPreview('')}
+                  className={cx('shrink-0 w-20 h-28 rounded-md border-2 text-xs text-slate-500 flex items-center justify-center text-center px-1', printing === '' ? 'border-indigo-500' : 'border-slate-300 dark:border-slate-700')}>
+                  Any printing<br />(cheapest)
+                </button>
+                {printings.map(o => (
+                  <button key={o.id} type="button" data-id={o.id} tabIndex={-1} onClick={() => setPrinting(o.id)} onMouseEnter={() => setPreview(o.id)}
+                    title={printingLabel(o)} className={cx('shrink-0 w-20 text-left rounded-md border-2 overflow-hidden', printing === o.id ? 'border-indigo-500' : 'border-transparent')}>
+                    <CardImage src={o.image} alt={printingLabel(o)} className="w-full" />
+                    <div className="text-[10px] leading-tight px-0.5 truncate">{o.setCode} #{o.number}</div>
+                    <div className="text-[10px] leading-tight px-0.5 text-slate-500 truncate">{o.treatments[0] ?? o.year}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         {chosen && printing && <p className="mt-1 text-xs text-slate-500">Written into your list as a note, not a lock: cheaper printings still count until you lock it in the review list.</p>}
         <div className="h-5 mt-1 text-xs flex justify-between">
           <span className="text-emerald-600 dark:text-emerald-400">{msg}</span>
-          <span className="text-slate-400">{chosen ? `${printings.length} printings · Enter adds` : meta}</span>
+          <span className="text-slate-400">{chosen ? `${printings.length} printings · ← → to browse · Enter adds` : meta}</span>
         </div>
       </div>
       {p.textarea}
@@ -391,7 +419,7 @@ export function CardSearcherPrototype(p: SearcherProps) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest('input, textarea, [contenteditable]')) return;
+      if (t.closest('input, textarea, select, [contenteditable], [data-keys]')) return;
       if (e.key === 'ArrowLeft') cycle(-1);
       if (e.key === 'ArrowRight') cycle(1);
     };

@@ -27,7 +27,9 @@ describe('mapFetchListing', () => {
     expect(mapped.some((l: any) => l.finish === 'foil')).toBe(true);
     expect(mapped.find((l: any) => l.title.includes('Japanese'))?.english).toBe(false);
     expect(mapped.find((l: any) => l.title === 'Counterspell')?.english).toBe(true);
-    expect(mapped.some((l: any) => !l.buyable)).toBe(true);
+    const individual = raw.find((l: any) => l.buyNowEnabled === false);
+    expect(mapFetchListing(individual)?.buyable).toBe(true);
+    expect(mapFetchListing({ ...individual, sellerOnHoliday: true })?.buyable).toBe(false);
     expect(mapped.find((l: any) => l.title.startsWith('Counterspell (Retro)'))?.treatments).toContain('Retro frame');
   });
 

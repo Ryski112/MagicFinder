@@ -56,7 +56,7 @@ export interface Listing {
   url: string;
   title: string;
   english: boolean;
-  /** False for Listings that can't be bought at list price (offer-only, seller on holiday). */
+  /** False for Listings that can't be bought right now (seller on holiday). */
   buyable: boolean;
   /** Free-form extras a Source wants to keep (e.g. Shopify product handle). */
   extra?: Record<string, string>;

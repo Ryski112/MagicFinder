@@ -19,9 +19,10 @@ export const httpGet: HttpGet = async (url, signal) => {
   return { status: res.status, body: await res.text(), retryAfter: res.headers.get('retry-after'), contentType: res.headers.get('content-type') };
 };
 
-// Combined grades count as their worse half; SP is treated as Lightly Played.
+// Most MtgSingles stock is graded "NM / SP", so it counts as NM; otherwise a Near Mint minimum hides nearly all of it.
+// Other combined grades count as their worse half; SP is treated as Lightly Played.
 const CONDITIONS: Record<string, Condition | null> = {
-  'NM': 'NM', 'NM / SP': 'LP', 'SP': 'LP', 'SP / LP': 'LP', 'LP': 'LP', 'MP': 'MP', 'HP': 'HP', 'D': 'DMG', 'N/A': null,
+  'NM': 'NM', 'NM / SP': 'NM', 'SP': 'LP', 'SP / LP': 'LP', 'LP': 'LP', 'MP': 'MP', 'HP': 'HP', 'D': 'DMG', 'N/A': null,
 };
 
 const FEATURE_TREATMENTS: Record<string, string> = {

@@ -165,45 +165,100 @@ function comboKeys(e: React.KeyboardEvent, hits: Hit[], active: number, setActiv
 
 // --- Variant A: a search bar with a quantity box, between the import row and the text box -------
 
+interface PrintingOpt { id: string; setCode: string; setName: string; number: string; finishes: string[]; treatments: string[]; nonTournament: string | null; image: string | null; year: string }
+
+function printingLabel(o: PrintingOpt) {
+  const extra = [...o.treatments, o.finishes.length === 1 && o.finishes[0] !== 'nonfoil' ? `${o.finishes[0]} only` : '', o.nonTournament ?? ''].filter(Boolean).join(', ');
+  return `${o.setCode} #${o.number} · ${o.setName} (${o.year})${extra ? ` · ${extra}` : ''}`;
+}
+
 function VariantA(p: SearcherProps & { ready: boolean }) {
   const { match, add, limit } = useParams();
   const [q, setQ] = useState('');
   const [qty, setQty] = useState(1);
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<Hit | null>(null);
+  const [printings, setPrintings] = useState<PrintingOpt[]>([]);
+  const [printing, setPrinting] = useState('');
   const [msg, setMsg] = useFlash();
-  const { hits, meta } = useCardSearch(q, match, limit);
+  const { hits, meta } = useCardSearch(chosen ? '' : q, match, limit);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => setActive(0), [hits]);
-  const pick = (h: Hit) => {
-    const r = addToText(p.text, h.name, qty, add);
-    p.onText(r.text);
-    setMsg(r.message);
+  useEffect(() => {
+    setPrinting('');
+    setPrintings([]);
+    if (chosen) fetch(`/api/prototype/printings/${chosen.oracleId}`).then(r => r.json()).then(r => setPrintings(r.printings));
+  }, [chosen]);
+  const reset = () => {
     setQ('');
     setQty(1);
+    setChosen(null);
     input.current?.focus();
   };
+  const addCard = (h: Hit, printingId: string) => {
+    const o = printings.find(x => x.id === printingId);
+    const line = o ? `${h.name} (${o.setCode}) ${o.number}` : h.name;
+    const r = addToText(p.text, line, qty, add);
+    p.onText(r.text);
+    setMsg(r.message);
+    reset();
+  };
+  // Second step: pick the name first, then (optionally) a Printing.
+  const choose = (h: Hit) => {
+    setChosen(h);
+    setQ(h.name);
+    setOpen(false);
+  };
+  const shown = printings.find(x => x.id === printing);
   return (
     <>
       {p.importRow}
       <div>
         <div className="flex gap-2">
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <input ref={input} disabled={!p.ready} value={q} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
-              onChange={e => { setQ(e.target.value); setOpen(true); }}
-              onKeyDown={e => comboKeys(e, hits, active, setActive, pick, () => setOpen(false))}
+              onChange={e => { setQ(e.target.value); setChosen(null); setOpen(true); }}
+              onKeyDown={e => {
+                if (chosen) {
+                  if (e.key === 'Enter') { e.preventDefault(); addCard(chosen, printing); }
+                  if (e.key === 'Escape') reset();
+                  return;
+                }
+                // Tab picks the name and moves on to quantity / printing; Enter adds straight away with any printing.
+                if (e.key === 'Tab' && hits.length && !e.shiftKey) { choose(hits[Math.max(active, 0)]); return; }
+                comboKeys(e, hits, active, setActive, h => addCard(h, ''), () => setOpen(false));
+              }}
               placeholder={p.ready ? '🔍 Add a card by name…' : notReadyText(p.catalogueProgress)}
-              className="w-full rounded-lg px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 disabled:opacity-60" />
-            {open && <Suggestions hits={hits} active={active} onPick={pick} onHover={setActive} showHow />}
+              title={p.ready ? undefined : notReadyText(p.catalogueProgress)}
+              className={cx('w-full rounded-lg px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 disabled:opacity-60', chosen && 'border-indigo-500 font-medium')} />
+            {open && !chosen && <Suggestions hits={hits} active={active} onPick={choose} onHover={setActive} showHow />}
           </div>
           <input type="number" min={1} max={99} value={qty} disabled={!p.ready} onChange={e => setQty(Math.max(1, Number(e.target.value) || 1))}
+            onKeyDown={e => { if (e.key === 'Enter' && chosen) addCard(chosen, printing); if (e.key === 'Escape') reset(); }}
             aria-label="Quantity" title="How many"
             className="w-16 rounded-lg px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 tabnum" />
-          <Button variant="primary" disabled={!hits.length} onClick={() => hits[active] && pick(hits[active])}>Add</Button>
+          <Button variant="primary" tabIndex={chosen ? -1 : undefined} disabled={!chosen && !hits.length} onClick={() => chosen ? addCard(chosen, printing) : hits[active] && addCard(hits[active], '')}>Add</Button>
         </div>
+        {chosen && (
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <CardImage src={shown?.image ?? chosen.image} alt="" className="w-10 h-14 rounded object-cover" />
+            <label className="flex-1 min-w-0">
+              <span className="block text-xs text-slate-500">Printing</span>
+              <select value={printing} onChange={e => setPrinting(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addCard(chosen, printing); if (e.key === 'Escape') reset(); }}
+                className="w-full rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700">
+                <option value="">Any printing (cheapest wins)</option>
+                {printings.map(o => <option key={o.id} value={o.id}>{printingLabel(o)}</option>)}
+              </select>
+            </label>
+            <Button variant="link" className="text-xs" onClick={reset}>cancel</Button>
+          </div>
+        )}
+        {chosen && printing && <p className="mt-1 text-xs text-slate-500">Written into your list as a note, not a lock: cheaper printings still count until you lock it in the review list.</p>}
         <div className="h-5 mt-1 text-xs flex justify-between">
           <span className="text-emerald-600 dark:text-emerald-400">{msg}</span>
-          <span className="text-slate-400">{meta}</span>
+          <span className="text-slate-400">{chosen ? `${printings.length} printings · Enter adds` : meta}</span>
         </div>
       </div>
       {p.textarea}

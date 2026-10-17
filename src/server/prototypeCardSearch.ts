@@ -59,6 +59,16 @@ function score(e: Entry, q: string, qWords: string[], match: string): number | n
 }
 
 export function registerCardSearchPrototype(app: Hono, store: CatalogueStore) {
+  // Every Printing of one card, newest first, for the "which printing?" dropdown.
+  app.get('/api/prototype/printings/:oracleId', c => {
+    if (!store.ready) return c.json({ printings: [] });
+    const ps = store.get().printingsOf(c.req.param('oracleId'));
+    return c.json({ printings: ps.map(p => ({
+      id: p.id, setCode: p.setCode.toUpperCase(), setName: p.setName, number: p.collectorNumber, finishes: p.finishes,
+      treatments: p.treatments, nonTournament: p.nonTournament, image: p.imageSmall, year: p.releasedAt.slice(0, 4),
+    })) });
+  });
+
   app.get('/api/prototype/card-search', c => {
     if (!store.ready) return c.json({ ready: false, progress: store.progress, results: [] });
     const q = nameKey(c.req.query('q') ?? '');

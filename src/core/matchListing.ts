@@ -18,6 +18,15 @@ export function nameCandidates(title: string): string[] {
   for (const part of base.split(/\s+[-–]\s+/)) if (part !== base) out.push(part.trim());
   // Front face of "Front // Back".
   if (base.includes('//')) out.push(base.split('//')[0].trim());
+  // Arctic Collect: a rarity letter and collector number after the name ("Brainstorm C 96"), sometimes with the finish
+  // and set name in between ("Sol Ring Foil Buy-A-Box Promos P 1"). Only for titles ending that way: drop the tail,
+  // then try shorter and shorter leading words, longest first so the full name wins over a shorter one inside it.
+  const tail = base.match(/^(.+?)\s+[CURMSLPT]\s+\d+[a-z★]?$/);
+  if (tail) {
+    const rest = tail[1].split(/\s+:\s+/)[0];
+    const words = rest.split(' ');
+    for (let n = words.length; n >= 1; n--) out.push(words.slice(0, n).join(' '));
+  }
   return [...new Set(out.filter(Boolean))];
 }
 

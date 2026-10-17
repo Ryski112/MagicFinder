@@ -4,7 +4,25 @@ import type { CartCheckResponse, ItemView, StoreView } from '../../shared/api';
 import { api } from '../api';
 import { Button, Dialog, money, Notice } from './ui';
 
-export type CartTarget = { kind: 'fetch'; items: ItemView[]; k: number; seller?: string } | { kind: 'store'; store: StoreView; k: number };
+export type CartTarget =
+  | { kind: 'fetch'; items: ItemView[]; k: number; seller?: string }
+  /** `tab` is a tab opened on the click itself, sent to the cart once it's ready (null when pop-ups are blocked). */
+  | { kind: 'store'; store: StoreView; k: number; tab?: Window | null };
+
+/**
+ * Opens the tab a Shopify cart will load in, during the click, so the browser doesn't block it as a pop-up (a tab
+ * opened after the stock check has finished would be). It says what's happening until the cart is ready.
+ */
+export function openCartTab(storeName: string): Window | null {
+  const tab = window.open('', '_blank');
+  if (!tab) return null;
+  tab.opener = null;
+  tab.document.title = `Checking ${storeName}…`;
+  tab.document.body.innerHTML =
+    '<p style="font:16px system-ui,sans-serif;color:#475569;margin:3rem auto;max-width:32rem;text-align:center"></p>';
+  tab.document.body.firstElementChild!.textContent = `Checking ${storeName} still has your cards at these prices… Your cart opens here in a moment.`;
+  return tab;
+}
 
 /** Opens every link in a new tab. Returns how many the browser blocked (it allows one per click unless pop-ups are allowed). */
 function openAll(urls: string[]): number {
@@ -62,7 +80,7 @@ export function CartDialog({ runId, target, onClose }: { runId: string; target: 
     );
   }
   const s = target.store;
-  if (s.cart === 'shopify') return <ShopifyCart runId={runId} store={s} k={target.k} onClose={onClose} />;
+  if (s.cart === 'shopify') return <ShopifyCart runId={runId} store={s} k={target.k} tab={target.tab ?? null} onClose={onClose} />;
   const items = s.items.map(i => ({ name: i.name, qty: i.qty, price: i.price, url: i.url }));
   if (s.cart === 'hobbymaster-deckbuilder') return <DeckBuilder store={s} items={items} onClose={onClose} />;
   return (
@@ -95,13 +113,27 @@ function DeckBuilder({ store, items, onClose }: { store: StoreView; items: { nam
   );
 }
 
-function ShopifyCart({ runId, store, k, onClose }: { runId: string; store: StoreView; k: number; onClose: () => void }) {
+function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: StoreView; k: number; tab: Window | null; onClose: () => void }) {
   const [check, setCheck] = useState<CartCheckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number; name: string } | null>(null);
+  // Whether the tab opened on the click was sent to the cart (it may have been closed in the meantime).
+  const [sent, setSent] = useState(false);
   useEffect(() => {
-    api.cart(runId, store.id, k, (done, total, name) => setProgress({ done, total, name })).then(setCheck, e => setError((e as Error).message));
-  }, [runId, store.id, k]);
+    api.cart(runId, store.id, k, (done, total, name) => setProgress({ done, total, name })).then(
+      r => {
+        setCheck(r);
+        if (tab && !tab.closed && r.cartUrl) {
+          tab.location.href = r.cartUrl;
+          setSent(true);
+        } else if (tab && !tab.closed) tab.close();
+      },
+      e => {
+        setError((e as Error).message);
+        if (tab && !tab.closed) tab.close();
+      },
+    );
+  }, [runId, store.id, k, tab]);
   const bad = check?.lines.filter(l => l.status === 'unavailable' || l.status === 'unconfirmed') ?? [];
   const changed = check?.lines.filter(l => l.status === 'price-changed') ?? [];
   const good = check?.lines.filter(l => l.status === 'ok' || l.status === 'price-changed') ?? [];
@@ -123,7 +155,13 @@ function ShopifyCart({ runId, store, k, onClose }: { runId: string; store: Store
               {changed.map(l => <li key={l.listingId}>{l.name}: now {money(l.currentPrice)} (was {money(l.expectedPrice)})</li>)}
             </ul>
           )}
-          {check.cartUrl && (
+          {check.cartUrl && sent && (
+            <p>
+              Your cart at {store.name} is open in a new tab, ready to review and check out.{' '}
+              <a href={check.cartUrl} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 underline">Open it again ↗</a>
+            </p>
+          )}
+          {check.cartUrl && !sent && (
             <>
               <Notice tone="warn">This replaces anything already in your {store.name} cart.</Notice>
               <a href={check.cartUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-md bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold px-4 py-2">Open my cart at {store.name} ↗</a>

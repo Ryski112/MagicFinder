@@ -49,10 +49,10 @@ A source copy shares the downloaded version's settings and card list. With `MAGI
 
 1. **Want List.** Paste a list (Archidekt, Moxfield, Arena, MTGO or plain `4 Lightning Bolt` lines), paste an Archidekt deck link and press Import, or add cards by name with the search bar (Enter shows a card's printings; pick one to buy only that printing). The review list shows what was recognised; untick anything you don't want. Basic lands and the maybeboard are left out by default. MagicFinder buys the cheapest printing of each card unless a line is locked to one (**🔒 only buy …**).
 2. **Search.** MagicFinder asks each Source about every card, politely (about one request a second per Source). Results are reused for an hour.
-3. **Choose a Plan.** Pick a rung of the Ladder. Each Store section lists the cards, prices, postage and a link to every Listing.
+3. **Choose a Plan.** Pick a rung of the Ladder. Store Listings MagicFinder couldn't match to a card are listed under **Show them**, in case one is a card you want. Each Store section lists the cards, prices, postage and a link to every Listing.
    - **Other Printings** shows every version in stock with its price. **Only buy this one** locks the line to that exact Printing and re-plans.
    - **I'll pick up** (Stores in your pickup city) removes their postage and re-plans. MagicFinder remembers it.
-   - **Add all to cart** (most Stores) checks stock and prices, then opens the Store's cart with your cards in it. It replaces anything already in that Store's cart. You check out yourself. Fetch TCG has one cart for all its sellers, so it gets an "Open Fetch Listings" button instead.
+   - **Add all to cart** (most Stores) opens a new tab straight away, checks stock and prices, then turns that tab into the Store's cart with your cards in it (anything sold out is listed back in MagicFinder). It replaces anything already in that Store's cart. You check out yourself. Fetch TCG has one cart for all its sellers, so it gets an "Open Fetch Listings" button instead.
    - Postage marked **est.** is a guess ($7 by default) because the Store doesn't publish its rates. Click it to enter what that Store really charges you.
 
 **Settings** (⚙): postage type, pickup city, rural address, minimum condition (Lightly Played by default), foils, using the Printings from your list, basic lands, which Sources to search, the default postage guess, and light/dark mode.

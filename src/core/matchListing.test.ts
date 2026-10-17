@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import { mapFetchListing } from '../sources/fetchTcg';
 import type { SourceListing } from '../sources/types';
-import { matchListing, nameCandidates } from './matchListing';
+import { findCardForTitle, matchListing, nameCandidates } from './matchListing';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-match-'));
 let cat: Catalogue;
@@ -30,6 +30,29 @@ describe('nameCandidates', () => {
     expect(nameCandidates('Wild Rose Rebellion - Counterspell (Showcase)')).toEqual(['Wild Rose Rebellion - Counterspell', 'Wild Rose Rebellion', 'Counterspell']);
     expect(nameCandidates('Delver of Secrets // Insectile Aberration [ISD]')[0]).toBe('Delver of Secrets // Insectile Aberration');
     expect(nameCandidates('Counterspell (Borderless) |  Foil (009)')).toEqual(['Counterspell']);
+  });
+
+  it('reads Arctic Collect titles: rarity and collector number after the name, sometimes with finish and set between', () => {
+    expect(nameCandidates('Brainstorm C 96')).toContain('Brainstorm');
+    expect(nameCandidates('Sol Ring Foil Buy-A-Box Promos P 1')).toContain('Sol Ring');
+    expect(nameCandidates('Arcane Signet (Borderless) : Eternal-Legal M 95')).toContain('Arcane Signet');
+    // Longest first, so a longer real name wins over a shorter one hidden inside it.
+    const c = nameCandidates('Bonecrusher Giant Foil Throne of Eldraine R 115');
+    expect(c.indexOf('Bonecrusher Giant')).toBeLessThan(c.indexOf('Bonecrusher'));
+  });
+
+  it('only shortens titles that end in a rarity and number, so other titles are never guessed at', () => {
+    expect(nameCandidates('Sol Ring Foil Promo')).toEqual(['Sol Ring Foil Promo']);
+    expect(nameCandidates('Very Cryptic Command')).toEqual(['Very Cryptic Command']);
+  });
+});
+
+describe('findCardForTitle', () => {
+  it('finds the card in Arctic Collect titles', () => {
+    expect(findCardForTitle(cat, 'Sol Ring Foil Buy-A-Box Promos P 1')?.name).toBe('Sol Ring');
+    expect(findCardForTitle(cat, 'Rhystic Study (Borderless) : Eternal-Legal M 95')?.name).toBe('Rhystic Study');
+    expect(findCardForTitle(cat, 'Counterspell C 96')?.name).toBe('Counterspell');
+    expect(findCardForTitle(cat, 'Sol Ring Foil Promo')).toBeNull();
   });
 });
 

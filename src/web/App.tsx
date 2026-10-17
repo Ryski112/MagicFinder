@@ -42,7 +42,8 @@ export function App() {
       api.status().then(
         s => {
           setStatus(s);
-          if (!s.catalogue.ready) timer = setTimeout(poll, 1500);
+          // Quickly while the card list downloads; then now and then, so an update notice found after start-up shows.
+          timer = setTimeout(poll, s.catalogue.ready ? 5 * 60 * 1000 : 1500);
         },
         () => (timer = setTimeout(poll, 3000)),
       );
@@ -161,6 +162,16 @@ export function App() {
 
       <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
         {error && <div className="mb-4"><Notice tone="bad">{error} <Button variant="link" onClick={() => setError(null)}>dismiss</Button></Notice></div>}
+        {status?.update && settings && settings.updateCheck.dismissed !== status.update.version && (
+          <div className="mb-4">
+            <Notice tone="info">
+              MagicFinder {status.update.version} is available (you have {status.version}).{' '}
+              <a className="underline font-medium" href={status.update.url} target="_blank" rel="noreferrer">Download · What's new</a>
+              {' · '}
+              <Button variant="link" onClick={() => changeSettings({ updateCheck: { ...settings.updateCheck, dismissed: status.update!.version } })}>not now</Button>
+            </Notice>
+          </div>
+        )}
         {settings && step === 'list' && (
           <WantListStep
             text={text}

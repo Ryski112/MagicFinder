@@ -14,12 +14,15 @@ import { checkShopifyCart } from './cart';
 import { cardImage } from './planner';
 import type { RunManager } from './runs';
 import type { Settings, SettingsStore } from './settings';
+import type { UpdateInfo } from './updates';
 
 export interface AppDeps {
   catalogue: CatalogueStore;
   settings: SettingsStore;
   runs: RunManager;
   version: string;
+  /** A newer release to offer, if any. */
+  update?: () => UpdateInfo | null;
 }
 
 export function createApp(d: AppDeps) {
@@ -28,7 +31,12 @@ export function createApp(d: AppDeps) {
   app.onError((err, c) => c.json({ error: err.message }, 500));
 
   app.get('/api/status', c =>
-    c.json<StatusResponse>({ version: d.version, catalogue: { ready: d.catalogue.ready, progress: d.catalogue.progress, error: d.catalogue.error } }),
+    c.json<StatusResponse>({
+      app: 'MagicFinder',
+      version: d.version,
+      catalogue: { ready: d.catalogue.ready, progress: d.catalogue.progress, error: d.catalogue.error },
+      update: d.update?.() ?? null,
+    }),
   );
 
   app.get('/api/settings', c => c.json<Settings>(d.settings.get()));
@@ -36,8 +44,8 @@ export function createApp(d: AppDeps) {
   app.put('/api/settings', async c => {
     const patch = await c.req.json<Partial<Settings>>();
     const s = d.settings.update(patch);
-    // The theme doesn't change any Plan.
-    if (Object.keys(patch).some(k => k !== 'theme')) d.runs.replanAll();
+    // The theme and the update notice don't change any Plan.
+    if (Object.keys(patch).some(k => k !== 'theme' && k !== 'updateCheck')) d.runs.replanAll();
     return c.json<Settings>(s);
   });
 

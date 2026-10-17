@@ -8,8 +8,12 @@ import type { CartKind } from '../core/stores';
 export type { Lock, Settings, SourceRunStatus, Condition, Finish, Section, SourceId, CartKind };
 
 export interface StatusResponse {
+  /** Lets a second launch recognise a running MagicFinder on a port. */
+  app: 'MagicFinder';
   version: string;
   catalogue: { ready: boolean; progress: number; error: string | null };
+  /** A newer MagicFinder release the buyer hasn't dismissed. */
+  update: { version: string; url: string } | null;
 }
 
 /** One suggestion from the Want List's card searcher. */

@@ -1,6 +1,8 @@
 // Runs exact rung solves in worker threads so the server stays responsive and rungs solve in parallel.
 import { Worker } from 'node:worker_threads';
 import { availableParallelism } from 'node:os';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { RungOutcome, SolveOptions } from './milp';
 import type { Problem } from './problem';
 import type { RungSolver } from './ladder';
@@ -10,6 +12,10 @@ interface Job {
   resolve: (o: RungOutcome) => void;
   reject: (e: Error) => void;
 }
+
+// The packaged build bundles the worker as worker.mjs next to the bundled server; from source it is worker.ts.
+const BUNDLED_WORKER = new URL('./worker.mjs', import.meta.url);
+const WORKER = existsSync(fileURLToPath(BUNDLED_WORKER)) ? BUNDLED_WORKER : new URL('./worker.ts', import.meta.url);
 
 export class SolverPool {
   private idle: Worker[] = [];
@@ -23,7 +29,7 @@ export class SolverPool {
   }
 
   private spawn(): Worker {
-    const w = new Worker(new URL('./worker.ts', import.meta.url));
+    const w = new Worker(WORKER);
     w.on('message', (m: { id: number; outcome?: RungOutcome; error?: string }) => {
       const job = this.busy.get(w);
       this.busy.delete(w);

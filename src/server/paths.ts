@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 
 /** Where MagicFinder keeps the catalogue, search cache and settings for this user. */
 export function dataDir(): string {
@@ -15,4 +15,7 @@ export function dataDir(): string {
   return dir;
 }
 
-export const USER_AGENT = 'MagicFinder/0.1 (personal price finder; https://github.com/Ryski112/MagicFinder)';
+/** From package.json, which sits two folders up both in the source tree and in the packaged build. */
+export const APP_VERSION: string = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
+
+export const USER_AGENT = `MagicFinder/${APP_VERSION} (personal price finder; https://github.com/Ryski112/MagicFinder)`;

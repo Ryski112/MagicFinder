@@ -1,16 +1,20 @@
 // The Want List's card searcher: type a name, pick a suggestion, optionally pick a Printing, and the card is added to
-// the pasted text. Decided in "How should the Want List card searcher look and behave?" (layout A).
-// Keys: ↑/↓ move through suggestions; Enter adds straight away (any Printing); Tab (or a click) chooses the card and
-// moves to quantity, then to the Printing strip (←/→); Enter adds from any of them; Escape cancels.
+// the pasted text. Decided in "How should the Want List card searcher look and behave?" (layout A), with two later
+// owner changes: Enter on a suggestion chooses it like a click, and a Printing chosen here is locked, not just noted.
+// Keys: ↑/↓ move through suggestions; Enter, Tab or a click chooses the card and shows its Printings (Tab also moves
+// to quantity, then to the Printing strip, ←/→); Enter adds from any of them; Escape cancels.
 import { useEffect, useRef, useState } from 'react';
 import { addToWantList } from '../../core/addToWantList';
-import type { CardSearchResult, CataloguePrintingView } from '../../shared/api';
+import { defaultFinish, wantLineId } from '../../core/wantList';
+import type { CardSearchResult, CataloguePrintingView, Lock } from '../../shared/api';
 import { api } from '../api';
 import { Button, CardImage, cx } from './ui';
 
 interface Props {
   text: string;
   onText: (t: string) => void;
+  /** Locks a Want List line to a Printing (used when the buyer picks one here). */
+  onLock: (lineId: string, lock: Lock) => void;
   ready: boolean;
   /** 0..1 while the card list downloads. */
   progress: number;
@@ -89,6 +93,11 @@ export function CardSearcher(p: Props) {
     const o = printings.find(x => x.id === printingId);
     const r = addToWantList(p.text, { name: card.name, set: o?.setCode, collectorNumber: o?.collectorNumber }, qty);
     p.onText(r.text);
+    // The line's id is what the server will give it once it reads "(SET) num" back as this Printing.
+    if (o) {
+      const lock = { printingId: o.id, finish: defaultFinish(o.finishes) };
+      p.onLock(wantLineId(card.oracleId, 'main', lock), lock);
+    }
     setMsg(r.message);
     reset();
   };
@@ -145,7 +154,7 @@ export function CardSearcher(p: Props) {
                 setActive(Math.max(active - 1, 0));
               } else if (e.key === 'Enter' && hits.length) {
                 e.preventDefault();
-                add(hits[active], '');
+                choose(hits[active]);
               } else if (e.key === 'Tab' && !e.shiftKey && hits.length) {
                 // Let the browser move focus on to quantity; the Printing strip follows.
                 choose(hits[active]);
@@ -271,7 +280,7 @@ export function CardSearcher(p: Props) {
               ))}
             </div>
             {printing && (
-              <p className="text-xs text-slate-500">Written into your list as a note, not a lock: cheaper printings still count until you lock it in the review list.</p>
+              <p className="text-xs text-slate-500">🔒 Added locked to this printing: only it can fill the line. You can allow any printing in the review list.</p>
             )}
           </div>
         </div>

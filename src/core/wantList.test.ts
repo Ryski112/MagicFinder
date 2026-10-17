@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
-import { buyLines, resolveWantList, type ListChoices } from './wantList';
+import { buyLines, defaultFinish, resolveWantList, wantLineId, type ListChoices } from './wantList';
+import { addToWantList } from './addToWantList';
 import { isEligible } from './eligibility';
 import type { Listing } from './types';
 
@@ -41,6 +42,17 @@ describe('resolveWantList', () => {
     expect(cat.getPrinting(sol.hint!.lock!.printingId)?.setCode).toBe('c21');
     expect(r.lines.find(l => l.name === 'Island')?.isBasic).toBe(true);
     expect(r.lines.find(l => l.name === 'Rhystic Study')?.includedByDefault).toBe(false);
+  });
+
+  it("gives a card searcher line the id the searcher locks, from the Printing's own finishes", () => {
+    // What the card searcher does: write "N Name (SET) num", then lock wantLineId(card, 'main', that Printing).
+    const sol = cat.findCard('Sol Ring')!;
+    const printing = cat.findPrinting(sol.oracleId, { setCode: 'C21', collectorNumber: '263' }).printing!;
+    const lock = { printingId: printing.id, finish: defaultFinish(printing.finishes) };
+    const text = addToWantList('1 Arcane Signet', { name: 'Sol Ring', set: 'C21', collectorNumber: '263' }, 1).text;
+    const line = resolveWantList(text, cat).lines.find(l => l.name === 'Sol Ring')!;
+    expect(line.id).toBe(wantLineId(sol.oracleId, 'main', lock));
+    expect(line.hint?.lock).toEqual(lock);
   });
 });
 

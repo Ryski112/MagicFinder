@@ -12,6 +12,15 @@ export interface Lock {
 
 export const lockKey = (l: Lock) => `${l.printingId}:${l.finish}`;
 
+/** The finish a Printing named without one means: non-foil when it comes that way, else its only finish. */
+export const defaultFinish = (finishes: Finish[]): Finish => (finishes.includes('nonfoil') ? 'nonfoil' : finishes[0] ?? 'nonfoil');
+
+/** A Want List line's id: card, section and the list's Printing, plus "#n" for repeats. Locks are keyed by it. */
+export const wantLineId = (oracleId: string, section: Section, listPrinting: Lock | null, repeat = 0) => {
+  const base = `${oracleId}:${section}:${listPrinting ? lockKey(listPrinting) : ''}`;
+  return repeat ? `${base}#${repeat}` : base;
+};
+
 export function parseLockKey(k: string): Lock | null {
   const i = k.lastIndexOf(':');
   if (i <= 0) return null;
@@ -61,14 +70,14 @@ export function resolveWantList(text: string, catalogue: Catalogue): ResolvedWan
     if (text) {
       const m = p.set ? catalogue.findPrinting(card.oracleId, { setCode: p.set, collectorNumber: p.collectorNumber, finish: p.finish }) : null;
       const printing = m?.printing ?? null;
-      const finish: Finish = p.finish ?? (printing?.finishes.includes('nonfoil') ? 'nonfoil' : printing?.finishes[0] ?? 'nonfoil');
+      const finish: Finish = p.finish ?? defaultFinish(printing?.finishes ?? []);
       hint = { text, lock: printing && printing.finishes.includes(finish) ? { printingId: printing.id, finish } : null };
     }
-    const base = `${card.oracleId}:${p.section}:${hint?.lock ? lockKey(hint.lock) : ''}`;
+    const base = wantLineId(card.oracleId, p.section, hint?.lock ?? null);
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
     lines.push({
-      id: n ? `${base}#${n}` : base,
+      id: wantLineId(card.oracleId, p.section, hint?.lock ?? null, n),
       oracleId: card.oracleId,
       name: card.name,
       quantity: p.quantity,

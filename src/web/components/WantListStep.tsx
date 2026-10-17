@@ -73,7 +73,7 @@ export function WantListStep(p: Props) {
         <Button variant="primary" className="px-4" disabled={!url || importing} onClick={doImport}>{importing ? 'Importing…' : 'Import'}</Button>
       </div>
       {importError && <p className="text-sm text-rose-600 dark:text-rose-400">{importError}</p>}
-      <CardSearcher text={p.text} onText={p.onText} ready={p.catalogueReady} progress={p.catalogueProgress} />
+      <CardSearcher text={p.text} onText={p.onText} onLock={setLock} ready={p.catalogueReady} progress={p.catalogueProgress} />
       <textarea
         className="w-full h-56 rounded-lg p-3 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
         placeholder={'4 Lightning Bolt\n1 Sol Ring (C21) 263\n1x Rhystic Study *F*'}

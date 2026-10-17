@@ -58,7 +58,8 @@ export function mapFetchListing(l: any): SourceListing | null {
     price,
     quantity: typeof l.remainingQuantity === 'number' ? l.remainingQuantity : 1,
     url: `https://www.fetchtcg.com/marketplace/listings/${l.id}`,
-    buyable: l.buyNowEnabled !== false && !l.sellerOnHoliday,
+    // buyNowEnabled is only true for business sellers; individuals' Listings still go in the cart at their listed price.
+    buyable: !l.sellerOnHoliday,
     extra: l.sellerProfileName ? { profile: l.sellerProfileName } : undefined,
   };
 }

@@ -18,9 +18,9 @@ describe('mapMtgSinglesListing', () => {
     expect(new Set(mapped.map(l => l.id)).size).toBe(mapped.length);
   });
 
-  it('judges combined grades by their worse half', () => {
+  it('counts "NM / SP" as NM and other combined grades by their worse half', () => {
     const byRaw = (c: string) => mapped.find(l => l.extra?.rawCondition === c)?.condition;
-    expect(byRaw('NM / SP')).toBe('LP');
+    expect(byRaw('NM / SP')).toBe('NM');
     expect(byRaw('SP / LP')).toBe('LP');
     expect(byRaw('MP')).toBe('MP');
     expect(byRaw('N/A')).toBeNull();

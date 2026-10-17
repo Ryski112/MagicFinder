@@ -174,9 +174,9 @@ Decided in [What happens when a Source blocks MagicFinder?](https://github.com/R
 Decided in [Which Listings count as a match for a Want List line?](https://github.com/Ryski112/MagicFinder/issues/8). These filters run before the optimiser.
 
 **Listing filters**
-- **Condition**: the minimum is Lightly Played or better (a setting). MtgSingles combined grades count as their worse half (`SP / LP` → LP). `N/A` passes and is tagged "condition not stated".
+- **Condition**: the minimum is Lightly Played or better (a setting). MtgSingles `NM / SP`, the grade on most of its stock, counts as NM; other combined grades count as their worse half (`SP / LP` → LP). `N/A` passes and is tagged "condition not stated".
 - **Language**: English only, with no setting.
-- **Buyability (Fetch)**: offer-only (`buyNowEnabled=false`) and `sellerOnHoliday` Listings are never used.
+- **Buyability (Fetch)**: `sellerOnHoliday` Listings are never used. `buyNowEnabled` is not a buyability flag: it is only true for business sellers, and individual sellers' Listings (`buyNowEnabled=false`, `offerEnabled=true`) still go in the cart at their listed price.
 
 **Unlocked lines**
 - Any English Printing in any finish is eligible, and lines may mix Printings.

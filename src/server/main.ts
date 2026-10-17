@@ -2,6 +2,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { parse } from 'yaml';
@@ -19,7 +21,8 @@ import { SettingsStore } from './settings';
 const dev = process.argv.includes('--dev');
 const version: string = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
 const storesFile = new URL('../../data/stores.yaml', import.meta.url);
-const webDir = new URL('../../dist/web/', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows .pathname gives "/C:/…", which serveStatic can't find (the UI 404s).
+const webDir = fileURLToPath(new URL('../../dist/web/', import.meta.url));
 
 const dir = dataDir();
 const settings = new SettingsStore(dir);
@@ -46,8 +49,8 @@ const runs = new RunManager({
 const app = createApp({ catalogue, settings, runs, version });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
-  app.use('/*', serveStatic({ root: webDir.replace(process.cwd(), '.') }));
-  app.get('*', serveStatic({ path: `${webDir}index.html`.replace(process.cwd(), '.') }));
+  app.use('/*', serveStatic({ root: webDir }));
+  app.get('*', serveStatic({ path: join(webDir, 'index.html') }));
 }
 
 async function freePort(start: number): Promise<number> {

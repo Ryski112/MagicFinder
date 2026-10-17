@@ -1,6 +1,6 @@
 // Calls to the local MagicFinder server.
 import type {
-  ArchidektResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, Settings, StatusResponse,
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, Settings, StatusResponse,
 } from '../shared/api';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -21,6 +21,8 @@ export const api = {
   tryAgain: (source: string) => call<{ ok: true }>('POST', `/api/sources/${source}/try-again`),
   parse: (text: string) => call<ParseResponse>('POST', '/api/parse', { text }),
   archidekt: (url: string) => call<ArchidektResponse>('POST', '/api/archidekt', { url }),
+  searchCards: (q: string) => call<CardSearchResponse>('GET', `/api/cards/search?${new URLSearchParams({ q })}`),
+  cardPrintings: (oracleId: string) => call<CardPrintingsResponse>('GET', `/api/cards/${encodeURIComponent(oracleId)}/printings`),
   startRun: (text: string, choices: PlanChoices) => call<{ runId: string }>('POST', '/api/runs', { text, choices }),
   replan: (runId: string, choices: PlanChoices) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices }),
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),

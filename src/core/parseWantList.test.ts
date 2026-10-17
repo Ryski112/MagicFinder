@@ -50,7 +50,12 @@ SIDEBOARD:
 
   it('treats an empty Arena set "()" as no set and drops the collector number', () => {
     const { lines } = parseWantList('1 Deadly Tempest () 19');
-    expect(lines[0]).toEqual({ quantity: 1, name: 'Deadly Tempest', section: 'main', raw: '1 Deadly Tempest () 19' });
+    expect(lines[0]).toEqual({ quantity: 1, name: 'Deadly Tempest', section: 'main', raw: '1 Deadly Tempest () 19', row: 0 });
+  });
+
+  it('records which row of the text each line came from', () => {
+    const { lines } = parseWantList('Deck\r\n4 Lightning Bolt\r\n\r\nSideboard\r\n2 Negate');
+    expect(lines.map(l => l.row)).toEqual([1, 4]);
   });
 
   it('reads Arena exports with About/Name/Deck headers', () => {

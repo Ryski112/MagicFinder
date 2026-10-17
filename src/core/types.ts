@@ -18,6 +18,8 @@ export interface ParsedLine {
   section: Section;
   /** The original line, for "Couldn't recognise" messages. */
   raw: string;
+  /** Which line of the text it came from (0-based). */
+  row: number;
 }
 
 export interface ParseResult {

@@ -12,6 +12,39 @@ export interface StatusResponse {
   catalogue: { ready: boolean; progress: number; error: string | null };
 }
 
+/** One suggestion from the Want List's card searcher. */
+export interface CardSearchResult {
+  oracleId: string;
+  name: string;
+  /** The flavour name that matched, when it wasn't the card's own name. */
+  matchedAlias: string | null;
+  how: 'exact' | 'starts with' | 'word starts' | 'contains' | 'typo';
+  image: string | null;
+}
+
+export interface CardSearchResponse {
+  results: CardSearchResult[];
+}
+
+/** A Printing offered by the card searcher's optional Printing step (from the catalogue, not from any Source). */
+export interface CataloguePrintingView {
+  id: string;
+  /** Upper case, as written into the Want List line. */
+  setCode: string;
+  setName: string;
+  collectorNumber: string;
+  finishes: Finish[];
+  treatments: string[];
+  nonTournament: string | null;
+  year: string;
+  image: string | null;
+  imageLarge: string | null;
+}
+
+export interface CardPrintingsResponse {
+  printings: CataloguePrintingView[];
+}
+
 export interface WantLineView {
   id: string;
   oracleId: string;

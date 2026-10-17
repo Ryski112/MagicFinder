@@ -1,9 +1,13 @@
 // HTTP API for the UI. Everything that talks to Sources, Archidekt or Scryfall happens here, not in the browser.
 import { Hono } from 'hono';
 import { stream, streamSSE } from 'hono/streaming';
+import type { Catalogue } from '../catalogue/catalogue';
+import { CardSearchIndex } from '../catalogue/cardSearch';
 import type { CatalogueStore } from '../catalogue/updater';
 import { resolveWantList } from '../core/wantList';
-import type { ArchidektResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, StartRunRequest, StatusResponse } from '../shared/api';
+import type {
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, StartRunRequest, StatusResponse,
+} from '../shared/api';
 import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
 import { checkShopifyCart } from './cart';
@@ -51,6 +55,30 @@ export function createApp(d: AppDeps) {
     const cat = d.catalogue.get();
     const r = resolveWantList(text ?? '', cat);
     return c.json<ParseResponse>({ lines: r.lines.map(l => ({ ...l, image: cardImage(cat, l.oracleId) })), unrecognised: r.unrecognised });
+  });
+
+  // The card searcher's index, built once per catalogue (a refreshed catalogue gets a fresh index).
+  const searchIndexes = new WeakMap<Catalogue, CardSearchIndex>();
+  const searchIndex = (cat: Catalogue) => {
+    let index = searchIndexes.get(cat);
+    if (!index) searchIndexes.set(cat, (index = new CardSearchIndex(cat.allNames())));
+    return index;
+  };
+
+  app.get('/api/cards/search', c => {
+    if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);
+    const cat = d.catalogue.get();
+    const results = searchIndex(cat).search(c.req.query('q') ?? '').map(h => ({ ...h, image: cardImage(cat, h.oracleId) }));
+    return c.json<CardSearchResponse>({ results });
+  });
+
+  app.get('/api/cards/:oracleId/printings', c => {
+    if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);
+    const printings = d.catalogue.get().printingsOf(c.req.param('oracleId')).map(p => ({
+      id: p.id, setCode: p.setCode.toUpperCase(), setName: p.setName, collectorNumber: p.collectorNumber, finishes: p.finishes,
+      treatments: p.treatments, nonTournament: p.nonTournament, year: p.releasedAt.slice(0, 4), image: p.imageSmall, imageLarge: p.imageNormal,
+    }));
+    return c.json<CardPrintingsResponse>({ printings });
   });
 
   app.post('/api/archidekt', async c => {

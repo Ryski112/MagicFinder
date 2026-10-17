@@ -10,7 +10,7 @@ This spec gathers the decisions made on the [Wayfinder map](https://github.com/R
 - A locally run app on each user's own computer. It's started with one command and opens in the browser. Friends with some coding knowledge can install it.
 - Two Sources: Fetch TCG and MtgSingles. The data layer takes more Sources later as plug-ins.
 - NZ-based Stores only.
-- Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL.
+- Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL, plus a card searcher that adds cards by name.
 - Live search per run with about a 1 h cache, then a Trade-off Ladder of Plans and a per-Store breakdown with clean links.
 - A per-Store button that opens the Store with the Plan's cards in the cart (where the Store supports it). The buyer checks out themselves.
 
@@ -91,6 +91,14 @@ Decided in [What Want List formats must import support, and what does Archidekt 
 - Split and double-faced cards match on the front face.
 
 **Archidekt URL**: the back end fetches `GET https://archidekt.com/api/decks/{id}/`. Moxfield URLs are Cloudflare-blocked, so Moxfield users paste instead. Don't use Archidekt's CSV export.
+
+**Card searcher**: decided in [How should the Want List card searcher look and behave?](https://github.com/Ryski112/MagicFinder/issues/18).
+- A search bar between the Archidekt row and the paste box, with a quantity box and **Add**. It searches every name alias in the local catalogue, in memory (`GET /api/cards/search?q=`), and shows 8 suggestions with images.
+- Ranking: exact, starts with, every typed word starts a word of the name, contains, then typos (1 edit; 2 for words of 7+ letters; a half-typed last word counts as a prefix). Front faces of double-faced cards and flavour names match too; a flavour match shows "matched …". Ties go to the shorter name (there is no popularity data).
+- Keys: ↑/↓ move, **Enter** adds with any Printing, **Tab** (or a click) chooses the card and moves to quantity, then to an optional Printing strip (`GET /api/cards/{oracleId}/printings`, newest first, ←/→ with a large preview). Escape cancels. The box clears and keeps focus after adding, with a short confirmation.
+- A chosen Printing is written as `N Name (SET) num`: a hint, never a lock.
+- Adding raises the quantity of a plain main-deck line naming the same card and Printing; otherwise a new line goes at the end of the main deck (before other sections, or before the MTGO blank-line sideboard).
+- Disabled until the catalogue is ready, saying so with the download percentage (also as a tooltip).
 
 **Line shape**: `{ quantity, name, set?, collectorNumber?, finish?, section }`. Set, collector number and finish are **hints** only.
 
@@ -237,7 +245,7 @@ Decided in [What should the results GUI look like?](https://github.com/Ryski112/
 - **Dark mode** is the default, and the choice is remembered.
 
 **1. Want List**
-- A simple start screen: a headline, an Archidekt URL box with **Import**, a large paste box, and one primary **Find my cards** button.
+- A simple start screen: a headline, an Archidekt URL box with **Import**, the card searcher, a large paste box, and one primary **Find my cards** button.
 - Beside the button, a one-line summary ("14 cards recognised, 1 not, basics skipped").
 - **Review list** expands the parsed lines: include checkboxes, "your list said … · lock" hints, unrecognised lines and skipped basics.
 

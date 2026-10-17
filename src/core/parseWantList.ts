@@ -34,8 +34,9 @@ export function parseWantList(text: string): ParseResult {
   let sawCard = false;
   let afterBlank = false;
 
-  for (const rawLine of text.split(/\r?\n/)) {
-    const raw = rawLine.trim();
+  const rows = text.split(/\r?\n/);
+  for (let row = 0; row < rows.length; row++) {
+    const raw = rows[row].trim();
     if (!raw) {
       if (sawCard) afterBlank = true;
       continue;
@@ -74,6 +75,7 @@ export function parseWantList(text: string): ParseResult {
       name: normaliseCardName(name),
       section: lineSection,
       raw,
+      row,
     };
     if (set) {
       line.set = set.toUpperCase();

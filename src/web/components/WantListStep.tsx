@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Lock, ParseResponse, PlanChoices, Settings } from '../../shared/api';
+import { CardSearcher } from './CardSearcher';
 import { Button, cx } from './ui';
 
 interface Props {
@@ -15,6 +16,9 @@ interface Props {
   onFind: () => void;
   busy: boolean;
   catalogueMessage: string | null;
+  catalogueReady: boolean;
+  /** 0..1 while the card list downloads. */
+  catalogueProgress: number;
 }
 
 export function isLineIncluded(l: ParseResponse['lines'][number], choices: PlanChoices, s: Settings) {
@@ -53,7 +57,7 @@ export function WantListStep(p: Props) {
   return (
     <div className="max-w-2xl mx-auto space-y-4 pt-6">
       <h1 className="text-4xl font-black tracking-tight">Cheapest way to buy your list in NZ.</h1>
-      <p className="text-slate-500 dark:text-slate-400">Paste a list or an Archidekt link. MagicFinder searches Fetch TCG and MtgSingles and shows what each extra Store saves you.</p>
+      <p className="text-slate-500 dark:text-slate-400">Paste a list or an Archidekt link, or add cards by name. MagicFinder searches Fetch TCG and MtgSingles and shows what each extra Store saves you.</p>
       <div className="flex gap-2">
         <input
           className="flex-1 rounded-lg px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
@@ -65,6 +69,7 @@ export function WantListStep(p: Props) {
         <Button variant="primary" className="px-4" disabled={!url || importing} onClick={doImport}>{importing ? 'Importing…' : 'Import'}</Button>
       </div>
       {importError && <p className="text-sm text-rose-600 dark:text-rose-400">{importError}</p>}
+      <CardSearcher text={p.text} onText={p.onText} ready={p.catalogueReady} progress={p.catalogueProgress} />
       <textarea
         className="w-full h-56 rounded-lg p-3 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
         placeholder={'4 Lightning Bolt\n1 Sol Ring (C21) 263\n1x Rhystic Study *F*'}

@@ -83,7 +83,7 @@ setInterval(() => void catalogue.refreshIfStale(), 60 * 60 * 1000).unref();
 setInterval(() => (directory = new StoreDirectory(stores)), 24 * 60 * 60 * 1000).unref();
 
 const shutdown = async () => {
-  await Promise.allSettled([mtgsingles.close(), pool.close()]);
+  await pool.close().catch(() => {});
   process.exit(0);
 };
 process.on('SIGINT', shutdown);

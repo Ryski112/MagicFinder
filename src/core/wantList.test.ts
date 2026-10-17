@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import { buyLines, defaultFinish, resolveWantList, wantLineId, type ListChoices } from './wantList';
 import { addToWantList } from './addToWantList';
-import { isEligible } from './eligibility';
+import { exclusion, isEligible } from './eligibility';
 import type { Listing } from './types';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-want-'));
@@ -111,5 +111,19 @@ describe('isEligible', () => {
     expect(isEligible(listing({ confidence: 'exact', printingId: p.id }), line, cat, settings)).toBe(true);
     expect(isEligible(listing({ confidence: 'exact', printingId: p.id, finish: 'foil' }), line, cat, settings)).toBe(false);
     expect(isEligible(listing({ confidence: 'card-only' }), line, cat, settings)).toBe(false);
+  });
+
+  it('says why a Listing was left out', () => {
+    const gold = printings().find(p => p.nonTournament)!;
+    const p = printings().find(x => !x.nonTournament && x.finishes.includes('nonfoil'))!;
+    const locked = { ...counter(), lock: { printingId: p.id, finish: 'nonfoil' as const } };
+    expect(exclusion(listing({}), counter(), cat, settings)).toBeNull();
+    expect(exclusion(listing({ condition: 'MP' }), counter(), cat, settings)).toBe('condition');
+    expect(exclusion(listing({ english: false }), counter(), cat, settings)).toBe('non-english');
+    expect(exclusion(listing({ buyable: false }), counter(), cat, settings)).toBe('not-buyable');
+    expect(exclusion(listing({ quantity: 0 }), counter(), cat, settings)).toBe('sold-out');
+    expect(exclusion(listing({ finish: 'foil' }), counter(), cat, { ...settings, allowFoils: false })).toBe('foil');
+    expect(exclusion(listing({ confidence: 'exact', printingId: gold.id }), counter(), cat, settings)).toBe('non-tournament');
+    expect(exclusion(listing({ confidence: 'card-only' }), locked, cat, settings)).toBe('other-printing');
   });
 });

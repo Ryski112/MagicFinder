@@ -32,6 +32,7 @@ export interface Settings {
   sourceHealth: Record<SourceId, SourceHealth>;
   /** The "new version available" check: when it last ran, what it found, and a version the buyer dismissed. */
   updateCheck: { lastCheckedAt: string | null; latest: { version: string; url: string } | null; dismissed: string | null };
+  cardKingdom: { enabled: boolean; shippingUsd: number; addGst: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
     mtgsingles: { blockedAt: null, consecutiveBlockedRuns: 0 },
   },
   updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
+  cardKingdom: { enabled: false, shippingUsd: 20, addGst: true },
 };
 
 export class SettingsStore {

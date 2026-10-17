@@ -10,20 +10,33 @@ export interface EligibilitySettings {
   allowFoils: boolean;
 }
 
+/** Why a Listing of the right card can't fill a line, so Not Found can say what was left out. */
+export type Exclusion = 'non-english' | 'not-buyable' | 'unmatched' | 'sold-out' | 'condition' | 'other-printing' | 'foil' | 'non-tournament';
+
+function listingExclusion(l: Listing, s: EligibilitySettings): Exclusion | null {
+  if (!l.english) return 'non-english';
+  if (!l.buyable) return 'not-buyable';
+  if (l.confidence === 'unmatched') return 'unmatched';
+  if (l.quantity <= 0) return 'sold-out';
+  if (l.condition !== null && CONDITION_RANK[l.condition] > CONDITION_RANK[s.minCondition]) return 'condition';
+  return null;
+}
+
 /** Filters that apply to every line, whether locked or not. */
 export function passesListingFilters(l: Listing, s: EligibilitySettings): boolean {
-  if (!l.english || !l.buyable || l.confidence === 'unmatched' || l.quantity <= 0) return false;
-  if (l.condition !== null && CONDITION_RANK[l.condition] > CONDITION_RANK[s.minCondition]) return false;
-  return true;
+  return listingExclusion(l, s) === null;
+}
+
+/** Why a Listing of this line's card can't fill it, or null if it can. */
+export function exclusion(l: Listing, line: BuyLine, catalogue: Catalogue, s: EligibilitySettings): Exclusion | null {
+  const general = listingExclusion(l, s);
+  if (general) return general;
+  if (line.lock) return l.confidence === 'exact' && l.printingId === line.lock.printingId && l.finish === line.lock.finish ? null : 'other-printing';
+  if (!s.allowFoils && l.finish !== 'nonfoil') return 'foil';
+  if (l.printingId && catalogue.getPrinting(l.printingId)?.nonTournament) return 'non-tournament';
+  return null;
 }
 
 export function isEligible(l: Listing, line: BuyLine, catalogue: Catalogue, s: EligibilitySettings): boolean {
-  if (l.oracleId !== line.oracleId || !passesListingFilters(l, s)) return false;
-  if (line.lock) return l.confidence === 'exact' && l.printingId === line.lock.printingId && l.finish === line.lock.finish;
-  if (!s.allowFoils && l.finish !== 'nonfoil') return false;
-  if (l.printingId) {
-    const p = catalogue.getPrinting(l.printingId);
-    if (p?.nonTournament) return false;
-  }
-  return true;
+  return l.oracleId === line.oracleId && exclusion(l, line, catalogue, s) === null;
 }

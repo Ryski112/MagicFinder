@@ -33,4 +33,9 @@ export class SearchCache {
   put(source: SourceId, query: string, listings: SourceListing[], fetchedAt = Date.now()) {
     this.db.prepare('INSERT OR REPLACE INTO searches VALUES (?, ?, ?, ?)').run(source, query.toLowerCase(), fetchedAt, JSON.stringify(listings));
   }
+
+  /** Forgets every saved search, so the next run asks the Sources again. Returns how many were removed. */
+  clear(): number {
+    return Number(this.db.prepare('DELETE FROM searches').run().changes);
+  }
 }

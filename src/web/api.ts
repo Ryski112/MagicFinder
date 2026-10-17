@@ -19,6 +19,7 @@ export const api = {
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (patch: Partial<Settings>) => call<Settings>('PUT', '/api/settings', patch),
   tryAgain: (source: string) => call<{ ok: true }>('POST', `/api/sources/${source}/try-again`),
+  clearCache: () => call<{ cleared: number }>('POST', '/api/cache/clear'),
   parse: (text: string) => call<ParseResponse>('POST', '/api/parse', { text }),
   archidekt: (url: string) => call<ArchidektResponse>('POST', '/api/archidekt', { url }),
   searchCards: (q: string) => call<CardSearchResponse>('GET', `/api/cards/search?${new URLSearchParams({ q })}`),

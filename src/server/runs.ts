@@ -3,9 +3,10 @@
 import type { Catalogue } from '../catalogue/catalogue';
 import { StoreDirectory } from '../core/stores';
 import { buyLines, resolveWantList, type ResolvedWantList } from '../core/wantList';
-import { buildLadder, LadderKnowledge, type RungSolver } from '../optimiser/ladder';
+import { buildLadder, LadderKnowledge, type LadderState, type RungSolver } from '../optimiser/ladder';
 import type { LadderView, PlanChoices, RunEvent, SearchProgressView } from '../shared/api';
 import type { Source } from '../sources/types';
+import type { CardKingdom } from './cardKingdom';
 import { ladderView, listChoices, preparePlan, printingOptions, type PlanContext, type Prepared } from './planner';
 import { searchAll, type SearchCard, type SearchResult } from './search';
 import type { SearchCache } from './searchCache';
@@ -15,6 +16,7 @@ export interface RunDeps {
   catalogue: () => Catalogue;
   sources: Source[];
   cache: SearchCache;
+  cardKingdom: CardKingdom;
   settings: SettingsStore;
   directory: () => StoreDirectory;
   solve: RungSolver;
@@ -48,7 +50,7 @@ export class Run {
   }
 
   private ctx(): PlanContext {
-    return { catalogue: this.deps.catalogue(), directory: this.deps.directory(), settings: this.deps.settings.get() };
+    return { catalogue: this.deps.catalogue(), directory: this.deps.directory(), settings: this.deps.settings.get(), cardKingdom: this.deps.cardKingdom.context() };
   }
 
   /** Cards the current choices need, which this run hasn't searched yet. */
@@ -115,12 +117,22 @@ export class Run {
     this.planAbort?.abort();
     const abort = (this.planAbort = new AbortController());
     const planId = ++this.planId;
-    const ctx = this.ctx();
+    let ctx = this.ctx();
     const prepared = preparePlan(this.want, this.search, this.choices, ctx);
     const knowledge = new LadderKnowledge();
     this.prepared = prepared;
     this.knowledge = knowledge;
     const extras = { planId, want: this.want, search: this.search, choices: this.choices };
+    let latest: LadderState | null = null;
+    // CardKingdom prices only change what the Plan shows, so planning doesn't wait for their (large) download;
+    // the latest view is sent again once they arrive.
+    if (ctx.settings.cardKingdom.enabled) {
+      void this.deps.cardKingdom.refresh().then(() => {
+        if (abort.signal.aborted) return;
+        ctx = this.ctx();
+        if (latest) this.emit({ type: 'ladder', ladder: ladderView(prepared, latest, ctx, extras) });
+      });
+    }
     const solve: RungSolver = (p, k, o) => (abort.signal.aborted ? Promise.resolve({ kind: 'no-plan-in-time' }) : this.deps.solve(p, k, o));
     try {
       await buildLadder(prepared.problem, {
@@ -130,6 +142,7 @@ export class Run {
         parallel: this.deps.parallel,
         signal: abort.signal,
         onUpdate: state => {
+          latest = state;
           if (!abort.signal.aborted) this.emit({ type: 'ladder', ladder: ladderView(prepared, state, ctx, extras) });
         },
       });

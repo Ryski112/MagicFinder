@@ -6,7 +6,7 @@ import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import { SourceError, type Source, type SourceListing } from '../sources/types';
 import type { SourceId } from '../core/types';
 import { queryFor, searchAll, type SearchCard, type SearchProgress } from './search';
-import { SearchCache } from './searchCache';
+import { FRESH_MS, SearchCache } from './searchCache';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-search-'));
@@ -147,5 +147,16 @@ describe('searchAll', () => {
     expect(st.status).toBe('blocked');
     expect(st.notSearched).toHaveLength(cards.length);
     expect(mts.calls.slice(cards.length)).toEqual(DEFAULT_SETTINGS.staples);
+  });
+});
+
+describe('SearchCache.clear', () => {
+  it('forgets every saved search and says how many there were', () => {
+    const cache = freshCache();
+    cache.put('fetch', 'Counterspell', []);
+    cache.put('mtgsingles', 'Counterspell', []);
+    expect(cache.clear()).toBe(2);
+    expect(cache.get('fetch', 'Counterspell', FRESH_MS)).toBeNull();
+    expect(cache.clear()).toBe(0);
   });
 });

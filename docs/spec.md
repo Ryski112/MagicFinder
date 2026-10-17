@@ -80,6 +80,15 @@ Notes:
 - The buyer can override postage per Store in Settings.
 - A monthly change-detection job hashes each Store's policy page and `meta.json`, and opens an issue for a human to update the table when something changes.
 
+### 3.3 CardKingdom comparison
+
+An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there and it never changes a Plan. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
+
+- **CardKingdom's public price list**, `GET https://api.cardkingdom.com/api/v2/pricelist` (about 22 MB), saved to the user's data directory. Matched by Scryfall id. Planning never waits for it; the Plan's view is updated when it arrives.
+- **frankfurter.dev** for the USD→NZD rate, `GET https://api.frankfurter.dev/v1/latest?base=USD&symbols=NZD`, saved to the user's data directory, with 1.7 as the fallback.
+
+Totals add a flat shipping estimate and, by default, 15% NZ GST so they compare fairly with NZ prices. When CardKingdom lacks some cards, its total isn't compared with the Plan's.
+
 ## 4. Want List input
 
 Decided in [What Want List formats must import support, and what does Archidekt give us?](https://github.com/Ryski112/MagicFinder/issues/4) and [Which Listings count as a match for a Want List line?](https://github.com/Ryski112/MagicFinder/issues/8).
@@ -301,6 +310,9 @@ All settings live in the user's settings file and are editable in the Settings d
 | Use the Printings from my list | Off |
 | Include basic lands | Off |
 | Search Fetch TCG / Search MtgSingles | On / On |
+| Compare with CardKingdom | Off |
+| CardKingdom shipping to NZ | US$20 |
+| Add 15% GST to CardKingdom prices | On |
 | Theme | Dark |
 | Staples basket (file only) | Lightning Bolt, Counterspell, Swords to Plowshares, Llanowar Elves, Sol Ring |
 

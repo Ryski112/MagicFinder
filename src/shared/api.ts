@@ -4,8 +4,9 @@ import type { Lock } from '../core/wantList';
 import type { Settings } from '../server/settings';
 import type { SourceRunStatus } from '../server/search';
 import type { CartKind } from '../core/stores';
+import type { Exclusion } from '../core/eligibility';
 
-export type { Lock, Settings, SourceRunStatus, Condition, Finish, Section, SourceId, CartKind };
+export type { Lock, Settings, SourceRunStatus, Condition, Finish, Section, SourceId, CartKind, Exclusion };
 
 export interface StatusResponse {
   /** Lets a second launch recognise a running MagicFinder on a port. */
@@ -74,6 +75,7 @@ export interface ArchidektResponse {
 export interface PlanChoices {
   included: Record<string, boolean>;
   locks: Record<string, Lock | null>;
+  pins?: Record<string, string>;
 }
 
 export interface StartRunRequest {
@@ -113,6 +115,8 @@ export interface ItemView {
   url: string;
   source: SourceId;
   locked: boolean;
+  cardKingdomNzd: number | null;
+  overCardKingdom: boolean;
   /** Source-specific details (e.g. MtgSingles' raw condition), used by the cart pre-check. */
   extra?: Record<string, string>;
 }
@@ -175,7 +179,36 @@ export interface NotFoundView {
   notSearchedOn: string[];
   /** Sources that were searched. */
   searchedOn: string[];
+  /** Listings of this card that were found but left out, counted by reason. */
+  excluded: Partial<Record<Exclusion, number>>;
   image: string | null;
+}
+
+export interface OfferView {
+  listingId: string;
+  storeId: string;
+  storeName: string;
+  price: number;
+  qty: number;
+  condition: Condition | null;
+  finish: Finish;
+  label: string;
+  image: string | null;
+  url: string;
+  cardKingdomNzd: number | null;
+  overCardKingdom: boolean;
+}
+
+export interface CardKingdomView {
+  usdToNzd: number;
+  items: { buyKey: string; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; label: string; url: string }[];
+  missing: { buyKey: string; name: string; missing: number }[];
+  subtotalUsd: number;
+  shippingUsd: number;
+  totalUsd: number;
+  /** NZ GST on cards and shipping; 0 when the buyer has it switched off. */
+  gstNzd: number;
+  totalNzd: number;
 }
 
 export interface LadderView {
@@ -190,6 +223,8 @@ export interface LadderView {
   unrecognised: string[];
   /** Cards that only one Source could be asked about. */
   partialCards: string[];
+  cardKingdom: CardKingdomView | null;
+  offers: Record<string, OfferView[]>;
 }
 
 export interface SearchProgressView {

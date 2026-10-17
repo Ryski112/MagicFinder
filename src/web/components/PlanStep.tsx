@@ -23,6 +23,13 @@ const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-sl
 export function PlanStep(p: Props) {
   const rung = p.ladder.rungs.find(r => r.k === p.selectedK) ?? p.ladder.rungs.find(r => r.cheapestOverall) ?? null;
   const [cart, setCart] = useState<CartTarget | null>(null);
+  // Toggling pickup changes a Store's total, which would re-sort it; hold the order it had when the switch was flipped.
+  const [heldOrder, setHeldOrder] = useState<{ k: number; ids: string[] } | null>(null);
+  const stores = rung ? keepOrder(rung.stores, heldOrder?.k === rung.k ? heldOrder.ids : null) : [];
+  const onStoreSettings = (patch: Partial<Settings>) => {
+    if (rung && patch.pickupStores) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    p.onSettings(patch);
+  };
   const refining = !p.ladder.final;
   const fetchItems = rung?.stores.filter(s => s.cart === 'fetch').flatMap(s => s.items) ?? [];
 
@@ -80,8 +87,8 @@ export function PlanStep(p: Props) {
               <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: rung.k })}>Open {fetchItems.length} Fetch Listings ↗</Button>
             </div>
           )}
-          {rung.stores.map(s => (
-            <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={p.onSettings}
+          {stores.map(s => (
+            <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               onCart={() => setCart(s.cart === 'fetch' ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name } : { kind: 'store', store: s, k: rung.k })}
               onLock={setLock} />
           ))}
@@ -94,6 +101,13 @@ export function PlanStep(p: Props) {
       {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(null)} />}
     </div>
   );
+}
+
+/** Stores in the held order; any Store not in it (a re-plan can bring new ones) goes after, in the server's order. */
+function keepOrder(stores: StoreView[], ids: string[] | null): StoreView[] {
+  if (!ids) return stores;
+  const pos = new Map(ids.map((id, i) => [id, i]));
+  return [...stores].sort((a, b) => (pos.get(a.id) ?? ids.length) - (pos.get(b.id) ?? ids.length));
 }
 
 function RungCard({ r, selected, onSelect, onTryLonger }: { r: RungView; selected: boolean; onSelect: () => void; onTryLonger: () => void }) {

@@ -1,7 +1,6 @@
 // Starts MagicFinder: the local server, then the browser.
 import { readFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
@@ -13,13 +12,28 @@ import { SolverPool } from '../optimiser/pool';
 import { FetchTcgSource } from '../sources/fetchTcg';
 import { MtgSinglesSource } from '../sources/mtgSingles';
 import { createApp } from './app';
-import { dataDir } from './paths';
+import { choosePort } from './instance';
+import { APP_VERSION, dataDir } from './paths';
 import { RunManager } from './runs';
 import { SearchCache } from './searchCache';
 import { SettingsStore } from './settings';
+import { availableUpdate, checkForUpdate } from './updates';
 
 const dev = process.argv.includes('--dev');
-const version: string = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
+
+// A second launch opens the copy that's already running, except in dev mode or on a chosen port, so a source copy can
+// run beside a packaged one.
+let port = Number(process.env.MAGICFINDER_PORT) || 5180;
+if (!dev && !process.env.MAGICFINDER_PORT) {
+  const choice = await choosePort(5180);
+  if ('running' in choice) {
+    console.log(`MagicFinder is already running, opening it (http://localhost:${choice.running}).`);
+    openBrowser(`http://localhost:${choice.running}`);
+    process.exit(0);
+  }
+  port = choice.free;
+}
+const version = APP_VERSION;
 const storesFile = new URL('../../data/stores.yaml', import.meta.url);
 // fileURLToPath, not URL.pathname: on Windows .pathname gives "/C:/…", which serveStatic can't find (the UI 404s).
 const webDir = fileURLToPath(new URL('../../dist/web/', import.meta.url));
@@ -46,22 +60,11 @@ const runs = new RunManager({
   appVersion: version,
 });
 
-const app = createApp({ catalogue, settings, runs, version });
+const app = createApp({ catalogue, settings, runs, version, update: () => (dev ? null : availableUpdate(settings, version)) });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));
   app.get('*', serveStatic({ path: join(webDir, 'index.html') }));
-}
-
-async function freePort(start: number): Promise<number> {
-  for (let p = start; p < start + 20; p++) {
-    const ok = await new Promise<boolean>(resolve => {
-      const s = createServer().once('error', () => resolve(false)).once('listening', () => s.close(() => resolve(true)));
-      s.listen(p, '127.0.0.1');
-    });
-    if (ok) return p;
-  }
-  throw new Error('No free port found');
 }
 
 function openBrowser(url: string) {
@@ -71,7 +74,6 @@ function openBrowser(url: string) {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
-const port = Number(process.env.MAGICFINDER_PORT) || (dev ? 5180 : await freePort(5180));
 serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
   const url = `http://localhost:${port}`;
   console.log(`MagicFinder ${version} is running at ${url}${dev ? ' (API only; open the Vite dev server)' : ''}`);
@@ -82,6 +84,11 @@ serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
 // Keep the card list fresh: now (first run downloads it) and then once a day.
 void catalogue.refreshIfStale();
 setInterval(() => void catalogue.refreshIfStale(), 60 * 60 * 1000).unref();
+// "A new version is available": checked at most once a day (not in dev mode, where you run your own code).
+if (!dev) {
+  void checkForUpdate(settings);
+  setInterval(() => void checkForUpdate(settings), 60 * 60 * 1000).unref();
+}
 // Clear Fetch sellers learned from old runs once a day so their details stay current.
 setInterval(() => (directory = new StoreDirectory(stores)), 24 * 60 * 60 * 1000).unref();
 
@@ -91,3 +98,5 @@ const shutdown = async () => {
 };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+// Windows sends this when the console window is closed.
+process.on('SIGHUP', shutdown);

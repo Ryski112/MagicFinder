@@ -86,7 +86,7 @@ export function WantListStep(p: Props) {
         <span className="text-sm text-slate-500 dark:text-slate-400">{p.deckName ? `“${p.deckName}”: ` : ''}{lines.length ? summary : ''}</span>
         {lines.length > 0 && <Button variant="link" className="ml-auto" onClick={() => setReview(!review)}>{review ? 'hide list ▴' : 'review list ▾'}</Button>}
       </div>
-      {review && (
+      {review && lines.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3">
           {lines.some(l => l.hint || lockOf(l)) && (
             <p className="mb-2 text-xs text-slate-500">

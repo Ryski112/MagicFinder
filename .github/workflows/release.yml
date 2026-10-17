@@ -1,0 +1,104 @@
+# Release: push a tag vX.Y.Z matching package.json's version. Builds the Windows zip and Linux tarball on one Linux
+# machine, smoke-tests each on its own OS, then publishes a GitHub Release with both attached.
+# Run it by hand (Actions → Release → Run workflow) to build and smoke-test without publishing; pull requests that
+# touch packaging or start-up code do the same.
+# Decided in "Which packaging approach, and where do friends download it?".
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/package.ts
+      - scripts/smoke-package.mjs
+      - .github/workflows/release.yml
+      - src/server/main.ts
+      - src/server/instance.ts
+      - src/server/paths.ts
+      - src/optimiser/pool.ts
+      - package.json
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          want="v$(node -p 'require("./package.json").version')"
+          [ "$GITHUB_REF_NAME" = "$want" ] || { echo "Tag $GITHUB_REF_NAME doesn't match package.json ($want)"; exit 1; }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: downloads
+          path: |
+            release/MagicFinder-windows-x64.zip
+            release/MagicFinder-linux-x64.tar.xz
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+
+  smoke-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: downloads
+          path: release
+      - run: tar -xJf release/MagicFinder-linux-x64.tar.xz
+      - run: MagicFinder/runtime/node scripts/smoke-package.mjs MagicFinder
+
+  smoke-windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: downloads
+          path: release
+      - run: Expand-Archive -Path release\MagicFinder-windows-x64.zip -DestinationPath app
+      - run: app\runtime\node.exe scripts\smoke-package.mjs app
+      - name: The launcher starts MagicFinder
+        run: |
+          $env:MAGICFINDER_NO_OPEN = '1'
+          $env:MAGICFINDER_DATA_DIR = "$env:RUNNER_TEMP\mf-launcher"
+          $launcher = Start-Process -FilePath "app\MagicFinder.cmd" -WorkingDirectory app -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 1
+            try { $ok = (Invoke-RestMethod http://127.0.0.1:5180/api/status).app -eq 'MagicFinder' } catch {}
+          }
+          Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+          Stop-Process -Id $launcher.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw 'MagicFinder.cmd did not start MagicFinder' }
+
+  publish:
+    needs: [smoke-linux, smoke-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: downloads
+          path: release
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "MagicFinder ${GITHUB_REF_NAME#v}" \
+            --notes "**Download:** Windows: \`MagicFinder-windows-x64.zip\` · Linux: \`MagicFinder-linux-x64.tar.xz\` (below, under Assets). New to MagicFinder? See [how to install](https://github.com/$GITHUB_REPOSITORY#install)." \
+            --generate-notes

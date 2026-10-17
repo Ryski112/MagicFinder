@@ -30,6 +30,8 @@ export interface Settings {
   /** Seconds per exact rung of the Ladder. */
   rungTimeLimitS: number;
   sourceHealth: Record<SourceId, SourceHealth>;
+  /** The "new version available" check: when it last ran, what it found, and a version the buyer dismissed. */
+  updateCheck: { lastCheckedAt: string | null; latest: { version: string; url: string } | null; dismissed: string | null };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fetch: { blockedAt: null, consecutiveBlockedRuns: 0 },
     mtgsingles: { blockedAt: null, consecutiveBlockedRuns: 0 },
   },
+  updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
 };
 
 export class SettingsStore {

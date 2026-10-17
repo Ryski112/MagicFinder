@@ -306,9 +306,14 @@ All settings live in the user's settings file and are editable in the Settings d
 
 ## 11. Install, run and licence
 
-- **Install**: the README steps are install Node, clone, `npm install`, `npm start`. `start.sh` / `start.bat` one-click scripts install on first run and then start the app.
-- **Running**: `npm start` runs the server and opens the browser. It runs on the user's own workstation (the owner's is Linux).
-- **Repo**: private for now, with collaborators invited. Make it public under **MIT** once the app works.
+Decided in [Which packaging approach, and where do friends download it?](https://github.com/Ryski112/MagicFinder/issues/23).
+
+- **Downloads (friends)**: `npm run package` builds `MagicFinder-windows-x64.zip` and `MagicFinder-linux-x64.tar.xz`: the official portable Node.js 24 runtime (checked against its `SHASUMS256.txt`) next to an esbuild bundle (`src/server/main.mjs`, `worker.mjs`), `dist/web`, `data/stores.yaml` and `node_modules/highs`, with `MagicFinder.cmd` / `MagicFinder.sh` launchers. Download, extract, double-click; the console window ("MagicFinder – keep this open") stops the app when closed. No installer, no code signing, no Electron.
+- **Launchers**: `MagicFinder.cmd` explains how to extract the zip when it's run from inside it. A second launch opens the running copy (ports from 5180, recognised by `app: "MagicFinder"` in `/api/status`), except in dev mode or with `MAGICFINDER_PORT` set.
+- **Releases**: push tag `vX.Y.Z` matching `package.json`. The Release Action tests, builds, smoke-tests each archive on its own OS (`scripts/smoke-package.mjs`, plus the Windows launcher), and publishes a GitHub Release. Downloads use `releases/latest/download/<file>` links in the README's Install section.
+- **Update notice**: at most once a day, `GET /repos/Ryski112/MagicFinder/releases/latest`; a newer, undismissed version shows a banner (Download · What's new · not now). Silent on failure; skipped in dev mode. No self-updating.
+- **From source**: install Node, clone, `npm install`, `npm start` (or `start.sh` / `start.bat`). Still supported beside the downloads; both share the user data folder.
+- **Repo**: private for now, with collaborators invited. Make it public under **MIT** once the app works; it must be public before the first release to friends (releases of a private repo are 404 for them, and the update check needs it); the owner decides when.
 - **Clean-room**: MTGBulkSingles (AGPL-3.0) is a reference only; copy no code.
 
 ## 12. Defaults chosen while writing this spec

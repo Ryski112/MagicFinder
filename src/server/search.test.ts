@@ -69,6 +69,23 @@ describe('searchAll', () => {
     expect(progress.at(-1)).toMatchObject({ done: cards.length, total: cards.length });
   });
 
+  it('keeps the Listings it couldn\'t identify, with what was being searched, but not tokens', async () => {
+    const odd: Source = {
+      id: 'mtgsingles', name: 'MtgSingles',
+      async search(q: string) {
+        const base = { source: 'mtgsingles' as const, storeKey: 'mtgsingles:NZ/Odd', storeName: 'Odd Store', finish: 'nonfoil' as const, treatments: [], condition: 'NM' as const, english: true, quantity: 1, buyable: true };
+        return q === 'Sol Ring'
+          ? [
+              { ...base, id: 'odd:1', title: 'Very Sol Ring (Un-card)', price: 4.5, url: 'https://odd.test/1' },
+              { ...base, id: 'odd:2', title: 'Sol Ring Token', price: 1, url: 'https://odd.test/2' },
+            ]
+          : [];
+      },
+    };
+    const r = await searchAll(cards.slice(0, 1), { catalogue: cat, sources: [odd], cache: freshCache(), settings: settings(), appVersion: 't' }, () => {});
+    expect(r.unidentified).toEqual([{ title: 'Very Sol Ring (Un-card)', source: 'mtgsingles', storeName: 'Odd Store', price: 4.5, url: 'https://odd.test/1', searchedFor: 'Sol Ring' }]);
+  });
+
   it('keeps going on the other Source when one blocks, keeping what it already answered', async () => {
     const health: [SourceId, boolean][] = [];
     const mts = fakeSource('mtgsingles', { failAt: 4 });

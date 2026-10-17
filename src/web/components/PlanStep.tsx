@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CardKingdomView, Exclusion, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, RungView, Settings, StoreView } from '../../shared/api';
 import { api } from '../api';
-import { CartDialog, type CartTarget } from './CartDialog';
+import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
 import { cardsElsewhere, costAtStore, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
 import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo } from './ui';
@@ -112,7 +112,13 @@ export function PlanStep(p: Props) {
           {view === 'stores' && stores.map(s => (
             <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin}
-              onCart={() => setCart(s.cart === 'fetch' ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name } : { kind: 'store', store: s, k: rung.k })}
+              onCart={() =>
+                setCart(
+                  s.cart === 'fetch'
+                    ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name }
+                    : { kind: 'store', store: s, k: rung.k, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
+                )
+              }
               onLock={setLock} />
           ))}
           <div className="text-right text-lg font-bold tabnum">
@@ -345,9 +351,38 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
           Skipped basic lands: {ladder.skippedBasics.join(', ')}. <Button variant="link" onClick={() => onSettings({ includeBasics: true })}>include them</Button>
         </Notice>
       )}
-      {ladder.unidentified > 0 && <Notice tone="info">{ladder.unidentified} Listing{ladder.unidentified > 1 ? 's' : ''} couldn't be identified and {ladder.unidentified > 1 ? 'were' : 'was'} ignored.</Notice>}
+      {ladder.unidentified.length > 0 && <Unidentified listings={ladder.unidentified} />}
       {settings.useListPrintings && <Notice tone="info">Using the Printings from your list. <Button variant="link" onClick={() => onSettings({ useListPrintings: false })}>Stop</Button></Notice>}
     </div>
+  );
+}
+
+/** Store Listings no card could be matched to, so the buyer can see whether any are real cards worth a look. */
+function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
+  const n = listings.length;
+  return (
+    <Notice tone="info">
+      <details>
+        <summary className="cursor-pointer">
+          {n} Listing{n > 1 ? 's' : ''} couldn't be matched to a card and {n > 1 ? 'were' : 'was'} left out of every Plan. <span className="underline">Show {n > 1 ? 'them' : 'it'}</span>
+        </summary>
+        <p className="mt-2 text-xs">
+          These are Store Listings whose titles MagicFinder couldn't tie to one card, often Un-cards, misprints or unusually named products. Your list's
+          section labels (Commander, Sideboard…) are never counted here. If one is a card you want, open it and buy it directly.
+        </p>
+        <ul className="mt-2 divide-y divide-slate-200 dark:divide-slate-700">
+          {listings.map((l, i) => (
+            <li key={i} className="py-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <SourceBadge source={l.source} />
+              <span className="flex-1 min-w-0">{l.title}</span>
+              <span className="text-xs text-slate-500">{l.storeName}{l.searchedFor && ` · found searching for ${l.searchedFor}`}</span>
+              <span className="tabnum">{money(l.price)}</span>
+              <a className="text-indigo-600 dark:text-indigo-400 underline" href={l.url} target="_blank" rel="noreferrer">open ↗</a>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </Notice>
   );
 }
 
@@ -379,7 +414,12 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, e
             <Switch checked={s.pickupOn} onChange={setPickup} ariaLabel={`I'll pick up from ${s.name}`} label={<>I'll pick up{!s.pickupConfirmed && <span className="text-xs text-slate-500"> (not confirmed)</span>}</>}
               title={s.pickupConfirmed ? (s.pickupFee ? `Pickup fee ${money(s.pickupFee)}` : 'Free pickup') : "This Store hasn't said whether it offers pickup; check before you rely on it"} />
           )}
-          {cartLabel && <Button variant="accent" onClick={onCart}>{cartLabel}{s.cart !== 'hobbymaster-deckbuilder' && ' ↗'}</Button>}
+          {cartLabel && (
+            <span className="flex flex-col items-end">
+              <Button variant="accent" onClick={onCart}>{cartLabel}{s.cart !== 'hobbymaster-deckbuilder' && ' ↗'}</Button>
+              {s.cart === 'shopify' && <span className="text-[11px] text-slate-500 mt-0.5">replaces your {s.name} cart</span>}
+            </span>
+          )}
         </div>
       </div>
       <div className="grid md:grid-cols-[minmax(0,1fr)_230px]">

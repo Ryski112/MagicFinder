@@ -45,10 +45,21 @@ export interface SearchProgress {
   sources: SourceRunStatus[];
 }
 
+/** A Listing found while searching that couldn't be matched to any card, so no Plan uses it. */
+export interface UnidentifiedListing {
+  title: string;
+  source: SourceId;
+  storeName: string;
+  price: number;
+  url: string;
+  /** The Want List card being searched for when it turned up. */
+  searchedFor: string;
+}
+
 export interface SearchResult {
   listings: Listing[];
-  /** Listings no card could be identified for. */
-  unidentified: number;
+  /** Listings no card could be identified for (tokens, art cards and the like aren't counted). */
+  unidentified: UnidentifiedListing[];
   sources: SourceRunStatus[];
 }
 
@@ -201,7 +212,8 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   // Match everything to the catalogue, once per Listing.
   const seen = new Set<string>();
   const listings: Listing[] = [];
-  let unidentified = 0;
+  const unidentified: UnidentifiedListing[] = [];
+  const nameOf = new Map(cards.map(c => [c.oracleId, c.name]));
   const foundBy = new Map<SourceId, Set<string>>();
   for (const [source, byCard] of raw) {
     const found = new Set<string>();
@@ -212,7 +224,9 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
         seen.add(s.id);
         const m = matchListing(deps.catalogue, s);
         if (m.confidence === 'unmatched') {
-          if (!NOT_A_CARD.test(s.title)) unidentified++;
+          if (!NOT_A_CARD.test(s.title)) {
+            unidentified.push({ title: s.title, source: s.source, storeName: s.storeName, price: s.price, url: s.url, searchedFor: nameOf.get(oracleId) ?? '' });
+          }
         }
         else listings.push(m);
         if (m.oracleId === oracleId) found.add(oracleId);

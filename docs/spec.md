@@ -199,7 +199,8 @@ Decided in [Which Listings count as a match for a Want List line?](https://githu
 **Uncertain matches**
 - `card-only` matches count for unlocked lines and are tagged "Printing not confirmed". They're excluded from locked lines.
 - A title that suggests foil counts as foil for the Allow foils setting.
-- `unmatched` Listings are dropped and counted ("12 Listings couldn't be identified").
+- `unmatched` Listings are dropped and listed in an expandable notice ("3 Listings couldn't be matched to a card… Show them"), with title, Store, Source, price, link and the card being searched for, so the buyer can spot a real card. Tokens, art cards and the like aren't listed.
+- Titles ending in a rarity letter and collector number (Arctic Collect: "Brainstorm C 96", "Sol Ring Foil Buy-A-Box Promos P 1") are tried with the tail removed, then by shorter and shorter leading words, longest first. Other titles are never shortened.
 
 ## 7. Optimiser and the Trade-off Ladder
 
@@ -289,9 +290,8 @@ Each Store section's cart button depends on the Store table's `cart` field:
 **Shopify flow:**
 1. Resolve each line's variant: `?variant=` on the Listing URL, or one `products/<handle>.js` call (about 1 req/s), matching on condition and foil, with price as the tiebreaker.
 2. Re-check `available` and price.
-3. Show a pre-flight summary, e.g. "12/13 available, 1 price changed, replaces your current cart at this Store".
-4. Open `/cart/<variant>:<qty>,…?storefront=true`.
-5. List any dropped lines with their Listing links.
+3. One click: the click itself opens a new tab ("Checking {Store} still has your cards…"), so browsers don't block it, and the tab goes to `/cart/<variant>:<qty>,…?storefront=true` once the check finishes, including when some lines were dropped. A note under the button says it replaces the Store's current cart. If pop-ups are blocked, the dialog shows the summary and an **Open my cart** button instead.
+4. The MagicFinder tab shows the summary, e.g. "12/13 available, 1 price changed", and lists any dropped lines with their Listing links.
 
 MagicFinder never reads `/cart` itself, never pre-fills email or address, and never goes past the Store's cart page. Details are in the [cart research](https://github.com/Ryski112/MagicFinder/blob/research/store-cart-prefill/docs/research/store-cart-prefill.md).
 

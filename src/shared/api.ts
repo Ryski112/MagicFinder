@@ -2,11 +2,11 @@
 import type { Condition, Finish, Section, SourceId } from '../core/types';
 import type { Lock } from '../core/wantList';
 import type { Settings } from '../server/settings';
-import type { SourceRunStatus } from '../server/search';
+import type { SourceRunStatus, UnidentifiedListing } from '../server/search';
 import type { CartKind } from '../core/stores';
 import type { Exclusion } from '../core/eligibility';
 
-export type { Lock, Settings, SourceRunStatus, Condition, Finish, Section, SourceId, CartKind, Exclusion };
+export type { Lock, Settings, SourceRunStatus, UnidentifiedListing, Condition, Finish, Section, SourceId, CartKind, Exclusion };
 
 export interface StatusResponse {
   /** Lets a second launch recognise a running MagicFinder on a port. */
@@ -217,7 +217,8 @@ export interface LadderView {
   kmin: number | null;
   final: boolean;
   notFound: NotFoundView[];
-  unidentified: number;
+  /** Listings found but not matched to any card, so no Plan uses them. */
+  unidentified: UnidentifiedListing[];
   sources: SourceRunStatus[];
   skippedBasics: string[];
   unrecognised: string[];

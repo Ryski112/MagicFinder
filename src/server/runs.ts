@@ -184,7 +184,7 @@ function mergeResults(a: SearchResult, b: SearchResult): SearchResult {
   const ids = new Set(a.listings.map(l => l.id));
   return {
     listings: [...a.listings, ...b.listings.filter(l => !ids.has(l.id))],
-    unidentified: a.unidentified + b.unidentified,
+    unidentified: [...a.unidentified, ...b.unidentified],
     sources: a.sources.map(s => {
       const n = b.sources.find(x => x.source === s.source);
       if (!n) return s;

@@ -44,6 +44,7 @@ function score(e: Entry, q: string, qWords: string[], match: string): number | n
   // Typo-tolerant: each typed word is near some word of the name (or a prefix of it).
   let typos = 0;
   for (const w of qWords) {
+    if (e.words.some(n => n.startsWith(w))) continue;
     if (w.length < 3) return null;
     const max = w.length >= 7 ? 2 : 1;
     let best: number | null = null;
@@ -78,7 +79,7 @@ export function registerCardSearchPrototype(app: Hono, store: CatalogueStore) {
       .sort((a, b) => a.s - b.s || a.e.cardName.length - b.e.cardName.length || a.e.cardName.localeCompare(b.e.cardName))
       .slice(0, limit)
       .map(({ s, e }) => ({
-        oracleId: e.oracleId, name: e.cardName, matchedAlias: e.alias !== e.cardName ? e.alias : null, kind: e.kind,
+        oracleId: e.oracleId, name: e.cardName, matchedAlias: e.alias.toLowerCase() !== e.cardName.toLowerCase() ? e.alias : null, kind: e.kind,
         how: ['exact', 'starts with', 'word starts', 'contains', 'typo'][Math.min(s, 4)], image: cardImage(cat, e.oracleId),
       }));
     return c.json({ ready: true, results, total: best.size, ms: Math.round(performance.now() - t0) });

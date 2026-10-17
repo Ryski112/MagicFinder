@@ -350,11 +350,12 @@ export function CardSearcherPrototype(p: SearcherProps) {
       {VARIANTS[i][0] === 'A' && <VariantA {...props} />}
       {VARIANTS[i][0] === 'B' && <VariantB {...props} />}
       {VARIANTS[i][0] === 'C' && <VariantC {...props} />}
-      {import.meta.env.DEV || import.meta.env.MODE !== 'production' || true ? (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full bg-slate-950 text-white text-xs px-4 py-2 shadow-2xl ring-2 ring-fuchsia-500">
+      {/* Shown in every build: this whole file lives only on the prototype branch. */}
+      {(
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-wrap justify-center items-center gap-x-3 gap-y-1 w-max max-w-[calc(100vw-2rem)] rounded-2xl bg-slate-950 text-white text-xs px-4 py-2 shadow-2xl ring-2 ring-fuchsia-500">
           <span className="text-fuchsia-400 font-bold">PROTOTYPE</span>
           <button type="button" onClick={() => cycle(-1)}>◀</button>
-          <span className="min-w-[13rem] text-center">{VARIANTS[i][0]} ({VARIANTS[i][1]})</span>
+          <span className="text-center">{VARIANTS[i][0]} ({VARIANTS[i][1]})</span>
           <button type="button" onClick={() => cycle(1)}>▶</button>
           <label>match <select className={sel} value={match} onChange={e => setParam('match', e.target.value)}>
             <option value="prefix">starts with</option><option value="words">any word</option><option value="fuzzy">typo-tolerant</option>
@@ -364,7 +365,7 @@ export function CardSearcherPrototype(p: SearcherProps) {
           </select></label>
           <label><input type="checkbox" checked={loading} onChange={e => setParam('catalogue', e.target.checked ? 'loading' : 'ready')} /> catalogue downloading</label>
         </div>
-      ) : null}
+      )}
     </>
   );
 }

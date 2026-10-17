@@ -175,6 +175,8 @@ export function App() {
             onFind={find}
             busy={!status?.catalogue.ready}
             catalogueMessage={catalogueMessage}
+            catalogueReady={!!status?.catalogue.ready}
+            catalogueProgress={status?.catalogue.progress ?? 0}
           />
         )}
         {step === 'search' && <SearchStep progress={progress} lines={includedLines} />}

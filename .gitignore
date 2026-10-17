@@ -4,3 +4,4 @@ node_modules/
 dist/
 .magicfinder-data/
 .claude/launch.json
+release/

@@ -1,5 +1,5 @@
 // MtgSingles: an aggregator over ~40-50 NZ Stores. Its search API sits behind Cloudflare, which refuses requests
-// without a mtgsingles.co.nz Referer; with one, plain HTTP works, about one request a second. There is no stealth
+// without a mtgsingles.co.nz Referer; with one, plain HTTP works, one request every 1.5 seconds. There is no stealth
 // and no challenge-solving: if a bot check appears, the Source is Blocked. See "How can MtgSingles listings be searched and read?".
 import type { Condition } from '../core/types';
 import { USER_AGENT } from '../server/paths';
@@ -90,7 +90,7 @@ export interface MtgSinglesOptions {
 export class MtgSinglesSource implements Source {
   readonly id = 'mtgsingles' as const;
   readonly name = 'MtgSingles';
-  private throttle = new Throttle(1000);
+  private throttle = new Throttle(1500); // At 1/s Cloudflare answers 429 (Retry-After 10) every ~20s; 1.5s stays under its limit.
 
   constructor(private readonly opts: MtgSinglesOptions = {}) {}
 

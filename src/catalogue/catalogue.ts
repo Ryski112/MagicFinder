@@ -3,6 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, renameSync, rmSync } from 'node:fs';
 import type { Finish } from '../core/types';
+import type { CardName } from './cardSearch';
 import { exactKey, nameKey } from './names';
 
 export interface Printing {
@@ -88,7 +89,7 @@ CREATE TABLE printings (
 );
 CREATE INDEX printings_oracle ON printings(oracle_id);
 CREATE INDEX printings_set ON printings(set_code, collector_number);
-CREATE TABLE names (key TEXT NOT NULL, exact TEXT NOT NULL, kind TEXT NOT NULL, oracle_id TEXT NOT NULL, card_name TEXT NOT NULL);
+CREATE TABLE names (key TEXT NOT NULL, exact TEXT NOT NULL, kind TEXT NOT NULL, oracle_id TEXT NOT NULL, card_name TEXT NOT NULL, alias TEXT NOT NULL);
 CREATE INDEX names_key ON names(key);
 CREATE TABLE sets (key TEXT PRIMARY KEY, set_code TEXT NOT NULL);
 CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -104,7 +105,7 @@ export async function buildCatalogue(dbPath: string, cards: AsyncIterable<any> |
   const db = new DatabaseSync(tmp);
   db.exec(SCHEMA);
   const insP = db.prepare('INSERT OR IGNORE INTO printings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
-  const insN = db.prepare('INSERT INTO names VALUES (?,?,?,?,?)');
+  const insN = db.prepare('INSERT INTO names VALUES (?,?,?,?,?,?)');
   const insS = db.prepare('INSERT OR IGNORE INTO sets VALUES (?,?)');
   const seenNames = new Set<string>();
   let count = 0;
@@ -132,7 +133,7 @@ export async function buildCatalogue(dbPath: string, cards: AsyncIterable<any> |
       const seen = `${oracleId}|${kind}|${alias}`;
       if (seenNames.has(seen)) continue;
       seenNames.add(seen);
-      insN.run(nameKey(alias), exactKey(alias), kind, oracleId, name);
+      insN.run(nameKey(alias), exactKey(alias), kind, oracleId, name, alias);
     }
   }
   db.prepare('INSERT INTO meta VALUES (?,?)').run('source_updated_at', sourceUpdatedAt);
@@ -180,6 +181,14 @@ export class Catalogue {
     }
     if (!row) return null;
     return { oracleId: row.oracle_id, name: row.card_name, isBasic: this.printingsOf(row.oracle_id).some(p => p.isBasic) };
+  }
+
+  /** Every name alias (full names, front faces, flavour names), for the card searcher's in-memory index. */
+  allNames(): CardName[] {
+    // Catalogues built before the alias column only have the lower-cased form; they are replaced within a day.
+    const hasAlias = (this.db.prepare('PRAGMA table_info(names)').all() as { name: string }[]).some(c => c.name === 'alias');
+    const rows = this.db.prepare(`SELECT ${hasAlias ? 'alias' : 'exact AS alias'}, kind, oracle_id, card_name FROM names`).all() as unknown as (NameRow & { alias: string })[];
+    return rows.map(r => ({ alias: r.alias, kind: r.kind as CardName['kind'], oracleId: r.oracle_id, cardName: r.card_name }));
   }
 
   printingsOf(oracleId: string): Printing[] {

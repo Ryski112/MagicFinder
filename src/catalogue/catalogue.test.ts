@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from './catalogue';
+import { CardSearchIndex } from './cardSearch';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-cat-'));
 let cat: Catalogue;
@@ -88,5 +89,15 @@ describe('Catalogue printings', () => {
     const m = cat.findPrinting(sol.oracleId, { setCode: 'ZZZ' });
     expect(m.printing).toBeNull();
     expect(m.candidates.length).toBeGreaterThan(100);
+  });
+});
+
+describe('Catalogue.allNames for the card searcher', () => {
+  it('lists full names, front faces and flavour names in their own spelling', () => {
+    const index = new CardSearchIndex(cat.allNames());
+    expect(index.search('bonecrusher')[0]).toMatchObject({ name: 'Bonecrusher Giant // Stomp', matchedAlias: null });
+    expect(index.search('cybertron')[0]).toMatchObject({ name: 'Command Tower', matchedAlias: 'Cybertron' });
+    expect(index.search("summoners rift")[0]).toMatchObject({ name: 'Command Tower', matchedAlias: "Summoner's Rift" });
+    expect(index.search('rhystc')[0]).toMatchObject({ name: 'Rhystic Study', how: 'typo' });
   });
 });

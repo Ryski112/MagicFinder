@@ -126,6 +126,8 @@ function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: 
         if (tab && !tab.closed && r.cartUrl) {
           tab.location.href = r.cartUrl;
           setSent(true);
+          // The cart tab shows what's in the cart and its prices; only stay open when cards were left out of it.
+          if (!r.lines.some(l => l.status === 'unavailable' || l.status === 'unconfirmed')) onClose();
         } else if (tab && !tab.closed) tab.close();
       },
       e => {
@@ -137,6 +139,8 @@ function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: 
   const bad = check?.lines.filter(l => l.status === 'unavailable' || l.status === 'unconfirmed') ?? [];
   const changed = check?.lines.filter(l => l.status === 'price-changed') ?? [];
   const good = check?.lines.filter(l => l.status === 'ok' || l.status === 'price-changed') ?? [];
+  // With a cart tab open, that tab says what's happening, so this dialog only appears if the check needs the buyer.
+  if (tab && !tab.closed && !check && !error) return null;
   return (
     <Dialog open onClose={onClose} title={`Add all to cart at ${store.name}`}>
       {error && <Notice tone="bad">{error}</Notice>}

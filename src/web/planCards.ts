@@ -5,6 +5,8 @@ export interface PlanCard {
   name: string;
   qty: number;
   image: string | null;
+  /** Want List line ids this card fills (none for a card a Short Plan only leaves out). */
+  lineIds: string[];
   bought: { store: StoreView; item: ItemView }[];
   missing: number;
   notFound: boolean;
@@ -14,7 +16,7 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
   const cards = new Map<string, PlanCard>();
   const entry = (buyKey: string, name: string, image: string | null) => {
     let c = cards.get(buyKey);
-    if (!c) cards.set(buyKey, (c = { buyKey, name, qty: 0, image, bought: [], missing: 0, notFound: false }));
+    if (!c) cards.set(buyKey, (c = { buyKey, name, qty: 0, image, lineIds: [], bought: [], missing: 0, notFound: false }));
     return c;
   };
   for (const store of stores) {
@@ -22,6 +24,7 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
       const c = entry(item.buyKey, item.name, item.printing?.image ?? item.fallbackImage);
       c.qty += item.qty;
       c.bought.push({ store, item });
+      c.lineIds = [...new Set([...c.lineIds, ...item.lineIds])];
     }
   }
   for (const l of leftOut) {
@@ -34,6 +37,7 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
     c.qty += n.missing;
     c.missing += n.missing;
     c.notFound = true;
+    c.lineIds = [...new Set([...c.lineIds, ...n.lineIds])];
   }
   return [...cards.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

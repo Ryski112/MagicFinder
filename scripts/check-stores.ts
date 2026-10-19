@@ -1,5 +1,6 @@
-// Monthly Store-table check: fetches each Store's shipping policy page and Shopify /meta.json, and reports the Stores
-// whose text changed since last time, so a person can update data/stores.yaml. It never edits stores.yaml itself.
+// Monthly Store-table check: fetches each Store's shipping policy page, Shopify /meta.json and the postage its Shopify
+// checkout offers, and reports the Stores whose text or checkout postage changed since last time, so a person can update
+// data/stores.yaml. It never edits stores.yaml itself.
 //
 //   npm run check-stores              report changes
 //   npm run check-stores -- --write   also save the new fingerprints to data/store-check.json
@@ -10,13 +11,14 @@ import { execFileSync } from 'node:child_process';
 import { parse } from 'yaml';
 import type { StoreRecord } from '../src/core/stores';
 import { USER_AGENT } from '../src/server/paths';
+import { checkoutRates, suggestPostage } from './checkoutRates';
 
 const HASHES = 'data/store-check.json';
 const write = process.argv.includes('--write');
 const issue = process.argv.includes('--issue');
 
 const stores: StoreRecord[] = parse(readFileSync('data/stores.yaml', 'utf8'));
-const old: Record<string, { policy: string | null; meta: string | null; checked: string }> = existsSync(HASHES) ? JSON.parse(readFileSync(HASHES, 'utf8')) : {};
+const old: Record<string, { policy: string | null; meta: string | null; checkout?: string | null; checked: string }> = existsSync(HASHES) ? JSON.parse(readFileSync(HASHES, 'utf8')) : {};
 const next: typeof old = {};
 const changes: string[] = [];
 
@@ -53,7 +55,10 @@ for (const s of stores) {
       // Not JSON: e.g. a password page.
     }
   }
-  next[s.id] = { policy: policyHash, meta: metaHash, checked: new Date().toISOString().slice(0, 10) };
+  const rates = s.cart === 'shopify' ? await checkoutRates(s.site) : null;
+  const postage = rates && suggestPostage(rates);
+  const checkoutHash = postage ? hash(JSON.stringify([postage.price, postage.rural_surcharge ?? null])) : null;
+  next[s.id] = { policy: policyHash, meta: metaHash, checkout: checkoutHash, checked: new Date().toISOString().slice(0, 10) };
 
   const notes: string[] = [];
   if (policy?.url.includes('/password') || meta?.url.includes('/password')) notes.push('shop is password-protected');
@@ -63,6 +68,7 @@ for (const s of stores) {
   if (before) {
     if (before.policy !== policyHash) notes.push(`shipping policy changed (${policyUrl})`);
     if (before.meta !== metaHash) notes.push(`location changed${city ? ` (now ${city})` : ''}`);
+    if (before.checkout !== undefined && before.checkout !== checkoutHash) notes.push('checkout postage changed (run `npm run probe-postage -- ' + s.id + '`)');
   }
   if (notes.length) changes.push(`- **${s.name}** (\`${s.id}\`): ${notes.join('; ')}`);
   console.log(`${s.name}: ${notes.length ? notes.join('; ') : 'no change'}`);

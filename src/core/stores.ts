@@ -22,7 +22,7 @@ export interface StoreRecord {
   postage?: PostageOption[];
   free_postage?: { threshold: RegionValue; applies_to: 'all' | 'singles_only' };
   cart: CartKind;
-  provenance?: { url: string | null; checked_on: string; confidence: 'published' | 'inferred' | 'default' };
+  provenance?: { url: string | null; checked_on: string; confidence: 'checkout' | 'published' | 'inferred' | 'default' };
 }
 
 /** Everything about the buyer that changes what a Store costs. */

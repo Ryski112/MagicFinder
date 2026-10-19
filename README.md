@@ -49,7 +49,7 @@ A source copy shares the downloaded version's settings and card list. With `MAGI
 
 1. **Want List.** Paste a list (Archidekt, Moxfield, Arena, MTGO or plain `4 Lightning Bolt` lines), paste an Archidekt deck link and press Import, or add cards by name with the search bar (Enter shows a card's printings; pick one to buy only that printing). The review list shows what was recognised; untick anything you don't want. Basic lands and the maybeboard are left out by default. MagicFinder buys the cheapest printing of each card unless a line is locked to one (**🔒 only buy …**).
 2. **Search.** MagicFinder asks each Source about every card, politely (about one request a second per Source). Results are reused for an hour.
-3. **Choose a Plan.** Pick a rung of the Ladder. Store Listings MagicFinder couldn't match to a card are listed under **Show them**, in case one is a card you want. Each Store section lists the cards, prices, postage and a link to every Listing.
+3. **Choose a Plan.** Pick a rung of the Ladder. Store Listings MagicFinder couldn't match to a card are listed under **Show them**, in case one is a card you want. Each Store section lists the cards, prices, postage and a link to every Listing. The ✕ beside a card takes it off your list and re-plans; **put back** undoes it.
    - **Other Printings** shows every version in stock with its price. **Only buy this one** locks the line to that exact Printing and re-plans.
    - **I'll pick up** (Stores in your pickup city) removes their postage and re-plans. MagicFinder remembers it.
    - **Add all to cart** (most Stores) opens a new tab straight away, checks stock and prices, then turns that tab into the Store's cart with your cards in it (anything sold out is listed back in MagicFinder). It replaces anything already in that Store's cart. You check out yourself. Fetch TCG has one cart for all its sellers, so it gets an "Open Fetch Listings" button instead.
@@ -86,7 +86,7 @@ npm run package    # the Windows zip and Linux tarball, into release/ (see Relea
 - `src/optimiser`: the Trade-off Ladder: a fast greedy draft, then exact HiGHS solves in worker threads.
 - `src/server`: the local API (Hono), search runs, planning, Archidekt import and the cart pre-check.
 - `src/web`: the React UI.
-- `data/stores.yaml`: the hand-maintained Store table (postage, free-postage thresholds, pickup, cart type). A monthly GitHub Action (`npm run check-stores`) opens an issue when a Store's shipping policy or location changes.
+- `data/stores.yaml`: the hand-maintained Store table (postage, free-postage thresholds, pickup, cart type). Shopify Stores' postage is read from their checkout with `npm run probe-postage` (`-- --write` updates the file). A monthly GitHub Action (`npm run check-stores`) opens an issue when a Store's shipping policy, checkout postage or location changes.
 
 ## Releasing
 

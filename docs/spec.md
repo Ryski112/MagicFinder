@@ -78,7 +78,8 @@ Decided in [Where do each Store's postage costs and location come from?](https:/
 Notes:
 - Stores that don't publish postage use an editable default of $7 tracked (+$5 rural) and are shown as "est.".
 - The buyer can override postage per Store in Settings.
-- A monthly change-detection job hashes each Store's policy page and `meta.json`, and opens an issue for a human to update the table when something changes.
+- Shopify Stores' postage comes from what their checkout actually offers (`npm run probe-postage` puts one cheap single in a throwaway cart and reads `/cart/shipping_rates.json` for an Auckland, Wellington and Christchurch address), because policy pages can disagree with checkout. Those entries have `confidence: checkout`.
+- A monthly change-detection job hashes each Store's policy page, `meta.json` and checkout postage, and opens an issue for a human to update the table when something changes.
 
 ### 3.3 CardKingdom comparison
 
@@ -291,7 +292,7 @@ Each Store section's cart button depends on the Store table's `cart` field:
 1. Resolve each line's variant: `?variant=` on the Listing URL, or one `products/<handle>.js` call (about 1 req/s), matching on condition and foil, with price as the tiebreaker.
 2. Re-check `available` and price.
 3. One click: the click itself opens a new tab ("Checking {Store} still has your cards…"), so browsers don't block it, and the tab goes to `/cart/<variant>:<qty>,…?storefront=true` once the check finishes, including when some lines were dropped. A note under the button says it replaces the Store's current cart. If pop-ups are blocked, the dialog shows the summary and an **Open my cart** button instead.
-4. The MagicFinder tab shows the summary, e.g. "12/13 available, 1 price changed", and lists any dropped lines with their Listing links.
+4. The MagicFinder tab shows nothing while the cart tab says what's happening, so the buyer can come straight back. Only when lines were dropped (sold out or unconfirmed), the Store can't take a cart link, or the tab was blocked or closed, does it show a dialog with the summary, e.g. "12/13 available, 1 price changed", and the dropped lines' Listing links.
 
 MagicFinder never reads `/cart` itself, never pre-fills email or address, and never goes past the Store's cart page. Details are in the [cart research](https://github.com/Ryski112/MagicFinder/blob/research/store-cart-prefill/docs/research/store-cart-prefill.md).
 

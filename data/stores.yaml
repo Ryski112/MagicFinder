@@ -1,8 +1,9 @@
 # MagicFinder Store table: one entry per Store (the seller who is paid and ships the parcel).
 #
 # Hand-maintained. Seeded 2026-10-16/17 from each Store's shipping policy page and Shopify /meta.json
-# (see the store-postage and store-cart-prefill research branches). Fetch TCG sellers are not listed
-# here: MagicFinder builds their entries from the Listings (city, pickup) and uses the default postage.
+# (see the store-postage and store-cart-prefill research branches). Shopify Stores' postage was then checked against
+# what their checkout actually offers (npm run probe-postage), since policy pages can disagree with checkout.
+# Fetch TCG sellers are not listed here: MagicFinder builds their entries from the Listings (city, pickup) and uses the default postage.
 #
 # Fields
 #   id            stable slug
@@ -17,7 +18,7 @@
 #                 and the app marks it "est.".
 #   free_postage  threshold (number or per-region map), applies_to: all | singles_only
 #   cart          shopify | open-listings | hobbymaster-deckbuilder   (how "Add all to cart" works)
-#   provenance    where the figures came from, when, and how sure: published | inferred | default
+#   provenance    where the figures came from, when, and how sure: checkout | published | inferred | default
 
 - id: badgers-sett
   name: Badgers Sett
@@ -43,8 +44,10 @@
   site: https://beadndgames.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Flat Rate Shipping Non Rural", tracked: null, price: 9.00, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://beadndgames.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: bulbastore
   name: Bulbastore
@@ -52,8 +55,10 @@
   site: https://bulbastore.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Standard", tracked: null, price: 4.80 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://bulbastore.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: calico-keep
   name: Calico Keep
@@ -62,9 +67,9 @@
   location: { city: Paraparaumu, region: north_island }
   pickup: { available: true, fee: 0 }
   postage:
-    - { name: Trading card singles (overnight), tracked: null, price: 5.00 }
+    - { name: "Domestic - Trading Card Singles (1-2 Business Days)", tracked: null, price: 6.00 }
   cart: shopify
-  provenance: { url: https://calicokeep.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+  provenance: { url: https://calicokeep.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-bard
   name: Card Bard
@@ -90,8 +95,10 @@
   site: https://cardmasters.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier Post (Singles Only)", tracked: true, price: 7.00, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmasters.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant
   name: Card Merchant (WestCity)
@@ -100,9 +107,9 @@
   location: { city: Auckland, region: auckland }
   pickup: { available: null, fee: 0 }
   postage:
-    - { name: Standard post, tracked: null, price: 5.00, rural_surcharge: 5.00 }
+    - { name: "Courier", tracked: true, price: { auckland: 6.50, north_island: 7.90, south_island: 9.90 }, rural_surcharge: { auckland: 5.40, north_island: 4.00, south_island: 4.00 } }
   cart: shopify
-  provenance: { url: https://cardmerchant.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+  provenance: { url: https://cardmerchant.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-takapuna
   name: Card Merchant Takapuna
@@ -111,9 +118,9 @@
   location: { city: Auckland, region: auckland }
   pickup: { available: null, fee: 0 }
   postage:
-    - { name: Standard post, tracked: null, price: 5.00, rural_surcharge: 5.00 }
+    - { name: "Courier in bag (No Rural or PO Boxes)", tracked: true, price: 8.00, rural_surcharge: 4.00 }
   cart: shopify
-  provenance: { url: https://cardmerchanttakapuna.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+  provenance: { url: https://cardmerchanttakapuna.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-ponsonby
   name: Card Merchant Ponsonby
@@ -121,8 +128,10 @@
   site: https://cardmerchantponsonby.co.nz
   location: { city: Auckland, region: auckland }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier (standard)", tracked: true, price: 6.90, rural_surcharge: 2.60 }
   cart: shopify
-  provenance: { url: https://cardmerchantponsonby.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantponsonby.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-silverdale
   name: Card Merchant Silverdale
@@ -139,8 +148,10 @@
   site: https://cardmerchanthamilton.co.nz
   location: { city: Hamilton, region: north_island }
   pickup: { available: true, fee: 0 }
+  postage:
+    - { name: "Courier (standard)", tracked: true, price: 7.00, rural_surcharge: 3.00 }
   cart: shopify
-  provenance: { url: https://cardmerchanthamilton.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://cardmerchanthamilton.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-whangarei
   name: Card Merchant Whangārei
@@ -148,8 +159,10 @@
   site: https://cardmerchantwhangarei.co.nz
   location: { city: Whangārei, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier - Singles Cards Only (up to 50 cards)", tracked: true, price: 8.00, rural_surcharge: 9.00 }
   cart: shopify
-  provenance: { url: https://cardmerchantwhangarei.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantwhangarei.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-new-plymouth
   name: Card Merchant New Plymouth
@@ -157,8 +170,10 @@
   site: https://cardmerchantnewplymouth.co.nz
   location: { city: New Plymouth, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Singles Cards Only", tracked: null, price: 7.99, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: https://cardmerchantnewplymouth.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantnewplymouth.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-taupo
   name: Card Merchant Taupō
@@ -166,8 +181,10 @@
   site: https://cardmerchanttaupo.co.nz
   location: { city: Taupō, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier (standard)", tracked: true, price: 7.00, rural_surcharge: 3.00 }
   cart: shopify
-  provenance: { url: https://cardmerchanttaupo.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchanttaupo.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-wellington
   name: Card Merchant Wellington
@@ -175,8 +192,10 @@
   site: https://cardmerchantwellington.co.nz
   location: { city: Wellington, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier (small)", tracked: true, price: { auckland: 6.90, north_island: 4.90, south_island: 6.90 } }
   cart: shopify
-  provenance: { url: https://cardmerchantwellington.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantwellington.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-blenheim
   name: Card Merchant Blenheim
@@ -184,8 +203,10 @@
   site: https://cardmerchantblenheim.co.nz
   location: { city: Blenheim, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Singles Cards Only", tracked: null, price: 7.99, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: https://cardmerchantblenheim.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantblenheim.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-nelson
   name: Card Merchant Nelson
@@ -193,8 +214,10 @@
   site: https://cardmerchantnelson.co.nz
   location: { city: Nelson, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Singles Cards Only", tracked: null, price: 7.99, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: https://cardmerchantnelson.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantnelson.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-christchurch
   name: Card Merchant Christchurch
@@ -202,8 +225,10 @@
   site: https://cardmerchantchristchurch.co.nz
   location: { city: Christchurch, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Standard", tracked: null, price: { auckland: 10.00, north_island: 10.00, south_island: 5.00 } }
   cart: shopify
-  provenance: { url: https://cardmerchantchristchurch.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantchristchurch.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-merchant-dunedin
   name: Card Merchant Dunedin
@@ -211,8 +236,10 @@
   site: https://cardmerchantdunedin.co.nz
   location: { city: Dunedin, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier", tracked: true, price: { auckland: 10.00, north_island: 10.00, south_island: 7.00 } }
   cart: shopify
-  provenance: { url: https://cardmerchantdunedin.co.nz/meta.json, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardmerchantdunedin.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: card-slayer
   name: Card Slayer
@@ -229,8 +256,10 @@
   site: https://cardspot.store
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier with NZ Post - XS Bag", tracked: true, price: 8.00, rural_surcharge: 6.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://cardspot.store/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: collectors-guild
   name: Collectors Guild
@@ -267,8 +296,10 @@
   site: https://gamingdna.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Nationwide Urban Delivery (Main Centres and Towns)", tracked: null, price: 9.99, rural_surcharge: 5.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://gamingdna.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: goblin-games
   name: Goblin Games
@@ -276,8 +307,10 @@
   site: https://goblingames.nz
   location: { city: Wellington, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier - Tracked [Authority to Leave]", tracked: true, price: 8.00 }
   cart: shopify
-  provenance: { url: https://goblingames.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://goblingames.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: hobbixchange
   name: HobbiXchange
@@ -285,8 +318,10 @@
   site: https://hobbixchange.co.nz
   location: { city: Christchurch, region: south_island }
   pickup: { available: true, fee: 0 }
+  postage:
+    - { name: "Standard Metro", tracked: null, price: 8.00, rural_surcharge: 6.00 }
   cart: shopify
-  provenance: { url: https://hobbixchange.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://hobbixchange.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: hobby-lords
   name: Hobby Lords
@@ -315,8 +350,10 @@
   site: https://ironknightgaming.co.nz
   location: { city: Rangiora, region: south_island }
   pickup: { available: true, fee: 0 }
+  postage:
+    - { name: "TCG Singles Only - Courier with Signature", tracked: true, price: 7.49 }
   cart: shopify
-  provenance: { url: https://ironknightgaming.co.nz/pages/faq-frequently-asked-questions, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://ironknightgaming.co.nz/pages/faq-frequently-asked-questions, checked_on: 2026-10-19, confidence: checkout }
 
 - id: kanto-corner
   name: Kanto Corner
@@ -324,8 +361,10 @@
   site: https://kantocorner.nz
   location: { city: New Plymouth, region: north_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier (Tracked) Non Rural", tracked: true, price: 12.00, rural_surcharge: 3.00 }
   cart: shopify
-  provenance: { url: https://kantocorner.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://kantocorner.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: magic-at-willis
   name: Magic at Willis
@@ -333,8 +372,10 @@
   site: https://magicatwillis.co.nz
   location: { city: Christchurch, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier (insured) (2-3 Days)", tracked: true, price: 9.00, rural_surcharge: 7.50 }
   cart: shopify
-  provenance: { url: https://magicatwillis.co.nz/pages/terms-conditions, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://magicatwillis.co.nz/pages/terms-conditions, checked_on: 2026-10-19, confidence: checkout }
 
 - id: magic-red-dragon
   name: Magic Red Dragon
@@ -352,10 +393,10 @@
   location: { city: Auckland, region: auckland }
   pickup: { available: true, fee: 0 }
   postage:
-    - { name: CourierPost, tracked: true, price: { auckland: 4.80, north_island: 8.80, south_island: 8.80 }, rural_surcharge: { auckland: 2.00, north_island: 4.00, south_island: 4.00 } }
+    - { name: "NZ Post Standard Delivery", tracked: null, price: { auckland: 5.80, north_island: 7.80, south_island: 9.60 }, rural_surcharge: { auckland: 2.00, north_island: 5.00, south_island: 5.20 } }
   free_postage: { threshold: { auckland: 120.00, north_island: 160.00, south_island: 160.00 }, applies_to: all }
   cart: shopify
-  provenance: { url: https://metalife.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+  provenance: { url: https://metalife.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: mtg-magpie
   name: MTG Magpie
@@ -363,8 +404,10 @@
   site: https://mtgmagpie.com
   location: { city: Christchurch, region: south_island }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Tracked shipping", tracked: true, price: 12.50 }
   cart: shopify
-  provenance: { url: https://mtgmagpie.com/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://mtgmagpie.com/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: nova-games
   name: Nova Games
@@ -383,8 +426,10 @@
   site: https://nztradingcards.com
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Standard Shipping NZ", tracked: null, price: 7.50, rural_surcharge: 4.50 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://nztradingcards.com/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: otaku-mart
   name: Otaku Mart
@@ -405,10 +450,10 @@
   location: { city: Auckland, region: auckland }
   pickup: { available: null, fee: 0 }
   postage:
-    - { name: Standard, tracked: null, price: { auckland: 6.90, north_island: 9.90, south_island: 12.90 }, rural_surcharge: 5.00 }
+    - { name: "A1-Local", tracked: null, price: { auckland: 6.90, north_island: 10.90, south_island: 12.90 } }
   free_postage: { threshold: 99.00, applies_to: all }
   cart: shopify
-  provenance: { url: https://playx.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: published }
+  provenance: { url: https://playx.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: pop-stop
   name: Pop Stop
@@ -416,8 +461,10 @@
   site: https://popstop.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "NZ Post (Courier)", tracked: true, price: { auckland: 5.98, north_island: 8.39, south_island: 10.11 } }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://popstop.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: shuffle-and-cut
   name: Shuffle and Cut
@@ -425,8 +472,10 @@
   site: https://shuffleandcutgames.co.nz
   location: { city: Auckland, region: auckland }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Standard (Insured up to $80)", tracked: null, price: 9.00, rural_surcharge: 4.50 }
   cart: shopify
-  provenance: { url: https://shuffleandcutgames.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://shuffleandcutgames.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: spellbound
   name: Spellbound
@@ -434,8 +483,10 @@
   site: https://spellboundgames.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Shipping for Single Cards Only", tracked: null, price: { auckland: 8.00, north_island: 8.50, south_island: 8.50 }, rural_surcharge: { auckland: 3.00, north_island: 2.50, south_island: 2.50 } }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://spellboundgames.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: tcg-collector-nz
   name: TCG Collector NZ
@@ -455,8 +506,10 @@
   site: https://tcgculture.com
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Standard", tracked: null, price: 9.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://tcgculture.com/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: the-game-tree
   name: The Game Tree
@@ -464,8 +517,10 @@
   site: https://thegametree.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "NZ Post Courier NON-RURAL ONLY", tracked: true, price: 8.00, rural_surcharge: 4.50 }
   cart: shopify
-  provenance: { url: https://thegametree.co.nz/policies/shipping-policy, checked_on: 2026-10-16, confidence: default }
+  provenance: { url: https://thegametree.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: three-tree-market
   name: Three Tree Market
@@ -473,8 +528,10 @@
   site: https://threetreemarket.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Courier", tracked: true, price: 9.50 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://threetreemarket.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: vagabond
   name: Vagabond
@@ -491,8 +548,10 @@
   site: https://valkyriegames.co.nz
   location: { city: null, region: null }
   pickup: { available: null, fee: 0 }
+  postage:
+    - { name: "Covered Courier", tracked: true, price: 10.00, rural_surcharge: 10.00 }
   cart: shopify
-  provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+  provenance: { url: https://valkyriegames.co.nz/policies/shipping-policy, checked_on: 2026-10-19, confidence: checkout }
 
 - id: xp-games
   name: XP Games

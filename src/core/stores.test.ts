@@ -50,15 +50,15 @@ describe('storeCost', () => {
   });
 
   it('prices by the region of the buyer pickup city', () => {
-    expect(storeCost(byId('meta-life'), buyer()).postage).toBe(4.8);
+    expect(storeCost(byId('meta-life'), buyer()).postage).toBe(5.8);
     expect(storeCost(byId('meta-life'), buyer()).freeOver).toBe(120);
-    expect(storeCost(byId('meta-life'), buyer({ pickupCity: 'Dunedin' }))).toMatchObject({ postage: 8.8, freeOver: 160 });
+    expect(storeCost(byId('meta-life'), buyer({ pickupCity: 'Dunedin' }))).toMatchObject({ postage: 9.6, freeOver: 160 });
     expect(storeCost(byId('game-roost'), buyer({ pickupCity: 'Christchurch' })).postage).toBe(10);
   });
 
   it('falls back to the editable default when a Store publishes no rates, and marks it estimated', () => {
-    expect(storeCost(byId('shuffle-and-cut'), buyer())).toMatchObject({ postage: 7, estimated: true, freeOver: null });
-    expect(storeCost(byId('shuffle-and-cut'), buyer({ ruralAddress: true })).postage).toBe(12);
+    expect(storeCost(byId('card-bard'), buyer())).toMatchObject({ postage: 7, estimated: true, freeOver: null });
+    expect(storeCost(byId('card-bard'), buyer({ ruralAddress: true })).postage).toBe(12);
   });
 
   it('uses a buyer override over everything but pickup', () => {

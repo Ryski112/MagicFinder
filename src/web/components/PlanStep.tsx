@@ -44,6 +44,20 @@ export function PlanStep(p: Props) {
     p.onChoices({ ...p.choices, pins });
   };
 
+  // Cards taken off the list from this screen, so they can be put back. They stay unticked on the Want List.
+  const [removed, setRemoved] = useState<{ name: string; lineIds: string[] }[]>([]);
+  const setIncluded = (lineIds: string[], on: boolean) =>
+    p.onChoices({ ...p.choices, included: { ...p.choices.included, ...Object.fromEntries(lineIds.map(id => [id, on])) } });
+  const removeCard = (name: string, lineIds: string[]) => {
+    if (!lineIds.length) return;
+    setRemoved(r => [...r.filter(x => x.name !== name), { name, lineIds }]);
+    setIncluded(lineIds, false);
+  };
+  const putBack = (card: { name: string; lineIds: string[] }) => {
+    setRemoved(r => r.filter(x => x !== card));
+    setIncluded(card.lineIds, true);
+  };
+
   const setLock = (lineIds: string[], lock: Lock | null) =>
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(lineIds.map(id => [id, lock])) } });
 
@@ -101,6 +115,17 @@ export function PlanStep(p: Props) {
               cards={rung.short.leftOut.map(l => ({ key: l.buyKey, name: l.name, qty: l.missing, image: l.image }))}
             />
           )}
+          {removed.length > 0 && (
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              Removed from your list:{' '}
+              {removed.map((r, n) => (
+                <span key={r.name}>
+                  {n > 0 && ', '}
+                  {r.name} (<Button variant="link" className="text-sm" onClick={() => putBack(r)}>put back</Button>)
+                </span>
+              ))}
+            </div>
+          )}
           {fetchItems.length > 0 && (
             <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
               <SourceBadge source="fetch" />
@@ -108,7 +133,7 @@ export function PlanStep(p: Props) {
               <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: rung.k })}>Open {fetchItems.length} Fetch Listings ↗</Button>
             </div>
           )}
-          {view === 'cards' && <CardsView stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} />}
+          {view === 'cards' && <CardsView stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} />}
           {view === 'stores' && stores.map(s => (
             <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin}
@@ -119,7 +144,7 @@ export function PlanStep(p: Props) {
                     : { kind: 'store', store: s, k: rung.k, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
                 )
               }
-              onLock={setLock} />
+              onLock={setLock} onRemove={removeCard} />
           ))}
           <div className="text-right text-lg font-bold tabnum">
             Landed Cost {money(rung.total)}
@@ -127,12 +152,12 @@ export function PlanStep(p: Props) {
           </div>
         </section>
       )}
-      {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(null)} />}
+      {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(c => (c === cart ? null : c))} />}
     </div>
   );
 }
 
-function CardsView({ stores, leftOut, notFound, offers, pins, onPin }: { stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void }) {
+function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }: { stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const cards = planCards(stores, leftOut, notFound);
   return (
@@ -152,6 +177,7 @@ function CardsView({ stores, leftOut, notFound, offers, pins, onPin }: { stores:
                   {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} />}
                   {c.notFound && <Tag tone="warn">{c.bought.length ? `${c.missing} not found` : 'Not found'}</Tag>}
                   {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
+                  {c.lineIds.length > 0 && <RemoveButton className="ml-auto" name={c.name} onClick={() => onRemove(c.name, c.lineIds)} />}
                 </div>
                 <ul className="mt-1 space-y-0.5">
                   {c.bought.map(({ store, item }) => (
@@ -386,8 +412,8 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, elsewhere, pins, onPin }: {
-  store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void;
+function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin }: {
+  store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [elsewhereOpen, setElsewhereOpen] = useState(false);
@@ -426,7 +452,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, e
         <ul className="divide-y divide-slate-100 dark:divide-slate-800 min-w-0">
           {s.items.map(i => (
             <li key={i.listingId} className="px-4 py-2">
-              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} />
+              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (
                 <PrintingGrid runId={runId} lineId={i.lineIds[0]} onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} />
               )}
@@ -464,7 +490,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, e
   );
 }
 
-function ItemRow({ item: i, open, onToggle, pinned, onUnpin }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void }) {
+function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onRemove: () => void }) {
   const img = i.printing?.image ?? i.fallbackImage;
   return (
     <div className="flex items-center gap-3 text-sm">
@@ -495,7 +521,16 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin }: { item: ItemView;
         <span className="tabnum">{money(i.price)}</span>
         <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
       </div>
+      <RemoveButton name={i.name} onClick={onRemove} />
     </div>
+  );
+}
+
+/** Takes a card off the Want List and re-plans without it. */
+function RemoveButton({ name, onClick, className }: { name: string; onClick: () => void; className?: string }) {
+  return (
+    <button type="button" onClick={onClick} title={`Remove ${name} from your list`} aria-label={`Remove ${name} from your list`}
+      className={cx('shrink-0 w-6 h-6 grid place-items-center rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50', className)}>✕</button>
   );
 }
 

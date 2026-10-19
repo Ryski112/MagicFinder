@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "check-stores": "tsx scripts/check-stores.ts"
+    "check-stores": "tsx scripts/check-stores.ts",
+    "probe-postage": "tsx scripts/probe-postage.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

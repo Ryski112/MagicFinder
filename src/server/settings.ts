@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
     mtgsingles: { blockedAt: null, consecutiveBlockedRuns: 0 },
   },
   updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
-  cardKingdom: { enabled: false, shippingUsd: 20, addGst: true },
+  cardKingdom: { enabled: true, shippingUsd: 20, addGst: true },
 };
 
 export class SettingsStore {

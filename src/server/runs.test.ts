@@ -190,11 +190,12 @@ describe('RunManager in hosted mode', () => {
     const fetch = gatedSource('fetch');
     const mtg = gatedSource('mtgsingles');
     const runs = manager(HOSTED, [fetch.source, mtg.source], s => s.update({ sources: { fetch: true, mtgsingles: true } }));
-    const both = friendSettings({});
-    const noMtg = friendSettings({ sources: { mtgsingles: false } });
+    // Card Kingdom off, so a late price refresh doesn't send an extra Plan.
+    const both = friendSettings({ cardKingdom: { enabled: false } });
+    const noMtg = friendSettings({ cardKingdom: { enabled: false }, sources: { mtgsingles: false } });
     const a = runs.start('1 Sol Ring', choices, 'a', both);
     const b = runs.start('1 Counterspell', choices, 'b', noMtg);
-    await tick();
+    await until(() => fetch.waiting.length === 2 && mtg.waiting.length === 1);
     expect(fetch.calls.sort()).toEqual(['Counterspell', 'Sol Ring']);
     expect(mtg.calls).toEqual(['Sol Ring']);
     expect(b.settings().sources.mtgsingles).toBe(false);
@@ -202,6 +203,7 @@ describe('RunManager in hosted mode', () => {
     expect(b.settings().staples).toEqual(DEFAULT_SETTINGS.staples);
     await fetch.release();
     await mtg.release();
+    await until(() => !!a.ladder?.final && !!b.ladder?.final);
     const aEvents = events(a);
     const bEvents = events(b);
     await b.replan(undefined, friendSettings({ ...noMtg, minCondition: 'NM' }));

@@ -1,6 +1,6 @@
 {
   "name": "magicfinder",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Finds the cheapest way to buy a list of Magic: The Gathering singles from New Zealand Stores, postage included.",
   "license": "UNLICENSED",

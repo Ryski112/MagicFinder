@@ -58,6 +58,10 @@ function gatedSource(id: SourceId) {
 }
 
 const tick = () => new Promise(r => setTimeout(r, 20));
+/** Waits for something a run does in the background (planning on a slow CI machine can take a while). */
+async function until(check: () => boolean, ms = 10_000) {
+  for (const end = Date.now() + ms; !check(); await tick()) if (Date.now() > end) throw new Error('timed out waiting');
+}
 let n = 0;
 
 function manager(hosted: HostedRunOptions | null, sources: Source[], onSettings?: (s: SettingsStore) => void) {
@@ -134,7 +138,7 @@ describe('RunManager in hosted mode', () => {
     expect(c.queuedAhead).toBe(2);
     expect(events(a).some(e => e.type === 'queued')).toBe(false);
     await src.release();
-    await tick();
+    await until(() => src.calls.length === 2);
     expect(src.calls).toEqual(['Sol Ring', 'Counterspell']);
     expect(b.queuedAhead).toBeNull();
     expect(c.queuedAhead).toBe(1);
@@ -159,7 +163,7 @@ describe('RunManager in hosted mode', () => {
     await tick();
     expect(src.calls).toEqual(['Sol Ring', 'Sol Ring']);
     await src.release();
-    expect(out.some(e => e.type === 'ladder')).toBe(true);
+    await until(() => out.some(e => e.type === 'ladder'));
     // Nobody watches it again; after 30 minutes it is gone.
     const b = runs.start('1 Counterspell', choices, 'b');
     runs.sweep(Date.now() + 30 * 60_000);
@@ -173,8 +177,9 @@ describe('RunManager in hosted mode', () => {
     await tick();
     expect(a.progress!.sources[0].sharedWith).toBeUndefined();
     const b = runs.start('1 Rhystic Study\n1 Command Tower', choices, 'b');
-    await tick();
+    await until(() => src.waiting.length === 2);
     await src.release();
+    await until(() => a.progress!.sources[0].sharedWith !== undefined);
     const mine = a.progress!.sources[0];
     expect(mine).toMatchObject({ sharedWith: 1 });
     expect(mine.minutesLeft).toBeGreaterThanOrEqual(1);
@@ -185,11 +190,12 @@ describe('RunManager in hosted mode', () => {
     const fetch = gatedSource('fetch');
     const mtg = gatedSource('mtgsingles');
     const runs = manager(HOSTED, [fetch.source, mtg.source], s => s.update({ sources: { fetch: true, mtgsingles: true } }));
-    const both = friendSettings({});
-    const noMtg = friendSettings({ sources: { mtgsingles: false } });
+    // Card Kingdom off, so a late price refresh doesn't send an extra Plan.
+    const both = friendSettings({ cardKingdom: { enabled: false } });
+    const noMtg = friendSettings({ cardKingdom: { enabled: false }, sources: { mtgsingles: false } });
     const a = runs.start('1 Sol Ring', choices, 'a', both);
     const b = runs.start('1 Counterspell', choices, 'b', noMtg);
-    await tick();
+    await until(() => fetch.waiting.length === 2 && mtg.waiting.length === 1);
     expect(fetch.calls.sort()).toEqual(['Counterspell', 'Sol Ring']);
     expect(mtg.calls).toEqual(['Sol Ring']);
     expect(b.settings().sources.mtgsingles).toBe(false);
@@ -197,6 +203,7 @@ describe('RunManager in hosted mode', () => {
     expect(b.settings().staples).toEqual(DEFAULT_SETTINGS.staples);
     await fetch.release();
     await mtg.release();
+    await until(() => !!a.ladder?.final && !!b.ladder?.final);
     const aEvents = events(a);
     const bEvents = events(b);
     await b.replan(undefined, friendSettings({ ...noMtg, minCondition: 'NM' }));

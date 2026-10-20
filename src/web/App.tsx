@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LadderView, ParseResponse, PlanChoices, SearchProgressView, Settings, StatusResponse } from '../shared/api';
-import { api, followRun } from './api';
+import { api, connection, followRun } from './api';
 import { PlanStep } from './components/PlanStep';
 import { SearchStep } from './components/SearchStep';
 import { CITIES, SettingsDrawer } from './components/SettingsDrawer';
@@ -62,6 +62,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [askFirst, setAskFirst] = useState(false);
+  const [connectionLost, setConnectionLost] = useState(false);
   const stopFollowing = useRef<(() => void) | null>(null);
   const hosted = !!status?.hosted;
 
@@ -146,6 +147,54 @@ export function App() {
     if (runId && step === 'plan') api.replan(runId, c, hosted && settings ? settings : undefined).catch(e => setError((e as Error).message));
   };
 
+  /** Follows a run's events. Hosted mode also notices when the run was replaced or dropped, or the connection lost. */
+  const follow = (id: string) => {
+    stopFollowing.current?.();
+    let stop: () => void = () => {};
+    const current = () => stopFollowing.current === stopHere;
+    const stopHere = () => stop();
+    const lost = (message: string) => {
+      stop();
+      stopFollowing.current = null;
+      setRunId(null);
+      setLadder(null);
+      setStep('list');
+      setError(message);
+    };
+    let checking = false;
+    // The stream failed: ask whether the run still exists. No answer at all shows the lost-connection banner.
+    const check = async (closed: boolean) => {
+      if (checking || !current()) return;
+      checking = true;
+      try {
+        const alive = await api.run(id);
+        if (!current()) return;
+        if (!alive) lost('This search expired — search again.');
+        else if (closed) setTimeout(() => current() && follow(id), 3000);
+      } catch {
+        // connection.onLost has already put up the banner.
+      } finally {
+        checking = false;
+      }
+    };
+    stop = followRun(
+      id,
+      e => {
+        if (e.type === 'progress') {
+          setQueuedAhead(null);
+          setProgress(e.progress);
+        } else if (e.type === 'ladder') {
+          setLadder(e.ladder);
+          setStep(s => (s === 'search' ? 'plan' : s));
+        } else if (e.type === 'queued') setQueuedAhead(e.ahead);
+        else if (e.type === 'replaced') lost('Replaced by a newer search in another tab.');
+        else setError(e.message);
+      },
+      hosted ? check : undefined,
+    );
+    stopFollowing.current = stopHere;
+  };
+
   const find = async (chosen: Settings | null = settings) => {
     // Hosted mode asks a new friend where they are before their first search.
     if (hosted && !stored(ASKED_KEY) && !askFirst) {
@@ -162,34 +211,41 @@ export function App() {
       const { runId: id } = await api.startRun(text, choices, hosted && chosen ? chosen : undefined);
       setRunId(id);
       setStep('search');
-      // Hosted mode only: another tab took over this browser's search, or the server dropped it.
-      const lost = (message: string) => {
-        stopFollowing.current?.();
-        stopFollowing.current = null;
-        setRunId(null);
-        setLadder(null);
-        setStep('list');
-        setError(message);
-      };
-      stopFollowing.current = followRun(
-        id,
-        e => {
-          if (e.type === 'progress') {
-            setQueuedAhead(null);
-            setProgress(e.progress);
-          } else if (e.type === 'ladder') {
-            setLadder(e.ladder);
-            setStep(s => (s === 'search' ? 'plan' : s));
-          } else if (e.type === 'queued') setQueuedAhead(e.ahead);
-          else if (e.type === 'replaced') lost('Replaced by a newer search in another tab.');
-          else setError(e.message);
-        },
-        status?.hosted ? () => lost('This search expired — search again.') : undefined,
-      );
+      follow(id);
     } catch (e) {
       setError((e as Error).message);
     }
   };
+
+  // Hosted mode: a call that gets no answer means the NAS is unreachable or the Access session expired.
+  useEffect(() => {
+    if (!hosted) return;
+    connection.onLost = () => {
+      setConnectionLost(true);
+      stopFollowing.current?.();
+      stopFollowing.current = null;
+    };
+    return () => {
+      connection.onLost = null;
+    };
+  }, [hosted]);
+
+  // Hosted mode: after a reload, pick up this browser's search if it is still alive, on its progress or Plan.
+  const reconnectTried = useRef(false);
+  useEffect(() => {
+    if (!hosted || !settings || reconnectTried.current) return;
+    reconnectTried.current = true;
+    api.browserRun().then(
+      r => {
+        if (!r || latest.current.runId) return;
+        setChoices(r.choices);
+        setRunId(r.runId);
+        setStep('search');
+        follow(r.runId);
+      },
+      () => {},
+    );
+  }, [hosted, settings]);
   useEffect(() => () => stopFollowing.current?.(), []);
 
   const importDeck = async (url: string) => {
@@ -238,6 +294,14 @@ export function App() {
       </header>
 
       <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
+        {hosted && connectionLost && (
+          <div className="mb-4">
+            <Notice tone="bad">
+              Lost connection to MagicFinder. Reload the page; you may need to sign in again.{' '}
+              <Button variant="accent" onClick={() => window.location.reload()}>Reload</Button>
+            </Notice>
+          </div>
+        )}
         {error && <div className="mb-4"><Notice tone="bad">{error} <Button variant="link" onClick={() => setError(null)}>dismiss</Button></Notice></div>}
         {!hosted && status?.update && settings && settings.updateCheck.dismissed !== status.update.version && (
           <div className="mb-4">

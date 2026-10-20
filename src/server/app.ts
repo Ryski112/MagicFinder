@@ -6,7 +6,7 @@ import { CardSearchIndex } from '../catalogue/cardSearch';
 import type { CatalogueStore } from '../catalogue/updater';
 import { resolveWantList } from '../core/wantList';
 import type {
-  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, StartRunRequest, StatusResponse,
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, StartRunRequest, StatusResponse,
 } from '../shared/api';
 import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
@@ -122,6 +122,19 @@ export function createApp(d: AppDeps) {
     const body = await c.req.json<StartRunRequest>();
     const run = d.runs.start(body.text ?? '', body.choices ?? { included: {}, locks: {} }, body.browserId, d.hosted ? friendSettings(body.settings) : undefined);
     return c.json({ runId: run.id });
+  });
+
+  // Hosted mode: lets a reloaded page find its browser's search, and tell a dropped run from a lost connection.
+  app.get('/api/browsers/:id/run', c => {
+    const run = d.hosted ? d.runs.forBrowser(c.req.param('id')) : undefined;
+    if (!run) return c.json({ error: gone ?? 'Not found' }, 404);
+    return c.json<RunStateResponse>({ runId: run.id, choices: run.choices });
+  });
+
+  app.get('/api/runs/:id', c => {
+    const run = d.hosted ? d.runs.get(c.req.param('id')) : undefined;
+    if (!run) return c.json({ error: gone ?? 'Not found' }, 404);
+    return c.json<RunStateResponse>({ runId: run.id, choices: run.choices });
   });
 
   app.get('/api/runs/:id/events', c => {

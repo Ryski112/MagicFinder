@@ -69,6 +69,10 @@ Settings, the card list and the search cache live in your user data folder:
 
 Set `MAGICFINDER_DATA_DIR` to use another folder or `MAGICFINDER_NO_OPEN=1` to stop it opening a browser tab.
 
+## Hosting it for friends
+
+MagicFinder also runs as a Docker image (`ghcr.io/ryski112/magicfinder`) in **hosted mode**: one copy on a NAS, shared by friends who sign in through Cloudflare Access. Each browser gets its own search and its own settings. See [docs/hosting.md](docs/hosting.md) for the Synology Container Manager and Cloudflare Tunnel setup. The desktop download doesn't change.
+
 ## For developers
 
 ```bash
@@ -93,6 +97,7 @@ npm run package    # the Windows zip and Linux tarball, into release/ (see Relea
 1. Set `version` in `package.json` (e.g. `0.2.0`) and commit.
 2. Tag it and push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
 3. The **Release** Action builds both downloads with the official Node.js 24 runtime, smoke-tests each on its own OS (Windows and Linux), and publishes a GitHub Release with them attached. Running the Action by hand builds and tests without publishing.
+4. The **Docker image** Action, on the same tag, builds the hosted image for `amd64` and `arm64`, checks that it boots, and pushes it to `ghcr.io/ryski112/magicfinder` as `X.Y.Z`, `X.Y` and `latest`. To update the NAS, see [docs/hosting.md](docs/hosting.md#updating-to-a-new-version).
 
 Friends can only download releases once the repository is public.
 

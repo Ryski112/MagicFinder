@@ -14,7 +14,7 @@ import { checkShopifyCart } from './cart';
 import { cardImage } from './planner';
 import type { RunManager } from './runs';
 import type { SearchCache } from './searchCache';
-import type { Settings, SettingsStore } from './settings';
+import { friendSettings, type Settings, type SettingsStore } from './settings';
 import type { UpdateInfo } from './updates';
 
 export interface AppDeps {
@@ -46,7 +46,15 @@ export function createApp(d: AppDeps) {
 
   app.get('/api/settings', c => c.json<Settings>(d.settings.get()));
 
+  // Hosted mode: the page sends the settings its browser keeps; the answer is them merged onto the server's own.
+  app.post('/api/settings/friend', async c => {
+    if (!d.hosted) return c.json({ error: 'Only in hosted mode' }, 404);
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return c.json<Settings>({ ...d.settings.get(), ...friendSettings(body) });
+  });
+
   app.put('/api/settings', async c => {
+    if (d.hosted) return c.json({ error: 'Your settings are kept in this browser.' }, 403);
     const patch = await c.req.json<Partial<Settings>>();
     const s = d.settings.update(patch);
     // The theme and the update notice don't change any Plan.
@@ -62,7 +70,8 @@ export function createApp(d: AppDeps) {
     return c.json({ ok: true });
   });
 
-  app.post('/api/cache/clear', c => c.json({ cleared: d.cache.clear() }));
+  // Hosted mode: the cache is shared and at most an hour old, so friends can't clear it (the owner can, on the volume).
+  app.post('/api/cache/clear', c => (d.hosted ? c.json({ error: 'Not available here' }, 403) : c.json({ cleared: d.cache.clear() })));
 
   app.post('/api/parse', async c => {
     if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);
@@ -111,7 +120,7 @@ export function createApp(d: AppDeps) {
   app.post('/api/runs', async c => {
     if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);
     const body = await c.req.json<StartRunRequest>();
-    const run = d.runs.start(body.text ?? '', body.choices ?? { included: {}, locks: {} }, body.browserId);
+    const run = d.runs.start(body.text ?? '', body.choices ?? { included: {}, locks: {} }, body.browserId, d.hosted ? friendSettings(body.settings) : undefined);
     return c.json({ runId: run.id });
   });
 
@@ -149,8 +158,8 @@ export function createApp(d: AppDeps) {
   app.post('/api/runs/:id/plan', async c => {
     const run = d.runs.get(c.req.param('id'));
     if (!run) return c.json({ error: gone ?? 'Search again.' }, 404);
-    const { choices } = await c.req.json<{ choices: PlanChoices }>();
-    void run.replan(choices).catch(e => console.error(e));
+    const { choices, settings } = await c.req.json<{ choices?: PlanChoices; settings?: unknown }>();
+    void run.replan(choices, d.hosted && settings ? friendSettings(settings) : undefined).catch(e => console.error(e));
     return c.json({ ok: true });
   });
 

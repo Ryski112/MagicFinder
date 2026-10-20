@@ -58,6 +58,25 @@ export const DEFAULT_SETTINGS: Settings = {
   cardKingdom: { enabled: true, shippingUsd: 20, addGst: true },
 };
 
+/**
+ * Hosted mode: the buyer preferences each friend keeps in their own browser and sends with every request that plans.
+ * The rest (staples, rung time limit, Source health) stays in settings.json on the server. Decided in "Which settings
+ * belong to each friend and which to the server?".
+ */
+export const FRIEND_KEYS = [
+  'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
+  'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom',
+] as const satisfies readonly (keyof Settings)[];
+
+export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;
+
+/** A friend's settings as their browser sent them, through the same merge as settings.json: missing keys get the defaults, unknown ones are dropped. */
+export function friendSettings(fromBrowser: unknown): FriendSettings {
+  const defaults = Object.fromEntries(FRIEND_KEYS.map(k => [k, structuredClone(DEFAULT_SETTINGS[k])])) as FriendSettings;
+  const plain = fromBrowser !== null && typeof fromBrowser === 'object' && !Array.isArray(fromBrowser);
+  return merge(defaults, plain ? fromBrowser : {});
+}
+
 export class SettingsStore {
   private current: Settings;
   readonly path: string;

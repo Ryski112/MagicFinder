@@ -67,7 +67,8 @@ const runs = new RunManager({
 }, hosting.hosted ? HOSTED_RUNS : null);
 if (hosting.hosted) setInterval(() => runs.sweep(), 15_000).unref();
 
-const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
+// No update notice in hosted mode: the owner cuts the releases and updates the image by hand.
+const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));
@@ -91,8 +92,9 @@ serve({ fetch: app.fetch, port, hostname: hosting.host }, () => {
 // Keep the card list fresh: now (first run downloads it) and then once a day.
 void catalogue.refreshIfStale();
 setInterval(() => void catalogue.refreshIfStale(), 60 * 60 * 1000).unref();
-// "A new version is available": checked at most once a day (not in dev mode, where you run your own code).
-if (!dev) {
+// "A new version is available": checked at most once a day (not in dev mode, where you run your own code, nor in
+// hosted mode).
+if (!dev && !hosting.hosted) {
   void checkForUpdate(settings);
   setInterval(() => void checkForUpdate(settings), 60 * 60 * 1000).unref();
 }

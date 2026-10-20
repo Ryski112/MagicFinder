@@ -37,14 +37,17 @@ export const api = {
   status: () => call<StatusResponse>('GET', '/api/status'),
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (patch: Partial<Settings>) => call<Settings>('PUT', '/api/settings', patch),
+  /** Hosted mode: the settings this browser keeps, merged onto the server's. */
+  friendSettings: (stored: unknown) => call<Settings>('POST', '/api/settings/friend', stored ?? {}),
   tryAgain: (source: string) => call<{ ok: true }>('POST', `/api/sources/${source}/try-again`),
   clearCache: () => call<{ cleared: number }>('POST', '/api/cache/clear'),
   parse: (text: string) => call<ParseResponse>('POST', '/api/parse', { text }),
   archidekt: (url: string) => call<ArchidektResponse>('POST', '/api/archidekt', { url }),
   searchCards: (q: string) => call<CardSearchResponse>('GET', `/api/cards/search?${new URLSearchParams({ q })}`),
   cardPrintings: (oracleId: string) => call<CardPrintingsResponse>('GET', `/api/cards/${encodeURIComponent(oracleId)}/printings`),
-  startRun: (text: string, choices: PlanChoices) => call<{ runId: string }>('POST', '/api/runs', { text, choices, browserId: browserId() }),
-  replan: (runId: string, choices: PlanChoices) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices }),
+  /** `settings` only in hosted mode, where they live in the browser and go with every request that plans. */
+  startRun: (text: string, choices: PlanChoices, settings?: Settings) => call<{ runId: string }>('POST', '/api/runs', { text, choices, browserId: browserId(), settings }),
+  replan: (runId: string, choices: PlanChoices, settings?: Settings) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices, settings }),
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),
   printings: (runId: string, lineId: string) => call<PrintingsResponse>('GET', `/api/runs/${runId}/printings/${encodeURIComponent(lineId)}`),
   /** Runs the cart pre-check, reporting each card as it is checked. */

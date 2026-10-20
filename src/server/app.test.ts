@@ -6,6 +6,8 @@ import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import type { CatalogueStore } from '../catalogue/updater';
 import type { CardPrintingsResponse, CardSearchResponse } from '../shared/api';
 import { createApp, type AppDeps } from './app';
+import type { SearchCache } from './searchCache';
+import { SettingsStore, type Settings } from './settings';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-app-'));
 let cat: Catalogue;
@@ -44,5 +46,32 @@ describe('card searcher API', () => {
     const app = appWith({ ready: false });
     expect((await app.request('/api/cards/search?q=sol')).status).toBe(503);
     expect((await app.request('/api/cards/x/printings')).status).toBe(503);
+  });
+});
+
+describe('hosted mode', () => {
+  const settingsDir = mkdtempSync(join(tmpdir(), 'mf-app-settings-'));
+  const settings = new SettingsStore(settingsDir);
+  const cache = { clear: () => 3 } as unknown as SearchCache;
+  const app = (hosted: boolean) => createApp({ catalogue: { ready: true } as CatalogueStore, settings, cache, version: '0', hosted, update: () => ({ version: '9', url: 'x' }) } as AppDeps);
+
+  it('says so in the status, and only then', async () => {
+    expect(await (await app(true).request('/api/status')).json()).toMatchObject({ hosted: true });
+    expect(await (await app(false).request('/api/status')).json()).not.toHaveProperty('hosted');
+  });
+
+  it('keeps friends\' settings in their browsers: settings.json can\'t be changed and the cache can\'t be cleared', async () => {
+    expect((await app(true).request('/api/settings', { method: 'PUT', body: '{"pickupCity":"Dunedin"}' })).status).toBe(403);
+    expect((await app(true).request('/api/cache/clear', { method: 'POST' })).status).toBe(403);
+    expect(settings.get().pickupCity).toBe('Auckland');
+    expect(await (await app(false).request('/api/cache/clear', { method: 'POST' })).json()).toEqual({ cleared: 3 });
+  });
+
+  it('merges a browser\'s settings onto the server\'s', async () => {
+    const res = await app(true).request('/api/settings/friend', { method: 'POST', body: JSON.stringify({ pickupCity: 'Dunedin', staples: [] }) });
+    const s = (await res.json()) as Settings;
+    expect(s.pickupCity).toBe('Dunedin');
+    expect(s.staples).toEqual(settings.get().staples);
+    expect((await app(false).request('/api/settings/friend', { method: 'POST', body: '{}' })).status).toBe(404);
   });
 });

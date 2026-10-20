@@ -3,19 +3,46 @@ import type { LadderView, ParseResponse, PlanChoices, SearchProgressView, Settin
 import { api, followRun } from './api';
 import { PlanStep } from './components/PlanStep';
 import { SearchStep } from './components/SearchStep';
-import { SettingsDrawer } from './components/SettingsDrawer';
-import { Button, cx, Notice } from './components/ui';
+import { CITIES, SettingsDrawer } from './components/SettingsDrawer';
+import { Button, cx, Dialog, Notice, Switch } from './components/ui';
 import { isLineIncluded, WantListStep } from './components/WantListStep';
 
 type Step = 'list' | 'search' | 'plan';
 const STEPS: [Step, string][] = [['list', 'Want List'], ['search', 'Search'], ['plan', 'Choose a Plan']];
 const DRAFT_KEY = 'magicfinder:draft';
+/** Hosted mode: this browser's settings, and whether the first-visit questions have been answered. */
+const SETTINGS_KEY = 'magicfinder:settings';
+const ASKED_KEY = 'magicfinder:asked';
 
 function loadDraft(): string {
   try {
     return localStorage.getItem(DRAFT_KEY) ?? '';
   } catch {
     return '';
+  }
+}
+
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function store(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private windows may refuse storage; settings then last until the page closes.
+  }
+}
+
+function storedSettings(): unknown {
+  try {
+    return JSON.parse(stored(SETTINGS_KEY) ?? '{}');
+  } catch {
+    return {};
   }
 }
 
@@ -34,22 +61,29 @@ export function App() {
   const [selectedK, setSelectedK] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [askFirst, setAskFirst] = useState(false);
   const stopFollowing = useRef<(() => void) | null>(null);
+  const hosted = !!status?.hosted;
 
   // Status: wait for the card catalogue on first run.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let settingsAsked = false;
     const poll = () =>
       api.status().then(
         s => {
           setStatus(s);
+          // Hosted mode keeps each friend's settings in their browser; the desktop keeps them in settings.json.
+          if (!settingsAsked) {
+            settingsAsked = true;
+            (s.hosted ? api.friendSettings(storedSettings()) : api.settings()).then(setSettings, e => setError((e as Error).message));
+          }
           // Quickly while the card list downloads; then now and then, so an update notice found after start-up shows.
           timer = setTimeout(poll, s.catalogue.ready ? 5 * 60 * 1000 : 1500);
         },
         () => (timer = setTimeout(poll, 3000)),
       );
     poll();
-    api.settings().then(setSettings, e => setError((e as Error).message));
     return () => clearTimeout(timer);
   }, []);
 
@@ -74,11 +108,30 @@ export function App() {
     return () => clearTimeout(t);
   }, [text, status?.catalogue.ready]);
 
+  // Hosted mode re-plans only this browser's run, with the settings and choices current when the batch is sent.
+  const latest = useRef({ hosted, settings, runId, choices });
+  latest.current = { hosted, settings, runId, choices };
+
   // Saves are batched briefly so typing a number doesn't re-plan on every keystroke.
   const pendingPatch = useRef<Partial<Settings>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const changeSettings = useCallback((patch: Partial<Settings>) => {
-    setSettings(s => (s ? { ...s, ...patch } : s));
+    setSettings(s => {
+      if (!s) return s;
+      const next = { ...s, ...patch };
+      if (latest.current.hosted) store(SETTINGS_KEY, JSON.stringify(next));
+      return next;
+    });
+    if (latest.current.hosted) {
+      // The theme doesn't change any Plan.
+      if (Object.keys(patch).every(k => k === 'theme')) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        const { runId: id, choices: c, settings: s } = latest.current;
+        if (id && s) api.replan(id, c, s).catch(e => setError((e as Error).message));
+      }, 400);
+      return;
+    }
     pendingPatch.current = { ...pendingPatch.current, ...patch };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -90,10 +143,15 @@ export function App() {
 
   const changeChoices = (c: PlanChoices) => {
     setChoices(c);
-    if (runId && step === 'plan') api.replan(runId, c).catch(e => setError((e as Error).message));
+    if (runId && step === 'plan') api.replan(runId, c, hosted && settings ? settings : undefined).catch(e => setError((e as Error).message));
   };
 
-  const find = async () => {
+  const find = async (chosen: Settings | null = settings) => {
+    // Hosted mode asks a new friend where they are before their first search.
+    if (hosted && !stored(ASKED_KEY) && !askFirst) {
+      setAskFirst(true);
+      return;
+    }
     setError(null);
     setProgress(null);
     setQueuedAhead(null);
@@ -101,7 +159,7 @@ export function App() {
     setSelectedK(null);
     stopFollowing.current?.();
     try {
-      const { runId: id } = await api.startRun(text, choices);
+      const { runId: id } = await api.startRun(text, choices, hosted && chosen ? chosen : undefined);
       setRunId(id);
       setStep('search');
       // Hosted mode only: another tab took over this browser's search, or the server dropped it.
@@ -181,7 +239,7 @@ export function App() {
 
       <main className="max-w-5xl w-full mx-auto px-4 py-6 flex-1">
         {error && <div className="mb-4"><Notice tone="bad">{error} <Button variant="link" onClick={() => setError(null)}>dismiss</Button></Notice></div>}
-        {status?.update && settings && settings.updateCheck.dismissed !== status.update.version && (
+        {!hosted && status?.update && settings && settings.updateCheck.dismissed !== status.update.version && (
           <div className="mb-4">
             <Notice tone="info">
               MagicFinder {status.update.version} is available (you have {status.version}).{' '}
@@ -202,7 +260,7 @@ export function App() {
             onChoices={setChoices}
             settings={settings}
             onSettings={changeSettings}
-            onFind={find}
+            onFind={() => find()}
             busy={!status?.catalogue.ready}
             catalogueMessage={catalogueMessage}
             catalogueReady={!!status?.catalogue.ready}
@@ -221,7 +279,7 @@ export function App() {
             settings={settings}
             onSettings={changeSettings}
             onEdit={() => setStep('list')}
-            onSearchAgain={find}
+            onSearchAgain={() => find()}
           />
         )}
       </main>
@@ -231,7 +289,44 @@ export function App() {
         {status && <span className="block mt-1">MagicFinder {status.version}</span>}
       </footer>
 
-      {settings && <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onChange={changeSettings} />}
+      {settings && <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onChange={changeSettings} hosted={hosted} />}
+      {settings && askFirst && (
+        <FirstVisit
+          settings={settings}
+          onDone={answers => {
+            const next = { ...settings, ...answers };
+            changeSettings(answers);
+            store(SETTINGS_KEY, JSON.stringify(next));
+            store(ASKED_KEY, '1');
+            setAskFirst(false);
+            void find(next);
+          }}
+          onClose={() => setAskFirst(false)}
+        />
+      )}
     </div>
+  );
+}
+
+/** Hosted mode: asked once, before a friend's first search. Everything else can be changed later in Settings. */
+function FirstVisit({ settings, onDone, onClose }: { settings: Settings; onDone: (answers: Pick<Settings, 'pickupCity' | 'ruralAddress'>) => void; onClose: () => void }) {
+  const [pickupCity, setPickupCity] = useState(settings.pickupCity);
+  const [ruralAddress, setRuralAddress] = useState(settings.ruralAddress);
+  return (
+    <Dialog open onClose={onClose} title="Before your first search">
+      <div className="space-y-4 text-sm">
+        <label className="block">Where are you?
+          <select className="mt-1 block w-full border rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600" value={pickupCity} onChange={e => setPickupCity(e.target.value)}>
+            {[...new Set([pickupCity, ...CITIES])].map(c => <option key={c}>{c}</option>)}
+          </select>
+          <span className="text-xs text-slate-500">Sets your region for postage prices, and Stores here get an "I'll pick up" switch.</span>
+        </label>
+        <Switch checked={ruralAddress} onChange={setRuralAddress} label="Rural delivery address" />
+        <p className="text-xs text-slate-500">These are kept in this browser only. Change them, and everything else, any time in ⚙ Settings.</p>
+        <div className="flex justify-end">
+          <Button variant="accent" onClick={() => onDone({ pickupCity, ruralAddress })}>Search</Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

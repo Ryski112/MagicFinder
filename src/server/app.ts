@@ -25,6 +25,8 @@ export interface AppDeps {
   version: string;
   /** A newer release to offer, if any. */
   update?: () => UpdateInfo | null;
+  /** Hosted mode (MAGICFINDER_HOSTED). */
+  hosted?: boolean;
 }
 
 export function createApp(d: AppDeps) {
@@ -38,6 +40,7 @@ export function createApp(d: AppDeps) {
       version: d.version,
       catalogue: { ready: d.catalogue.ready, progress: d.catalogue.progress, error: d.catalogue.error },
       update: d.update?.() ?? null,
+      ...(d.hosted ? { hosted: true as const } : {}),
     }),
   );
 
@@ -102,16 +105,19 @@ export function createApp(d: AppDeps) {
     }
   });
 
+  // Hosted mode drops runs nobody has looked at for 30 minutes; the desktop only ever replaces them.
+  const gone = d.hosted ? 'This search expired — search again.' : null;
+
   app.post('/api/runs', async c => {
     if (!d.catalogue.ready) return c.json({ error: 'The card list is still downloading. Try again in a moment.' }, 503);
     const body = await c.req.json<StartRunRequest>();
-    const run = d.runs.start(body.text ?? '', body.choices ?? { included: {}, locks: {} });
+    const run = d.runs.start(body.text ?? '', body.choices ?? { included: {}, locks: {} }, body.browserId);
     return c.json({ runId: run.id });
   });
 
   app.get('/api/runs/:id/events', c => {
     const run = d.runs.get(c.req.param('id'));
-    if (!run) return c.json({ error: 'That search has finished or been replaced. Search again.' }, 404);
+    if (!run) return c.json({ error: gone ?? 'That search has finished or been replaced. Search again.' }, 404);
     return streamSSE(c, async stream => {
       const queue: RunEvent[] = [];
       let wake: (() => void) | null = null;
@@ -119,11 +125,12 @@ export function createApp(d: AppDeps) {
         queue.push(e);
         wake?.();
       };
+      if (run.queuedAhead !== null) queue.push({ type: 'queued', ahead: run.queuedAhead });
       if (run.progress) queue.push({ type: 'progress', progress: run.progress });
       if (run.ladder) queue.push({ type: 'ladder', ladder: run.ladder });
-      run.listeners.add(listener);
+      const stop = run.listen(listener);
       stream.onAbort(() => {
-        run.listeners.delete(listener);
+        stop();
         wake?.();
       });
       while (!stream.aborted) {
@@ -135,13 +142,13 @@ export function createApp(d: AppDeps) {
         wake = null;
         if (!queue.length && !stream.aborted) await stream.writeSSE({ event: 'ping', data: '' });
       }
-      run.listeners.delete(listener);
+      stop();
     });
   });
 
   app.post('/api/runs/:id/plan', async c => {
     const run = d.runs.get(c.req.param('id'));
-    if (!run) return c.json({ error: 'Search again.' }, 404);
+    if (!run) return c.json({ error: gone ?? 'Search again.' }, 404);
     const { choices } = await c.req.json<{ choices: PlanChoices }>();
     void run.replan(choices).catch(e => console.error(e));
     return c.json({ ok: true });
@@ -149,7 +156,7 @@ export function createApp(d: AppDeps) {
 
   app.post('/api/runs/:id/try-longer', async c => {
     const run = d.runs.get(c.req.param('id'));
-    if (!run) return c.json({ error: 'Search again.' }, 404);
+    if (!run) return c.json({ error: gone ?? 'Search again.' }, 404);
     const { k } = await c.req.json<{ k: number }>();
     void run.tryLonger(k).catch(e => console.error(e));
     return c.json({ ok: true });
@@ -167,7 +174,8 @@ export function createApp(d: AppDeps) {
     const run = d.runs.get(c.req.param('id'));
     const { storeId, k } = await c.req.json<{ storeId: string; k: number }>();
     const store = run?.ladder?.rungs.find(r => r.k === k)?.stores.find(s => s.id === storeId);
-    if (!run?.search || !store) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
+    if (!run) return c.json({ error: gone ?? 'That Plan has changed. Pick it again.' }, 404);
+    if (!run.search || !store) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
     const byId = new Map(run.search.listings.map(l => [l.id, l]));
     const items = store.items.flatMap(i => {
       const listing = byId.get(i.listingId);

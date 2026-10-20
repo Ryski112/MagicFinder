@@ -3,7 +3,7 @@ import type { Settings, SourceId } from '../../shared/api';
 import { api } from '../api';
 import { Button, Notice, Sheet, SOURCE_NAME, Switch } from './ui';
 
-const CITIES = ['Auckland', 'Hamilton', 'Tauranga', 'Wellington', 'Palmerston North', 'Napier', 'New Plymouth', 'Whangārei', 'Christchurch', 'Dunedin', 'Nelson', 'Queenstown', 'Invercargill'];
+export const CITIES = ['Auckland', 'Hamilton', 'Tauranga', 'Wellington', 'Palmerston North', 'Napier', 'New Plymouth', 'Whangārei', 'Christchurch', 'Dunedin', 'Nelson', 'Queenstown', 'Invercargill'];
 const field = 'mt-1 block w-full border rounded-md px-2 py-1.5 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600';
 
 /** Searches are reused for an hour; this forgets them so the next search asks the Sources again. */
@@ -26,7 +26,7 @@ function ClearCache() {
   );
 }
 
-export function SettingsDrawer({ open, onClose, settings, onChange }: { open: boolean; onClose: () => void; settings: Settings; onChange: (patch: Partial<Settings>) => void }) {
+export function SettingsDrawer({ open, onClose, settings, onChange, hosted = false }: { open: boolean; onClose: () => void; settings: Settings; onChange: (patch: Partial<Settings>) => void; hosted?: boolean }) {
   const s = settings;
   const repeatedBlocks = (Object.keys(s.sourceHealth) as SourceId[]).filter(id => s.sources[id] && s.sourceHealth[id].consecutiveBlockedRuns >= 3);
   return (
@@ -73,7 +73,8 @@ export function SettingsDrawer({ open, onClose, settings, onChange }: { open: bo
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
           <Switch checked={s.sources.fetch} onChange={v => onChange({ sources: { ...s.sources, fetch: v } })} label="Search Fetch TCG" />
           <Switch checked={s.sources.mtgsingles} onChange={v => onChange({ sources: { ...s.sources, mtgsingles: v } })} label="Search MtgSingles" />
-          <ClearCache />
+          {/* Hosted mode: the cache is shared by everyone and at most an hour old. */}
+          {!hosted && <ClearCache />}
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">

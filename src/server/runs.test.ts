@@ -11,7 +11,7 @@ import type { Source, SourceListing } from '../sources/types';
 import type { CardKingdom } from './cardKingdom';
 import { RunManager, type HostedRunOptions, type Run } from './runs';
 import { SearchCache } from './searchCache';
-import { SettingsStore } from './settings';
+import { DEFAULT_SETTINGS, friendSettings, SettingsStore } from './settings';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-runs-'));
 let cat: Catalogue;
@@ -60,10 +60,11 @@ function gatedSource(id: SourceId) {
 const tick = () => new Promise(r => setTimeout(r, 20));
 let n = 0;
 
-function manager(hosted: HostedRunOptions | null, sources: Source[]) {
+function manager(hosted: HostedRunOptions | null, sources: Source[], onSettings?: (s: SettingsStore) => void) {
   const d = mkdtempSync(join(dir, `m${n++}-`));
   const settings = new SettingsStore(d);
   settings.update({ sources: { fetch: sources.some(s => s.id === 'fetch'), mtgsingles: sources.some(s => s.id === 'mtgsingles') } });
+  onSettings?.(settings);
   return new RunManager(
     {
       catalogue: () => cat,
@@ -179,4 +180,30 @@ describe('RunManager in hosted mode', () => {
     expect(mine.minutesLeft).toBeGreaterThanOrEqual(1);
     expect(b.progress!.sources[0]).toMatchObject({ sharedWith: 1 });
   });
+
+  it('plans each search with its own friend\'s settings, and re-plans only that search when they change', async () => {
+    const fetch = gatedSource('fetch');
+    const mtg = gatedSource('mtgsingles');
+    const runs = manager(HOSTED, [fetch.source, mtg.source], s => s.update({ sources: { fetch: true, mtgsingles: true } }));
+    const both = friendSettings({});
+    const noMtg = friendSettings({ sources: { mtgsingles: false } });
+    const a = runs.start('1 Sol Ring', choices, 'a', both);
+    const b = runs.start('1 Counterspell', choices, 'b', noMtg);
+    await tick();
+    expect(fetch.calls.sort()).toEqual(['Counterspell', 'Sol Ring']);
+    expect(mtg.calls).toEqual(['Sol Ring']);
+    expect(b.settings().sources.mtgsingles).toBe(false);
+    // Server-only settings still come from settings.json.
+    expect(b.settings().staples).toEqual(DEFAULT_SETTINGS.staples);
+    await fetch.release();
+    await mtg.release();
+    const aEvents = events(a);
+    const bEvents = events(b);
+    await b.replan(undefined, friendSettings({ ...noMtg, minCondition: 'NM' }));
+    expect(b.settings().minCondition).toBe('NM');
+    expect(a.settings().minCondition).toBe('LP');
+    expect(bEvents.some(e => e.type === 'ladder')).toBe(true);
+    expect(aEvents).toEqual([]);
+  });
 });
+

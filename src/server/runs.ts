@@ -12,8 +12,9 @@ import type { Source } from '../sources/types';
 import type { CardKingdom } from './cardKingdom';
 import { ladderView, listChoices, preparePlan, printingOptions, type PlanContext, type Prepared } from './planner';
 import { searchAll, type SearchCard, type SearchResult } from './search';
+import { friendSettings } from './settings';
 import type { SearchCache } from './searchCache';
-import type { SettingsStore } from './settings';
+import type { FriendSettings, Settings, SettingsStore } from './settings';
 
 export interface RunDeps {
   catalogue: () => Catalogue;
@@ -55,8 +56,18 @@ export class Run {
   private knowledge: LadderKnowledge | null = null;
   private searching: Promise<void> | null = null;
 
-  constructor(readonly id: string, readonly want: ResolvedWantList, choices: PlanChoices, private readonly deps: RunDeps) {
+  /**
+   * @param friend hosted mode: the settings this friend's browser sent, kept with the run so a re-plan after the
+   * idle stop still works. Null on the desktop, where settings.json holds everything.
+   */
+  constructor(readonly id: string, readonly want: ResolvedWantList, choices: PlanChoices, private readonly deps: RunDeps, private friend: FriendSettings | null = null) {
     this.choices = choices;
+  }
+
+  /** The settings this run plans with: settings.json, with the friend's own preferences on top in hosted mode. */
+  settings(): Settings {
+    const server = this.deps.settings.get();
+    return this.friend ? { ...server, ...this.friend } : server;
   }
 
   private emit(e: RunEvent) {
@@ -66,12 +77,12 @@ export class Run {
   }
 
   private ctx(): PlanContext {
-    return { catalogue: this.deps.catalogue(), directory: this.deps.directory(), settings: this.deps.settings.get(), cardKingdom: this.deps.cardKingdom.context() };
+    return { catalogue: this.deps.catalogue(), directory: this.deps.directory(), settings: this.settings(), cardKingdom: this.deps.cardKingdom.context() };
   }
 
   /** Cards the current choices need, which this run hasn't searched yet. */
   private missingCards(): SearchCard[] {
-    const lc = listChoices(this.choices, this.deps.settings.get());
+    const lc = listChoices(this.choices, this.settings());
     const need = new Map<string, string>();
     for (const b of buyLines(this.want.lines, lc)) need.set(b.oracleId, b.name);
     const have = this.searchedCards;
@@ -121,7 +132,7 @@ export class Run {
         catalogue: this.deps.catalogue(),
         sources: this.deps.sources,
         cache: this.deps.cache,
-        settings: settings.get(),
+        settings: this.settings(),
         appVersion: this.deps.appVersion,
         onHealth: (source, blocked) => {
           const h = settings.get().sourceHealth[source];
@@ -142,9 +153,10 @@ export class Run {
     this.search = this.search ? mergeResults(this.search, result) : result;
   }
 
-  /** Re-plans with new choices (locks, include toggles) or after a settings change. */
-  async replan(choices?: PlanChoices) {
+  /** Re-plans with new choices (locks, include toggles) or after a settings change (in hosted mode, this friend's). */
+  async replan(choices?: PlanChoices, friend?: FriendSettings) {
     if (choices) this.choices = choices;
+    if (friend && this.friend) this.friend = friend;
     this.working++;
     try {
       this.searching ??= this.searchMissing().finally(() => (this.searching = null));
@@ -284,9 +296,9 @@ export class RunManager {
   }
 
   /** Desktop: a new search cancels every run. Hosted: it replaces only the same browser's run. */
-  start(text: string, choices: PlanChoices, browserId?: string): Run {
+  start(text: string, choices: PlanChoices, browserId?: string, friend?: FriendSettings): Run {
     const want = resolveWantList(text, this.deps.catalogue());
-    const run = new Run(String(this.next++), want, choices, this.deps);
+    const run = new Run(String(this.next++), want, choices, this.deps, this.hosted ? (friend ?? friendSettings({})) : null);
     if (!this.hosted) {
       // One active run at a time keeps Source traffic low.
       for (const r of this.runs.values()) r.cancel();
@@ -318,7 +330,7 @@ export class RunManager {
     return this.runs.get(id);
   }
 
-  /** Settings changed: re-plan the active run. */
+  /** Settings changed: re-plan the active run. Desktop only; in hosted mode each browser re-plans its own run. */
   replanAll() {
     for (const r of this.runs.values()) void r.replan().catch(() => {});
   }

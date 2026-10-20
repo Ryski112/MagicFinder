@@ -85,6 +85,8 @@ export interface StartRunRequest {
   choices: PlanChoices;
   /** Hosted mode: the browser's own id (shared by its tabs), so a new search replaces only that browser's. */
   browserId?: string;
+  /** Hosted mode: the settings this browser keeps (the server uses only each friend's own preferences). */
+  settings?: Settings;
 }
 
 export interface PrintingView {

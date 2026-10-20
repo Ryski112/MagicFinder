@@ -218,12 +218,12 @@ describe('RunManager in hosted mode', () => {
     const runs = manager(HOSTED, [src.source]);
     const a = runs.start('1 Sol Ring\n1 Lava Axe', choices, 'a');
     const b = runs.start('1 Counterspell\n1 Rhystic Study\n1 Command Tower', choices, 'b');
-    await tick();
+    await until(() => src.waiting.length === 2);
     // Fetch refuses A's request; B's is answered.
     const i = src.waiting.findIndex(w => w.q === 'Sol Ring');
     src.waiting.splice(i, 1)[0].fail(new SourceError('blocked', 'Refused (403)'));
     await src.release();
-    await tick();
+    await until(() => b.progress!.sources[0].status === 'blocked');
     expect(src.calls).not.toContain('Rhystic Study');
     expect(b.progress!.sources[0].status).toBe('blocked');
     expect(a.progress!.sources[0].status).toBe('blocked');

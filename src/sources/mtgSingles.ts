@@ -4,6 +4,7 @@
 import type { Condition } from '../core/types';
 import { USER_AGENT } from '../server/paths';
 import { classify, mapRows, Throttle, withRetries } from './policy';
+import { requestCount } from './requestCount';
 import { SourceError, type Source, type SourceListing } from './types';
 import type { HttpGet } from './fetchTcg';
 
@@ -125,6 +126,7 @@ export class MtgSinglesSource implements Source {
   private fetchPage(url: string, signal?: AbortSignal): Promise<unknown[]> {
     return withRetries(async () => {
       await this.throttle.wait();
+      requestCount.count(this.name);
       const a = await (this.opts.get ?? httpGet)(url, signal);
       classify(a);
       // No Listings at all comes back as "204 No Content" with an empty body, not as an empty list.

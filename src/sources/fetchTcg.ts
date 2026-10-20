@@ -3,6 +3,7 @@
 import type { Condition } from '../core/types';
 import { USER_AGENT } from '../server/paths';
 import { classify, mapRows, Throttle, withRetries, type HttpAnswer } from './policy';
+import { requestCount } from './requestCount';
 import { SourceError, type Source, type SourceListing } from './types';
 
 const API = 'https://api.fetchtcg.com/v1/market/listings';
@@ -77,6 +78,7 @@ export class FetchTcgSource implements Source {
       const url = `${API}?cardName=${encodeURIComponent(cardName)}&gameIds=mtg&countryCode=NZ&currencyCode=NZD&size=200&page=${page}`;
       const body = await withRetries(async () => {
         await this.throttle.wait();
+        requestCount.count(this.name);
         const a = await this.get(url, signal);
         classify(a);
         try {

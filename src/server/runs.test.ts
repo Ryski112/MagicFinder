@@ -7,7 +7,7 @@ import { StoreDirectory } from '../core/stores';
 import type { SourceId } from '../core/types';
 import { solveRung } from '../optimiser/milp';
 import type { RunEvent } from '../shared/api';
-import type { Source, SourceListing } from '../sources/types';
+import { SourceError, type Source, type SourceListing } from '../sources/types';
 import type { CardKingdom } from './cardKingdom';
 import { RunManager, type HostedRunOptions, type Run } from './runs';
 import { SearchCache } from './searchCache';
@@ -27,7 +27,7 @@ afterAll(() => {
 
 /** A Source whose searches wait until the test lets them through, and give up when their run stops. */
 function gatedSource(id: SourceId) {
-  const waiting: { q: string; go: () => void }[] = [];
+  const waiting: { q: string; go: () => void; fail: (e: Error) => void }[] = [];
   const calls: string[] = [];
   const aborted: string[] = [];
   const source: Source = {
@@ -42,7 +42,7 @@ function gatedSource(id: SourceId) {
           id: `${id}:${q}`, source: id, storeKey: `${id}:store`, storeName: 'Store', title: card.name, scryfallId: p.id,
           finish: 'nonfoil', treatments: [], condition: 'NM', english: true, price: 2, quantity: 1, url: 'https://x.test', buyable: true,
         };
-        waiting.push({ q, go: () => resolve([listing]) });
+        waiting.push({ q, go: () => resolve([listing]), fail: reject });
         signal?.addEventListener('abort', () => {
           aborted.push(q);
           reject(signal.reason);
@@ -204,6 +204,22 @@ describe('RunManager in hosted mode', () => {
     expect(a.settings().minCondition).toBe('LP');
     expect(bEvents.some(e => e.type === 'ladder')).toBe(true);
     expect(aEvents).toEqual([]);
+  });
+
+  it('applies a block seen by one search to every search at once', async () => {
+    const src = gatedSource('fetch');
+    const runs = manager(HOSTED, [src.source]);
+    const a = runs.start('1 Sol Ring\n1 Lava Axe', choices, 'a');
+    const b = runs.start('1 Counterspell\n1 Rhystic Study\n1 Command Tower', choices, 'b');
+    await tick();
+    // Fetch refuses A's request; B's is answered.
+    const i = src.waiting.findIndex(w => w.q === 'Sol Ring');
+    src.waiting.splice(i, 1)[0].fail(new SourceError('blocked', 'Refused (403)'));
+    await src.release();
+    await tick();
+    expect(src.calls).not.toContain('Rhystic Study');
+    expect(b.progress!.sources[0].status).toBe('blocked');
+    expect(a.progress!.sources[0].status).toBe('blocked');
   });
 });
 

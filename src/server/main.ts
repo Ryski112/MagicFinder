@@ -10,7 +10,9 @@ import { CatalogueStore } from '../catalogue/updater';
 import { StoreDirectory, type StoreRecord } from '../core/stores';
 import { SolverPool } from '../optimiser/pool';
 import { FetchTcgSource } from '../sources/fetchTcg';
+import { mergeInFlight } from '../sources/inFlight';
 import { MtgSinglesSource } from '../sources/mtgSingles';
+import { requestCount } from '../sources/requestCount';
 import { createApp } from './app';
 import { CardKingdom, CardKingdomPrices } from './cardKingdom';
 import { ExchangeRate } from './exchangeRate';
@@ -51,7 +53,8 @@ let directory = new StoreDirectory(stores);
 const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), new ExchangeRate(dir));
 const pool = new SolverPool(hosting.solvers);
 const mtgsingles = new MtgSinglesSource({ storeName: key => stores.find(s => s.source_keys.mtgsingles === key)?.name });
-const sources = [new FetchTcgSource(), mtgsingles];
+// Identical searches already on their way are shared between runs.
+const sources = [new FetchTcgSource(), mtgsingles].map(mergeInFlight);
 
 const runs = new RunManager({
   catalogue: () => catalogue.get(),
@@ -65,7 +68,12 @@ const runs = new RunManager({
   parallel: pool.size,
   appVersion: version,
 }, hosting.hosted ? HOSTED_RUNS : null);
-if (hosting.hosted) setInterval(() => runs.sweep(), 15_000).unref();
+if (hosting.hosted) {
+  setInterval(() => runs.sweep(), 15_000).unref();
+  // Each day's Source requests go to the container log (no ceiling; the owner just sees the volume).
+  requestCount.onDayEnd = line => console.log(line);
+  setInterval(() => requestCount.rollover(), 10 * 60 * 1000).unref();
+}
 
 // No update notice in hosted mode: the owner cuts the releases and updates the image by hand.
 const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
@@ -102,6 +110,7 @@ if (!dev && !hosting.hosted) {
 setInterval(() => (directory = new StoreDirectory(stores)), 24 * 60 * 60 * 1000).unref();
 
 const shutdown = async () => {
+  if (hosting.hosted) console.log(`${requestCount.line()} (so far)`);
   await pool.close().catch(() => {});
   process.exit(0);
 };

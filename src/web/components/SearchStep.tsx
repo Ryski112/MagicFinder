@@ -3,7 +3,12 @@ import { CardImage, cx } from './ui';
 
 export function sourceLine(s: SourceRunStatus): { text: string; warn: boolean } {
   switch (s.status) {
-    case 'ok': return { text: `${s.name} ✓`, warn: false };
+    case 'ok':
+      // Hosted mode: other friends' searches are using this Source too. A count only, never what they search for.
+      if (s.sharedWith) {
+        return { text: `${s.name}: shared with ${s.sharedWith} other search${s.sharedWith === 1 ? '' : 'es'} · about ${s.minutesLeft} min left`, warn: false };
+      }
+      return { text: `${s.name} ✓`, warn: false };
     case 'off': return { text: `${s.name} off`, warn: false };
     case 'cooling-down': return { text: `${s.name} paused (blocked recently)`, warn: true };
     case 'blocked': return { text: `${s.name} ⚠ stopped answering`, warn: true };
@@ -13,13 +18,15 @@ export function sourceLine(s: SourceRunStatus): { text: string; warn: boolean } 
   }
 }
 
-export function SearchStep({ progress, lines }: { progress: SearchProgressView | null; lines: ParseResponse['lines'] }) {
+export function SearchStep({ progress, queuedAhead = null, lines }: { progress: SearchProgressView | null; queuedAhead?: number | null; lines: ParseResponse['lines'] }) {
   const done = progress?.done ?? 0;
   const total = progress?.total ?? lines.length;
   return (
     <div className="space-y-6 mt-6">
       <div className="max-w-xl mx-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center space-y-4">
-        <div className="text-lg font-semibold">Searching NZ Stores…</div>
+        <div className="text-lg font-semibold">
+          {queuedAhead !== null ? `Waiting for ${queuedAhead} search${queuedAhead === 1 ? '' : 'es'} ahead of you…` : 'Searching NZ Stores…'}
+        </div>
         <div className="h-2 bg-slate-200 dark:bg-slate-800 rounded">
           <div className="h-2 bg-indigo-500 rounded transition-all" style={{ width: `${total ? (100 * done) / total : 0}%` }} />
         </div>

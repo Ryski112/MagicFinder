@@ -15,6 +15,8 @@ export interface StatusResponse {
   catalogue: { ready: boolean; progress: number; error: string | null };
   /** A newer MagicFinder release the buyer hasn't dismissed. */
   update: { version: string; url: string } | null;
+  /** Only present (and true) in hosted mode. */
+  hosted?: true;
 }
 
 /** One suggestion from the Want List's card searcher. */
@@ -81,6 +83,8 @@ export interface PlanChoices {
 export interface StartRunRequest {
   text: string;
   choices: PlanChoices;
+  /** Hosted mode: the browser's own id (shared by its tabs), so a new search replaces only that browser's. */
+  browserId?: string;
 }
 
 export interface PrintingView {
@@ -238,7 +242,11 @@ export interface SearchProgressView {
 export type RunEvent =
   | { type: 'progress'; progress: SearchProgressView }
   | { type: 'ladder'; ladder: LadderView }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** Hosted mode: waiting for a free slot behind this many searches. */
+  | { type: 'queued'; ahead: number }
+  /** Hosted mode: another tab of the same browser started a newer search. */
+  | { type: 'replaced' };
 
 export interface PrintingOption {
   printing: PrintingView;

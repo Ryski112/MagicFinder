@@ -3,6 +3,25 @@ import type {
   ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, Settings, StatusResponse,
 } from '../shared/api';
 
+const BROWSER_KEY = 'magicfinder:browser';
+let pageBrowserId: string | null = null;
+
+/**
+ * This browser's id, kept in localStorage so all its tabs share it: in hosted mode a new search replaces only the
+ * same browser's previous one. (crypto.randomUUID needs https, which the home network doesn't have.)
+ */
+export function browserId(): string {
+  const fresh = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+  try {
+    let id = localStorage.getItem(BROWSER_KEY);
+    if (!id) localStorage.setItem(BROWSER_KEY, (id = fresh()));
+    return id;
+  } catch {
+    // Private windows may refuse storage; this page then counts as its own browser.
+    return (pageBrowserId ??= fresh());
+  }
+}
+
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -24,7 +43,7 @@ export const api = {
   archidekt: (url: string) => call<ArchidektResponse>('POST', '/api/archidekt', { url }),
   searchCards: (q: string) => call<CardSearchResponse>('GET', `/api/cards/search?${new URLSearchParams({ q })}`),
   cardPrintings: (oracleId: string) => call<CardPrintingsResponse>('GET', `/api/cards/${encodeURIComponent(oracleId)}/printings`),
-  startRun: (text: string, choices: PlanChoices) => call<{ runId: string }>('POST', '/api/runs', { text, choices }),
+  startRun: (text: string, choices: PlanChoices) => call<{ runId: string }>('POST', '/api/runs', { text, choices, browserId: browserId() }),
   replan: (runId: string, choices: PlanChoices) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices }),
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),
   printings: (runId: string, lineId: string) => call<PrintingsResponse>('GET', `/api/runs/${runId}/printings/${encodeURIComponent(lineId)}`),
@@ -55,11 +74,19 @@ export const api = {
   },
 };
 
-/** Follows a run's live updates. Returns a function that stops listening. */
-export function followRun(runId: string, onEvent: (e: RunEvent) => void): () => void {
+/**
+ * Follows a run's live updates. Returns a function that stops listening. `onClosed` (hosted mode) hears when the
+ * browser gives up on the stream, which happens when the server no longer has the run.
+ */
+export function followRun(runId: string, onEvent: (e: RunEvent) => void, onClosed?: () => void): () => void {
   const es = new EventSource(`/api/runs/${runId}/events`);
   es.onmessage = m => {
     if (m.data) onEvent(JSON.parse(m.data) as RunEvent);
   };
+  if (onClosed) {
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) onClosed();
+    };
+  }
   return () => es.close();
 }

@@ -17,7 +17,7 @@ import { ExchangeRate } from './exchangeRate';
 import { hostingFromEnv } from './hosting';
 import { choosePort } from './instance';
 import { APP_VERSION, dataDir } from './paths';
-import { RunManager } from './runs';
+import { HOSTED_RUNS, RunManager } from './runs';
 import { SearchCache } from './searchCache';
 import { SettingsStore } from './settings';
 import { availableUpdate, checkForUpdate } from './updates';
@@ -64,9 +64,10 @@ const runs = new RunManager({
   solve: pool.solve,
   parallel: pool.size,
   appVersion: version,
-});
+}, hosting.hosted ? HOSTED_RUNS : null);
+if (hosting.hosted) setInterval(() => runs.sweep(), 15_000).unref();
 
-const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev ? null : availableUpdate(settings, version)) });
+const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));

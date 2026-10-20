@@ -29,6 +29,7 @@ export function App() {
   const [step, setStep] = useState<Step>('list');
   const [runId, setRunId] = useState<string | null>(null);
   const [progress, setProgress] = useState<SearchProgressView | null>(null);
+  const [queuedAhead, setQueuedAhead] = useState<number | null>(null);
   const [ladder, setLadder] = useState<LadderView | null>(null);
   const [selectedK, setSelectedK] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export function App() {
   const find = async () => {
     setError(null);
     setProgress(null);
+    setQueuedAhead(null);
     setLadder(null);
     setSelectedK(null);
     stopFollowing.current?.();
@@ -102,13 +104,30 @@ export function App() {
       const { runId: id } = await api.startRun(text, choices);
       setRunId(id);
       setStep('search');
-      stopFollowing.current = followRun(id, e => {
-        if (e.type === 'progress') setProgress(e.progress);
-        else if (e.type === 'ladder') {
-          setLadder(e.ladder);
-          setStep(s => (s === 'search' ? 'plan' : s));
-        } else setError(e.message);
-      });
+      // Hosted mode only: another tab took over this browser's search, or the server dropped it.
+      const lost = (message: string) => {
+        stopFollowing.current?.();
+        stopFollowing.current = null;
+        setRunId(null);
+        setLadder(null);
+        setStep('list');
+        setError(message);
+      };
+      stopFollowing.current = followRun(
+        id,
+        e => {
+          if (e.type === 'progress') {
+            setQueuedAhead(null);
+            setProgress(e.progress);
+          } else if (e.type === 'ladder') {
+            setLadder(e.ladder);
+            setStep(s => (s === 'search' ? 'plan' : s));
+          } else if (e.type === 'queued') setQueuedAhead(e.ahead);
+          else if (e.type === 'replaced') lost('Replaced by a newer search in another tab.');
+          else setError(e.message);
+        },
+        status?.hosted ? () => lost('This search expired — search again.') : undefined,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -190,7 +209,7 @@ export function App() {
             catalogueProgress={status?.catalogue.progress ?? 0}
           />
         )}
-        {step === 'search' && <SearchStep progress={progress} lines={includedLines} />}
+        {step === 'search' && <SearchStep progress={progress} queuedAhead={queuedAhead} lines={includedLines} />}
         {settings && step === 'plan' && ladder && runId && (
           <PlanStep
             runId={runId}

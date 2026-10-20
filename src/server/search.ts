@@ -36,6 +36,9 @@ export interface SourceRunStatus {
   details?: string;
   /** Cards skipped because the Source had a server error on that one search. */
   failedCards?: number;
+  /** Hosted mode: other searches using this Source right now, and roughly how long this one has left on it. */
+  sharedWith?: number;
+  minutesLeft?: number;
 }
 
 export interface SearchProgress {

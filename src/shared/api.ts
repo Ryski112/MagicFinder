@@ -89,6 +89,12 @@ export interface StartRunRequest {
   settings?: Settings;
 }
 
+/** Hosted mode: a run the page can reconnect to after a reload. */
+export interface RunStateResponse {
+  runId: string;
+  choices: PlanChoices;
+}
+
 export interface PrintingView {
   id: string;
   label: string;

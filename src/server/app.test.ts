@@ -6,6 +6,7 @@ import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import type { CatalogueStore } from '../catalogue/updater';
 import type { CardPrintingsResponse, CardSearchResponse } from '../shared/api';
 import { createApp, type AppDeps } from './app';
+import type { Run, RunManager } from './runs';
 import type { SearchCache } from './searchCache';
 import { SettingsStore, type Settings } from './settings';
 
@@ -73,5 +74,29 @@ describe('hosted mode', () => {
     expect(s.pickupCity).toBe('Dunedin');
     expect(s.staples).toEqual(settings.get().staples);
     expect((await app(false).request('/api/settings/friend', { method: 'POST', body: '{}' })).status).toBe(404);
+  });
+});
+
+describe('reconnecting to a search (hosted mode)', () => {
+  const choices = { included: { a: false }, locks: {} };
+  const run = { id: '7', choices } as unknown as Run;
+  const runs = { forBrowser: (b: string) => (b === 'mine' ? run : undefined), get: (id: string) => (id === '7' ? run : undefined) } as unknown as RunManager;
+  const app = (hosted: boolean) => createApp({ catalogue: { ready: true } as CatalogueStore, runs, version: '0', hosted } as AppDeps);
+
+  it('finds the browser\'s search while it is alive, with its choices', async () => {
+    expect(await (await app(true).request('/api/browsers/mine/run')).json()).toEqual({ runId: '7', choices });
+    expect(await (await app(true).request('/api/runs/7')).json()).toEqual({ runId: '7', choices });
+  });
+
+  it('says a dropped search expired', async () => {
+    const res = await app(true).request('/api/runs/8');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'This search expired — search again.' });
+    expect((await app(true).request('/api/browsers/other/run')).status).toBe(404);
+  });
+
+  it('is not there on the desktop', async () => {
+    expect((await app(false).request('/api/browsers/mine/run')).status).toBe(404);
+    expect((await app(false).request('/api/runs/7')).status).toBe(404);
   });
 });

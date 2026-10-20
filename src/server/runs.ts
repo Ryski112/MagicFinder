@@ -339,6 +339,11 @@ export class RunManager {
     return this.runs.get(id);
   }
 
+  /** Hosted mode: the browser's current run, while it is still alive (searching, or idle for less than 30 min). */
+  forBrowser(browserId: string): Run | undefined {
+    return this.hosted ? this.byBrowser.get(browserId) : undefined;
+  }
+
   /** Settings changed: re-plan the active run. Desktop only; in hosted mode each browser re-plans its own run. */
   replanAll() {
     for (const r of this.runs.values()) void r.replan().catch(() => {});

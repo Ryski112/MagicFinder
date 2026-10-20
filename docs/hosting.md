@@ -1,6 +1,6 @@
 # Hosting MagicFinder on the NAS for friends
 
-How the owner runs MagicFinder's **hosted mode** on the Synology DS423 so that friends can use it at `https://magicfinder.ryskinas.org`, signed in with Google through Cloudflare Access. It is the build side of [Wayfinder: hosting MagicFinder on the NAS for friends](https://github.com/Ryski112/MagicFinder/issues/33). Every choice below was made in that map's tickets.
+How the owner runs MagicFinder's **hosted mode** on a Synology NAS so that friends can use it at `https://magicfinder.<your-domain>`, signed in with Google through Cloudflare Access. It is the build side of [Wayfinder: hosting MagicFinder on the NAS for friends](https://github.com/Ryski112/MagicFinder/issues/33). Every choice below was made in that map's tickets.
 
 Nothing here changes the desktop download. Hosted mode only switches on inside the Docker image.
 
@@ -15,7 +15,7 @@ Nothing here changes the desktop download. Hosted mode only switches on inside t
 
 ## 1. Once, on GitHub: make the image public
 
-The **Docker image** workflow (`.github/workflows/docker.yml`) runs on every release tag, the same `vX.Y.Z` tag that publishes the desktop downloads. It pushes `ghcr.io/ryski112/magicfinder` as `X.Y.Z`, `X.Y` and `latest`, for both `amd64` and `arm64` (the DS423 is arm64).
+The **Docker image** workflow (`.github/workflows/docker.yml`) runs on every release tag, the same `vX.Y.Z` tag that publishes the desktop downloads. It pushes `ghcr.io/ryski112/magicfinder` as `X.Y.Z`, `X.Y` and `latest`, for both `amd64` and `arm64`, so it runs on either kind of Synology.
 
 After the **first** release that includes it:
 
@@ -27,7 +27,7 @@ To check that the image builds without releasing: Actions → **Docker image** �
 ## 2. On the NAS: the data folder
 
 1. **File Station:** create `docker/magicfinder/data` on volume 1, so the full path is `/volume1/docker/magicfinder/data`. Keep it on the NAS's own volume, not an SMB/NFS mount, because the SQLite files need local file locking.
-2. Find the uid and gid of the DSM user that owns that folder. Over SSH, run `id <your-dsm-user>`; it prints something like `uid=1026(ryan) gid=100(users)`. You'll put these in `user:` below.
+2. Find the uid and gid of the DSM user that owns that folder. Over SSH, run `id <your-dsm-user>`; it prints something like `uid=1026(<user>) gid=100(users)`. You'll put these in `user:` below.
 
 The data folder holds:
 
@@ -59,23 +59,23 @@ services:
     volumes:
       - /volume1/docker/magicfinder/data:/data
     ports:
-      - "5180:5180"             # the Coppermind route reaches http://192.168.1.15:5180
+      - "5180:5180"             # the tunnel route reaches http://<nas-ip>:5180
     mem_limit: 3g               # a guard rail, not a fit: a search peaks around 0.4–1.3 GB
     # environment:
-    #   MAGICFINDER_SOLVERS: "2"  # only if the NAS's CPU turns out tight (unset = 3 on the DS423's 4 cores)
+    #   MAGICFINDER_SOLVERS: "2"  # only if the NAS's CPU turns out tight (unset = one fewer than the NAS's cores, at most 4)
 ```
 
 Skip the web portal (Web Station) step, then **Done**. Container Manager pulls the image and starts it.
 
 The image already sets everything else: `MAGICFINDER_HOSTED=1`, `MAGICFINDER_HOST=0.0.0.0`, `MAGICFINDER_PORT=5180`, `MAGICFINDER_DATA_DIR=/data` and `MAGICFINDER_NO_OPEN=1`.
 
-**Check it on the LAN:** open `http://192.168.1.15:5180`. The first start downloads the card list, which takes a minute or two, and the page shows its progress. The container log (Container Manager → **Container** → magicfinder → **Log**) should say:
+**Check it on the LAN:** open `http://<nas-ip>:5180`. The first start downloads the card list, which takes a minute or two, and the page shows its progress. The container log (Container Manager → **Container** → magicfinder → **Log**) should say:
 
 ```
 MagicFinder X.Y.Z is running at http://localhost:5180 (hosted mode, listening on 0.0.0.0)
 ```
 
-Anyone on the home network can use MagicFinder at that address without signing in, the same as Immich on `:2283`. That's intended.
+Anyone on the home network can use MagicFinder at that address without signing in. That's intended: Access guards the public hostname, not the home network.
 
 ## 4. In Cloudflare: the Access application (do this before the route)
 
@@ -83,22 +83,22 @@ Create the Access application first, so the hostname is never public, even for a
 
 Cloudflare dashboard → **Zero Trust** → **Access controls** → **Applications** → **Create new application** → **Self-hosted**:
 
-1. **Public hostname:** subdomain `magicfinder`, domain `ryskinas.org`.
-2. **Policy:** add an **Allow** policy with **Include → Emails** listing the friends' Google addresses. If Immich's allowlist is a reusable policy or email list, you can attach that instead.
-3. **Login methods:** Google (already set up for Immich). With only one login method, turn on **Apply instant authentication** so friends skip the chooser page.
+1. **Public hostname:** subdomain `magicfinder`, domain `<your-domain>`.
+2. **Policy:** add an **Allow** policy with **Include → Emails** listing the friends' Google addresses. If another app's allowlist is a reusable policy or email list, you can attach that instead.
+3. **Login methods:** Google. With only one login method, turn on **Apply instant authentication** so friends skip the chooser page.
 4. **Session duration:** **1 week** (`168h`). A friend then signs in about once a week, and an expired session mid-search is rare. When it does happen, the Lost connection banner covers it.
 5. Save. Then open the application's **Additional settings** and copy the **Application Audience (AUD) Tag**. Step 5 needs it.
 
-## 5. In Cloudflare: the route on the Coppermind tunnel
+## 5. In Cloudflare: the route on your tunnel
 
-**Zero Trust** → **Networks** → **Tunnels** → **Coppermind** → **Routes** (or **Public hostnames**) → **Add route** → **Published application**:
+**Zero Trust** → **Networks** → **Tunnels** → *your tunnel* → **Routes** (or **Public hostnames**) → **Add route** → **Published application**:
 
-1. **Hostname:** `magicfinder.ryskinas.org`.
-2. **Service:** `HTTP`, URL `192.168.1.15:5180`, so the service URL is `http://192.168.1.15:5180`. This is the same pattern as Immich's `http://192.168.1.15:2283`, so it doesn't matter which Docker network cloudflared uses.
+1. **Hostname:** `magicfinder.<your-domain>`.
+2. **Service:** `HTTP`, URL `<nas-ip>:5180`, so the service URL is `http://<nas-ip>:5180`. Pointing at the NAS's LAN address means it doesn't matter which Docker network cloudflared uses.
 3. Under **Additional application settings → Access**, turn on **Protect with Access**. Enter your team name and the AUD tag from step 4. cloudflared then refuses any request without a valid Access token for this application, even if the Access application were later deleted or misconfigured. MagicFinder itself doesn't check the token.
 4. Save. Cloudflare creates the DNS record for the hostname.
 
-**Check it:** open `https://magicfinder.ryskinas.org` in a private window. Google sign-in should appear. Sign in with an allowlisted address, run a small search, and check that progress updates live. An address that isn't on the list should be refused.
+**Check it:** open `https://magicfinder.<your-domain>` in a private window. Google sign-in should appear. Sign in with an allowlisted address, run a small search, and check that progress updates live. An address that isn't on the list should be refused.
 
 ## Updating to a new version
 
@@ -120,12 +120,12 @@ MagicFinder never recognises the owner; there are no admin pages. Everything is 
 | A Source keeps blocking | Source Status shows it to everyone. Any friend can press **Try again now**, which clears the block for everyone. Requests stay paced, and the block comes straight back if the Source still refuses. Never route Source traffic through a VPN or proxy to get round a block. |
 | Fix a Store's postage for everyone | Fix the Store in `data/stores.yaml` in the repository and release. Friends' postage overrides only affect their own browsers. |
 | Add or remove a friend | The Access application's Allow policy (step 4). |
-| CPU too busy (Immich or MagicFinder slow) | Add `MAGICFINDER_SOLVERS: "2"` (or `"1"`) under `environment:` in the compose file, then Stop → Build. Fewer solvers make planning slower but lighter. |
+| CPU too busy (other apps or MagicFinder slow) | Add `MAGICFINDER_SOLVERS: "2"` (or `"1"`) under `environment:` in the compose file, then Stop → Build. Fewer solvers make planning slower but lighter. |
 
-## Still to check on the real DS423
+## Still to check on the real NAS
 
 These couldn't be checked before the image existed (see the map's Out of scope):
 
-- planning speed on the Cortex-A55 cores, and CPU use next to Immich (`MAGICFINDER_SOLVERS` is the knob),
+- planning speed on the NAS's CPU, and CPU use next to its other apps (`MAGICFINDER_SOLVERS` is the knob),
 - that Container Manager's Stop → Build really pulls the new `:latest`,
 - that an expired Access session, through the real tunnel, shows the Lost connection banner.

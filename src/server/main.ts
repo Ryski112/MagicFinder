@@ -14,6 +14,7 @@ import { MtgSinglesSource } from '../sources/mtgSingles';
 import { createApp } from './app';
 import { CardKingdom, CardKingdomPrices } from './cardKingdom';
 import { ExchangeRate } from './exchangeRate';
+import { hostingFromEnv } from './hosting';
 import { choosePort } from './instance';
 import { APP_VERSION, dataDir } from './paths';
 import { RunManager } from './runs';
@@ -22,6 +23,7 @@ import { SettingsStore } from './settings';
 import { availableUpdate, checkForUpdate } from './updates';
 
 const dev = process.argv.includes('--dev');
+const hosting = hostingFromEnv();
 
 // A second launch opens the copy that's already running, except in dev mode or on a chosen port, so a source copy can
 // run beside a packaged one.
@@ -47,7 +49,7 @@ const cache = new SearchCache(dir);
 const stores: StoreRecord[] = parse(readFileSync(storesFile, 'utf8'));
 let directory = new StoreDirectory(stores);
 const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), new ExchangeRate(dir));
-const pool = new SolverPool();
+const pool = new SolverPool(hosting.solvers);
 const mtgsingles = new MtgSinglesSource({ storeName: key => stores.find(s => s.source_keys.mtgsingles === key)?.name });
 const sources = [new FetchTcgSource(), mtgsingles];
 
@@ -78,10 +80,10 @@ function openBrowser(url: string) {
   spawn(cmd, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
 }
 
-serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, () => {
+serve({ fetch: app.fetch, port, hostname: hosting.host }, () => {
   const url = `http://localhost:${port}`;
-  console.log(`MagicFinder ${version} is running at ${url}${dev ? ' (API only; open the Vite dev server)' : ''}`);
-  console.log('Close this window (or press Ctrl+C) to stop it.');
+  console.log(`MagicFinder ${version} is running at ${url}${dev ? ' (API only; open the Vite dev server)' : ''}${hosting.hosted ? ` (hosted mode, listening on ${hosting.host})` : ''}`);
+  if (!hosting.hosted) console.log('Close this window (or press Ctrl+C) to stop it.');
   if (!dev) openBrowser(url);
 });
 

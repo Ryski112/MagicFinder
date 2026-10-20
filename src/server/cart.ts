@@ -67,12 +67,21 @@ const fetchProduct: ProductFetcher = async url => {
   }
 };
 
+/** One pace per Store host for the whole server, so friends checking carts at the same Store share it. */
+const storeThrottles = new Map<string, Throttle>();
+export function storeThrottle(host: string): Throttle {
+  let t = storeThrottles.get(host);
+  if (!t) storeThrottles.set(host, (t = new Throttle(1000)));
+  return t;
+}
+
 export async function checkShopifyCart(
   storeId: string,
   storeName: string,
   items: { listing: Listing; qty: number; name: string }[],
   get: ProductFetcher = fetchProduct,
-  throttle = new Throttle(1000),
+  /** Defaults to the Store host's shared pace of one request a second. */
+  throttle?: Throttle,
   onProgress?: (done: number, total: number, name: string) => void,
 ): Promise<CartCheckResponse> {
   const lines: CartLineCheck[] = [];
@@ -93,7 +102,7 @@ export async function checkShopifyCart(
       continue;
     }
     host ??= u.host;
-    await throttle.wait();
+    await (throttle ?? storeThrottle(u.host)).wait();
     const r = await get(`https://${u.host}/products/${handle}.js`);
     if (r.redirectedTo && /\/password/.test(r.redirectedTo)) {
       return { storeId, storeName, cartUrl: null, lines: items.map(i => ({ ...base, listingId: i.listing.id, name: i.name, qty: i.qty, expectedPrice: i.listing.price, url: i.listing.url })), fallbackReason: `${storeName}'s shop is password-protected right now.` };

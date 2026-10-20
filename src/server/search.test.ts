@@ -177,3 +177,21 @@ describe('SearchCache.clear', () => {
     expect(cache.clear()).toBe(0);
   });
 });
+
+describe('a block seen by another run (hosted mode)', () => {
+  it('switches this run to Blocked and stale results straight away', async () => {
+    const src = fakeSource('mtgsingles');
+    let blockedAt: number | null = null;
+    const result = await searchAll(cards.slice(0, 4), {
+      catalogue: cat, sources: [src], cache: freshCache(), settings: settings({ sources: { fetch: false, mtgsingles: true } }), appVersion: 't',
+      blockedElsewhere: () => blockedAt,
+    }, p => {
+      if (p.done === 2) blockedAt ??= Date.now();
+    });
+    expect(src.calls).toHaveLength(2);
+    const st = result.sources.find(s => s.source === 'mtgsingles')!;
+    expect(st.status).toBe('blocked');
+    expect(st.cooldownUntil).toBeGreaterThan(Date.now());
+    expect(st.notSearched).toHaveLength(2);
+  });
+});

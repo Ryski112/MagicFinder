@@ -36,6 +36,9 @@ export interface SourceRunStatus {
   details?: string;
   /** Cards skipped because the Source had a server error on that one search. */
   failedCards?: number;
+  /** Hosted mode: other searches using this Source right now, and roughly how long this one has left on it. */
+  sharedWith?: number;
+  minutesLeft?: number;
 }
 
 export interface SearchProgress {
@@ -71,6 +74,11 @@ export interface SearchDeps {
   appVersion: string;
   /** Called when the run learns something about a Source's health (blocked or answered normally). */
   onHealth?: (source: SourceId, blocked: boolean) => void;
+  /**
+   * Hosted mode: when another run saw this Source block MagicFinder after this search began (epoch ms), else null.
+   * This run then treats the Source as Blocked straight away and uses stale results, as a new run would.
+   */
+  blockedElsewhere?: (source: SourceId) => number | null;
   now?: () => number;
   /** Injectable for tests: the pause before retrying failed cards. */
   retryPause?: () => Promise<void>;
@@ -140,6 +148,12 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
         signal?.throwIfAborted();
         const card = cards[i];
         const q = queryFor(src.id, card.name);
+        const elsewhere = st.status === 'ok' ? deps.blockedElsewhere?.(src.id) : null;
+        if (elsewhere) {
+          st.status = 'blocked';
+          st.message = MESSAGES.blocked(src.name);
+          st.cooldownUntil = elsewhere + COOLDOWN_MS;
+        }
         if (st.status !== 'ok') useStale(src, card, st);
         else {
           const fresh = deps.cache.get(src.id, q, FRESH_MS);

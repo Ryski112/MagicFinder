@@ -27,6 +27,8 @@ export interface RunDeps {
   solve: (p: Problem, k: number, opts: SolveOptions, owner: string) => Promise<RungOutcome>;
   parallel: number;
   appVersion: string;
+  /** Hosted mode: a block seen by one run applies to every run at once. */
+  sharedBlocks?: boolean;
 }
 
 type Listener = (e: RunEvent) => void;
@@ -125,6 +127,7 @@ export class Run {
     const cards = this.missingCards();
     if (!cards.length) return;
     const settings = this.deps.settings;
+    const began = Date.now();
     this.searchingNow = true;
     const result = await searchAll(
       cards,
@@ -134,6 +137,12 @@ export class Run {
         cache: this.deps.cache,
         settings: this.settings(),
         appVersion: this.deps.appVersion,
+        blockedElsewhere: this.deps.sharedBlocks
+          ? source => {
+              const at = Date.parse(settings.get().sourceHealth[source]?.blockedAt ?? '');
+              return at >= began ? at : null;
+            }
+          : undefined,
         onHealth: (source, blocked) => {
           const h = settings.get().sourceHealth[source];
           settings.update({
@@ -288,7 +297,7 @@ export class RunManager {
   private readonly deps: RunDeps;
 
   constructor(deps: RunDeps, private readonly hosted: HostedRunOptions | null = null) {
-    this.deps = hosted ? { ...deps, sources: deps.sources.map(src => this.timed(src)) } : deps;
+    this.deps = hosted ? { ...deps, sources: deps.sources.map(src => this.timed(src)), sharedBlocks: true } : deps;
   }
 
   get isHosted() {

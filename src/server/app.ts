@@ -190,7 +190,10 @@ export function createApp(d: AppDeps) {
       const listing = byId.get(i.listingId);
       return listing ? [{ listing, qty: i.qty, name: i.name }] : [];
     });
-    // Stream progress so the dialog can show which card is being checked (about one a second).
+    // Stream progress so the dialog can show which card is being checked (about one a second). The explicit type and
+    // no-transform keep proxies such as Cloudflare from compressing (and so holding back) the lines.
+    c.header('Content-Type', 'application/x-ndjson');
+    c.header('Cache-Control', 'no-transform');
     return stream(c, async out => {
       const send = (e: CartCheckEvent) => out.write(JSON.stringify(e) + '\n');
       try {

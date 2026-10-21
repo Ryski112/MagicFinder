@@ -32,6 +32,22 @@ const FEATURE_TREATMENTS: Record<string, string> = {
 
 const NON_ENGLISH_TITLE = /\b(japanese|jp|chinese|korean|german|french|italian|spanish|portuguese|russian|phyrexian)\b/i;
 const SCRYFALL_IMAGE = /cards\.scryfall\.io\/[^/]+\/[^/]+\/[0-9a-f]\/[0-9a-f]\/([0-9a-f-]{36})\./;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * What a Store's picture says about the Printing: a file named after a Scryfall id (Scryfall's own site, or a Store
+ * that kept the id), and otherwise a card id its Store platform uses ("236019_370x480.jpg"), which is shared by every
+ * Store on that platform that sells the same Printing.
+ */
+export function imageIds(imageUrl: unknown): { scryfallId?: string; imageKey?: string } {
+  if (typeof imageUrl !== 'string') return {};
+  const scryfall = imageUrl.match(SCRYFALL_IMAGE)?.[1];
+  if (scryfall) return { scryfallId: scryfall };
+  const file = decodeURIComponent(imageUrl.split('?')[0].split('/').pop() ?? '').replace(/\.[a-z]+$/i, '').replace(/_\d+x\d+$/, '');
+  if (UUID.test(file)) return { scryfallId: file, imageKey: file };
+  // Numeric ids and "mtg-000791" style ids; a long hash is one Store's own file and tells nothing across Stores.
+  return /^(?:[a-z]{2,5}-)?\d{4,}$/i.test(file) ? { imageKey: file.toLowerCase() } : {};
+}
 
 export function parsePrice(p: unknown): number | null {
   if (typeof p === 'number') return p;
@@ -60,7 +76,7 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
   const etched = features.includes('Foil-Etched') || /etched/i.test(title);
   const url = l.url.replace(/[?&]utm_[^&]*/g, '').replace(/\?&/, '?').replace(/[?&]$/, '');
   const collector = title.match(/\((?:[A-Z0-9]{2,5}-)?(\d{1,4}[a-z★]?)\)/)?.[1];
-  const scryfallId = typeof l.imageUrl === 'string' ? l.imageUrl.match(SCRYFALL_IMAGE)?.[1] : undefined;
+  const { scryfallId, imageKey } = imageIds(l.imageUrl);
   const condition = l.condition in CONDITIONS ? CONDITIONS[l.condition] : null;
   return {
     id: `mtgsingles:${l.store}:${url}:${l.condition}:${foilish ? 'f' : 'n'}`,
@@ -69,6 +85,7 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
     storeName: storeName?.(l.store) ?? storeNameFromKey(l.store),
     title,
     scryfallId,
+    imageKey,
     setName: l.setName || undefined,
     collectorNumber: collector,
     finish: etched ? 'etched' : foilish ? 'foil' : 'nonfoil',
@@ -99,8 +116,20 @@ export class MtgSinglesSource implements Source {
   async search(cardName: string, signal?: AbortSignal): Promise<SourceListing[]> {
     const out: SourceListing[] = [];
     const seen = new Set<string>();
+    // isExactMatch makes the API match the whole card name, not any title that contains it ("Fracture" would otherwise
+    // match every card and product of Reality Fracture and bury the card). Double-faced cards are listed both ways.
+    // Stores write accented names without the accents ("Bartolome del Presidio"), and the API matches letter for letter.
+    const forms = (name: string) => [...new Set([name, name.normalize('NFD').replace(/[̀-ͯ]/g, '')])];
+    const names = [...new Set((cardName.includes(' // ') ? [cardName.split(' // ')[0], cardName] : [cardName]).flatMap(forms))];
+    for (const name of names) {
+      await this.searchName(name, out, seen, signal);
+    }
+    return out;
+  }
+
+  private async searchName(cardName: string, out: SourceListing[], seen: Set<string>, signal?: AbortSignal): Promise<void> {
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const url = `${API}?query=${encodeURIComponent(cardName)}&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
+      const url = `${API}?query=${encodeURIComponent(cardName)}&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
       let rows: unknown[];
       try {
         rows = await this.fetchPage(url, signal);
@@ -120,7 +149,6 @@ export class MtgSinglesSource implements Source {
       }
       if (rows.length < PAGE_SIZE) break;
     }
-    return out;
   }
 
   private fetchPage(url: string, signal?: AbortSignal): Promise<unknown[]> {

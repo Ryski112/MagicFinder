@@ -79,5 +79,38 @@ export function matchListing(catalogue: Catalogue, s: SourceListing): Listing {
     treatments: s.treatments,
   });
   if (m.printing) return { ...base, oracleId: card.oracleId, printingId: m.printing.id, confidence: 'exact' };
+  // A title that names no treatment ("Showcase", "Borderless", a collector number) is the plain printing: Stores label the
+  // variants, and leave the ordinary one bare. Only when that leaves exactly one.
+  if (m.candidates.length > 1 && !s.collectorNumber && !s.treatments.length && !/\(\s*(?:[A-Z0-9]{2,5}-)?\d{1,4}[a-z★]?\s*\)/.test(s.title)) {
+    const plain = m.candidates.filter(p => !p.treatments.length && !p.nonTournament && p.finishes.includes(s.finish));
+    if (plain.length === 1) return { ...base, oracleId: card.oracleId, printingId: plain[0].id, confidence: 'exact' };
+  }
   return { ...base, oracleId: card.oracleId, confidence: 'card-only' };
+}
+
+/**
+ * Printings the title couldn't settle, settled by the picture: Stores on the same platform use the same card image id
+ * for the same Printing, so a Listing that shares it with a Listing that was identified exactly is that Printing too.
+ * A picture seen on two different Printings is not trusted, and the Printing must still fit what the title said.
+ */
+export function matchByImage(catalogue: Catalogue, pairs: { source: SourceListing; listing: Listing }[]): void {
+  const printingOf = new Map<string, string | null>();
+  for (const { source, listing } of pairs) {
+    if (!source.imageKey || listing.confidence !== 'exact' || !listing.printingId) continue;
+    const seen = printingOf.get(source.imageKey);
+    printingOf.set(source.imageKey, seen === undefined || seen === listing.printingId ? listing.printingId : null);
+  }
+  for (const { source, listing } of pairs) {
+    if (listing.confidence !== 'card-only' || !source.imageKey || !listing.oracleId) continue;
+    const id = printingOf.get(source.imageKey);
+    const p = id ? catalogue.getPrinting(id) : null;
+    if (!p || p.oracleId !== listing.oracleId) continue;
+    const fits = catalogue.findPrinting(listing.oracleId, {
+      setCode: source.setCode, setName: source.setCode ? undefined : source.setName, collectorNumber: source.collectorNumber, finish: source.finish,
+    }).candidates.some(c => c.id === p.id);
+    if (!fits) continue;
+    listing.printingId = p.id;
+    listing.confidence = 'exact';
+    if (!p.finishes.includes(listing.finish) && p.finishes.length === 1) listing.finish = p.finishes[0];
+  }
 }

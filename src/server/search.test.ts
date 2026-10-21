@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import { SourceError, type Source, type SourceListing } from '../sources/types';
 import type { SourceId } from '../core/types';
-import { queryFor, searchAll, type SearchCard, type SearchProgress } from './search';
+import { searchAll, type SearchCard, type SearchProgress } from './search';
 import { FRESH_MS, SearchCache } from './searchCache';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 
@@ -52,14 +52,6 @@ function fakeSource(id: SourceId, opts: { failAt?: number; error?: SourceError; 
   };
 }
 
-describe('queryFor', () => {
-  it('searches MtgSingles by the front face of long double-faced names only', () => {
-    expect(queryFor('mtgsingles', 'Delver of Secrets // Insectile Aberration')).toBe('Delver of Secrets');
-    expect(queryFor('mtgsingles', 'Fire // Ice')).toBe('Fire // Ice');
-    expect(queryFor('fetch', 'Delver of Secrets // Insectile Aberration')).toBe('Delver of Secrets // Insectile Aberration');
-  });
-});
-
 describe('searchAll', () => {
   it('collects matched Listings from every Source and reports progress', async () => {
     const progress: SearchProgress[] = [];
@@ -104,7 +96,7 @@ describe('searchAll', () => {
     const cache = freshCache();
     const fiveHoursAgo = Date.now() - 5 * 60 * 60 * 1000;
     const good = fakeSource('mtgsingles');
-    for (const c of cards.slice(0, 6)) cache.put('mtgsingles', queryFor('mtgsingles', c.name), await good.search(queryFor('mtgsingles', c.name)), fiveHoursAgo);
+    for (const c of cards.slice(0, 6)) cache.put('mtgsingles', c.name, await good.search(c.name), fiveHoursAgo);
     const r = await searchAll(cards, { catalogue: cat, sources: [fakeSource('mtgsingles', { failAt: 0 })], cache, settings: settings(), appVersion: 't' }, () => {});
     const st = r.sources[0];
     expect(st.status).toBe('blocked');
@@ -119,7 +111,7 @@ describe('searchAll', () => {
     const r = await searchAll(cards, { catalogue: cat, sources: [mts], cache: freshCache(), settings: settings(), appVersion: 't', retryPause: async () => {} }, () => {});
     expect(r.sources[0]).toMatchObject({ status: 'ok', searched: cards.length - 1, failedCards: 1 });
     expect(r.sources[0].notSearched).toEqual([cards[2].oracleId]);
-    expect(mts.calls.at(-1)).toBe(queryFor('mtgsingles', cards[2].name));
+    expect(mts.calls.at(-1)).toBe(cards[2].name);
   });
 
   it('recovers a skipped card when the second try works', async () => {

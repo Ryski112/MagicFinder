@@ -1,7 +1,7 @@
 // Searches every enabled Source for every card on the Want List, applying the agreed rules for Sources that
 // block, slow down, go down or change. See "What happens when a Source blocks MagicFinder?".
 import type { Catalogue } from '../catalogue/catalogue';
-import { matchListing, NOT_A_CARD } from '../core/matchListing';
+import { matchByImage, matchListing, NOT_A_CARD } from '../core/matchListing';
 import type { Listing, SourceId } from '../core/types';
 import { SourceError, type Source, type SourceListing, type SourceStatus } from '../sources/types';
 import { FRESH_MS, STALE_MS, type SearchCache } from './searchCache';
@@ -84,15 +84,6 @@ export interface SearchDeps {
   retryPause?: () => Promise<void>;
 }
 
-/** The name sent to a Source. MtgSingles titles often carry only the front face of double-faced cards. */
-export function queryFor(source: SourceId, cardName: string): string {
-  if (source === 'mtgsingles' && cardName.includes(' // ')) {
-    const front = cardName.split(' // ')[0];
-    if (front.length >= 8) return front;
-  }
-  return cardName;
-}
-
 const MESSAGES: Record<Exclude<SourceStatus, 'ok'>, (name: string) => string> = {
   blocked: n => `${n} stopped answering (it showed a "checking your browser" page or refused the request).`,
   slowed: n => `${n} asked MagicFinder to slow down.`,
@@ -132,7 +123,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   report();
 
   const useStale = (src: Source, card: SearchCard, st: SourceRunStatus) => {
-    const c = deps.cache.get(src.id, queryFor(src.id, card.name), STALE_MS);
+    const c = deps.cache.get(src.id, card.name, STALE_MS);
     if (c) {
       raw.get(src.id)!.set(card.oracleId, c.listings);
       st.searched++;
@@ -147,7 +138,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
       for (let i = 0; i < cards.length; i++) {
         signal?.throwIfAborted();
         const card = cards[i];
-        const q = queryFor(src.id, card.name);
+        const q = card.name;
         const elsewhere = st.status === 'ok' ? deps.blockedElsewhere?.(src.id) : null;
         if (elsewhere) {
           st.status = 'blocked';
@@ -206,7 +197,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
     await (deps.retryPause ?? (() => new Promise(r => setTimeout(r, RETRY_PAUSE_MS))))();
     for (const card of failed) {
       signal?.throwIfAborted();
-      const q = queryFor(src.id, card.name);
+      const q = card.name;
       try {
         const listings = await src.search(q, signal);
         deps.cache.put(src.id, q, listings);
@@ -228,6 +219,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   const listings: Listing[] = [];
   const unidentified: UnidentifiedListing[] = [];
   const nameOf = new Map(cards.map(c => [c.oracleId, c.name]));
+  const matched: { source: SourceListing; listing: Listing }[] = [];
   const foundBy = new Map<SourceId, Set<string>>();
   for (const [source, byCard] of raw) {
     const found = new Set<string>();
@@ -237,6 +229,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
         if (seen.has(s.id)) continue;
         seen.add(s.id);
         const m = matchListing(deps.catalogue, s);
+        matched.push({ source: s, listing: m });
         if (m.confidence === 'unmatched') {
           if (!NOT_A_CARD.test(s.title)) {
             unidentified.push({ title: s.title, source: s.source, storeName: s.storeName, price: s.price, url: s.url, searchedFor: nameOf.get(oracleId) ?? '' });
@@ -247,6 +240,8 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
       }
     }
   }
+
+  matchByImage(deps.catalogue, matched);
 
   // A Source that answers but finds nothing for most of the list, while the other Source finds those cards, may be
   // blocking silently. Only then, ask it for a basket of everyday cards.

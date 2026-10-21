@@ -237,6 +237,11 @@ export function PlanStep(p: Props) {
               Your {storeCountLabel(rung.k, hasPreferred)} Plan
               {rung.runnerUp && <span className="font-normal text-indigo-600 dark:text-indigo-400"> · runner-up</span>}
               {rung.short && <span className="font-normal text-amber-600 dark:text-amber-400"> · leaves out {rung.short.wanted - rung.short.covered} of {rung.short.wanted} cards</span>}
+              {rung.short && rung.short.premium > 0 && (
+                <span className="block text-xs font-normal text-slate-500" title="Compared with each card's cheapest price at any Store, before postage.">
+                  These Stores charge {money(rung.short.premium)} more than the cheapest price anywhere for the cards they cover.
+                </span>
+              )}
             </h2>
             <div className="tabnum text-lg font-bold" title={`cards ${money(rung.cards)} + postage ${money(rung.postage)}`}>
               {money(rung.total)}

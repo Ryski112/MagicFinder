@@ -7,7 +7,7 @@ import { pickupEligible, storeCost, type BuyerContext, type StoreDirectory, type
 import type { Finish, Listing } from '../core/types';
 import { buyLines, isIncluded, lockFor, lockKey, type BuyLine, type ListChoices, type ResolvedWantList } from '../core/wantList';
 import type { LadderState, Rung } from '../optimiser/ladder';
-import { pruneDominated, type Problem } from '../optimiser/problem';
+import { cheapestPrices, pruneDominated, type Problem } from '../optimiser/problem';
 import type { ItemView, LadderView, ShopView, UnconfirmedListingView, WantedCardView, NotFoundView, OfferView, PlanChoices, PrintingOption, PrintingView, RungView, StoreView } from '../shared/api';
 import { cardKingdomUnitNzd, compareAtCardKingdom, overCardKingdom, type CardKingdomContext } from './cardKingdom';
 import type { SearchResult } from './search';
@@ -62,7 +62,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
     list.push(l);
   }
 
-  const problem: Problem = { lines: [], stores: [], offers: [] };
+  const problem: Problem = { lines: [], stores: [], offers: [], shortCap: ctx.settings.shortPlanCap.enabled ? ctx.settings.shortPlanCap.maxExtra : null };
   const storeIndex = new Map<string, number>();
   const stores: StoreRecord[] = [];
   const listings = new Map<string, Listing>();
@@ -247,14 +247,20 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         const best = offers[0];
         const note = !best ? undefined
           : !here ? `Not in stock at these Stores. Cheapest: ${prep.stores[best.store].name}, $${best.price.toFixed(2)}`
-          : `In stock at ${prep.stores[here.store].name} for $${here.price.toFixed(2)}, but including it would leave out other cards`;
+          : prep.problem.shortCap != null && here.price > best.price + prep.problem.shortCap
+            ? `In stock at ${prep.stores[here.store].name} for $${here.price.toFixed(2)}, which is $${(here.price - best.price).toFixed(2)} over its cheapest price, past your $${prep.problem.shortCap} limit`
+            : `In stock at ${prep.stores[here.store].name} for $${here.price.toFixed(2)}, but including it would leave out other cards`;
         return [{ buyKey: l.key, name: b.name, missing, lineIds: b.lineIds, waivable: !b.required, note, image: cardImage(catalogue, b.oracleId) }];
       });
       const leftOutBuy = leftOut.map(l => ({ ...buyByKey.get(l.buyKey)!, quantity: l.missing }));
       const leftOutCk = ck && leftOutBuy.length
         ? compareAtCardKingdom(leftOutBuy, catalogue, ck, { allowFoils: settings.allowFoils, shippingUsd: settings.cardKingdom.shippingUsd })
         : null;
-      short = { covered: r.short.covered, wanted: r.short.wanted, leftOut, cardKingdom: leftOutCk };
+      // What these Stores charge over each bought card's cheapest price anywhere.
+      const cheapest = cheapestPrices(prep.problem);
+      let premium = 0;
+      for (const [i, q] of r.plan.take) premium += q * (prep.problem.offers[i].price - cheapest[prep.problem.offers[i].line]);
+      short = { covered: r.short.covered, wanted: r.short.wanted, premium: Math.round(premium * 100) / 100, leftOut, cardKingdom: leftOutCk };
     }
     return {
       k: r.k, total: r.plan.total, cards: r.plan.cards, postage: r.plan.postage, status: r.status, mightSave: r.mightSave,

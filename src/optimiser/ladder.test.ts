@@ -160,6 +160,31 @@ describe('Short Plans', () => {
     for (let n = 1; n <= 5; n++) k.offerShort(n, fakePlan(n, 100 - n));
     expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([1, 2, 3]);
   });
+
+  it('hides a Short Plan that costs more than a Plan covering everything, when the limit is on', async () => {
+    const k = new LadderKnowledge();
+    k.problem = { lines: [], stores: [], offers: [], shortCap: 25 };
+    k.kmin = 4;
+    k.wanted = 10;
+    k.offer(fakePlan(4, 256));
+    k.offerShort(2, fakePlan(2, 233));
+    k.offerShort(3, fakePlan(3, 299));
+    expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([2]);
+    k.problem = { lines: [], stores: [], offers: [], shortCap: null };
+    expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([2, 3]);
+  });
+
+  it('keeps Short Plans when only a Plan with more Stores is cheaper', async () => {
+    const k = new LadderKnowledge();
+    k.problem = { lines: [], stores: [], offers: [], shortCap: 25 };
+    k.kmin = 4;
+    k.wanted = 10;
+    k.offer(fakePlan(4, 256));
+    k.offer(fakePlan(7, 203));
+    k.offerShort(1, fakePlan(1, 215));
+    k.offerShort(2, fakePlan(2, 233));
+    expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([1, 2]);
+  });
 });
 
 describe('preferred Stores and runner-up Plans', () => {

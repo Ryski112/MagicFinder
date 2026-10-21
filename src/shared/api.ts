@@ -198,6 +198,8 @@ export interface RungView {
   short?: {
     covered: number;
     wanted: number;
+    /** What the Plan's Stores charge over each bought card's cheapest price anywhere. */
+    premium: number;
     leftOut: LeftOutView[];
     /** What buying just the left-out cards at CardKingdom would cost; null unless the comparison is on. */
     cardKingdom: CardKingdomView | null;

@@ -1,7 +1,7 @@
 // Exact Plans with HiGHS (WebAssembly, MIT): one MILP per rung, "at most k Stores". The model follows the optimiser
 // research: split quantities, one link row per offer, free-postage thresholds as a lower bound on the subtotal.
 import highsLoader from 'highs';
-import { coverWeights, paidStoreIds, planFrom, round2, type Plan, type Problem } from './problem';
+import { capAllows, cheapestPrices, coverWeights, paidStoreIds, planFrom, round2, type Plan, type Problem } from './problem';
 
 type Highs = Awaited<ReturnType<typeof highsLoader>>;
 let highsPromise: Promise<Highs> | null = null;
@@ -28,9 +28,11 @@ export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }, exclude:
 
   const costs = mode.kind !== 'cover';
   const weight = coverWeights(p);
+  const cheapest = cheapestPrices(p);
   p.offers.forEach((o, i) => {
     obj.push(costs ? `${num(o.price)} x${i}` : `- ${weight[o.line]} x${i}`);
-    const ub = Math.min(o.qty, p.lines[o.line].need);
+    // A Short Plan may not buy a copy over the buyer's extra-cost limit.
+    const ub = mode.kind !== 'full' && !capAllows(p, cheapest, i) ? 0 : Math.min(o.qty, p.lines[o.line].need);
     if (ub === 1) binaries.push(`x${i}`);
     else {
       bounds.push(`0 <= x${i} <= ${ub}`);

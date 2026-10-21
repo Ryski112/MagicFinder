@@ -51,6 +51,8 @@ export interface Settings {
     /** Drop Listings more than 30% over CardKingdom's price, unless that would leave too few copies. */
     ignoreOver: boolean;
   };
+  /** Short Plans: don't buy a card more than `maxExtra` (NZD) above its cheapest price anywhere. Off by default. */
+  shortPlanCap: { enabled: boolean; maxExtra: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -81,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
   cardKingdom: { enabled: true, shippingUsd: 20, addGst: true, ignoreOver: false },
+  shortPlanCap: { enabled: false, maxExtra: 25 },
 };
 
 /**
@@ -91,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const FRIEND_KEYS = [
   'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
   'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom', 'australiaPostage', 'excludedStores',
-  'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings',
+  'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings', 'shortPlanCap',
 ] as const satisfies readonly (keyof Settings)[];
 
 export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;

@@ -32,6 +32,8 @@ export interface Problem {
   stores: ProblemStore[];
   /** Usable offers, sorted by price within each line. */
   offers: Offer[];
+  /** Short Plans only: the most (NZD) a copy may cost above its cheapest price anywhere. Null: no limit. */
+  shortCap?: number | null;
 }
 
 export interface PlanStore {
@@ -138,6 +140,26 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
     if (need) return null;
   }
   return planFrom(p, take);
+}
+
+/** Whether a Short Plan may buy this offer: under the buyer's extra-cost limit, or for a card they insisted on. */
+export function capAllows(p: Problem, cheapest: number[], offer: number): boolean {
+  const o = p.offers[offer];
+  return p.shortCap == null || !!p.lines[o.line].required || o.price <= cheapest[o.line] + p.shortCap + 1e-9;
+}
+
+/** The cheapest price anywhere for each line. */
+export function cheapestPrices(p: Problem): number[] {
+  const cheapest = p.lines.map(() => Infinity);
+  for (const o of p.offers) cheapest[o.line] = Math.min(cheapest[o.line], o.price);
+  return cheapest;
+}
+
+/** Whether every copy a Short Plan buys is within the buyer's extra-cost limit. */
+export function respectsCap(p: Problem, plan: Plan): boolean {
+  if (p.shortCap == null) return true;
+  const cheapest = cheapestPrices(p);
+  return [...plan.take.keys()].every(i => capAllows(p, cheapest, i));
 }
 
 /** What covering one copy of each line counts for: 1, or enough to outweigh every other copy together when the buyer insisted on it. */

@@ -164,6 +164,17 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
+          <Switch checked={s.shortPlanCap.enabled} onChange={v => onChange({ shortPlanCap: { ...s.shortPlanCap, enabled: v } })} label="Limit what a Short Plan pays to cover a card" />
+          {s.shortPlanCap.enabled && (
+            <label className="block">Up to ${s.shortPlanCap.maxExtra} over a card's cheapest price anywhere
+              <input type="range" min={5} max={100} step={5} className="w-full" value={s.shortPlanCap.maxExtra}
+                onChange={e => onChange({ shortPlanCap: { ...s.shortPlanCap, maxExtra: Number(e.target.value) } })} />
+            </label>
+          )}
+          <span className="block text-xs text-slate-500">Off: a Short Plan covers as many cards as its Stores can supply, and the dear ones are flagged for you to decide. On: a card dearer than this limit is left out of Short Plans, with the reason shown. Full Plans always cover every card.</span>
+        </div>
+
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
           <Switch checked={s.cardKingdom.enabled} onChange={v => onChange({ cardKingdom: { ...s.cardKingdom, enabled: v } })} label="Compare with CardKingdom" />
           <label className="block">CardKingdom shipping to NZ (US$)
             <input type="number" min={0} step={1} className={field} value={s.cardKingdom.shippingUsd}

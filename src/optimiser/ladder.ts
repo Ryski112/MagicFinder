@@ -4,7 +4,7 @@
 // Stores leave out the fewest cards when the whole list can't fit in that many Stores.
 import { heuristicLadder, shortPlanDraft } from './heuristic';
 import { minimumStores, type RungOutcome, type SolveOptions } from './milp';
-import { copiesIn, copiesWanted, paidStoreIds, round2, coverScore, type Plan, type Problem } from './problem';
+import { copiesIn, copiesWanted, paidStoreIds, round2, coverScore, respectsCap, type Plan, type Problem } from './problem';
 
 /** Short Plans are offered for Store counts up to this. */
 export const SHORT_PLAN_MAX_STORES = 3;
@@ -77,6 +77,7 @@ export class LadderKnowledge {
   /** Keeps the better Short Plan for k Stores: more of the list covered, then cheaper. */
   offerShort(k: number, plan: Plan | null, outcome?: RungOutcome) {
     const cur = this.short.get(k);
+    if (plan && this.problem && !respectsCap(this.problem, plan)) return;
     const score = (x: Plan) => (this.problem ? coverScore(this.problem, x) : copiesIn(x));
     const better = plan && (!cur || score(plan) > score(cur.plan) || (score(plan) === score(cur.plan) && plan.total < cur.plan.total - 1e-9));
     if (better) this.short.set(k, { plan, outcome });
@@ -97,6 +98,11 @@ export class LadderKnowledge {
     for (let k = 1; k < Math.min(this.kmin, SHORT_PLAN_MAX_STORES + 1); k++) {
       const s = this.short.get(k);
       if (!s) continue;
+      // A Short Plan dearer than the fewest-Stores Plan that covers everything only costs more and covers less.
+      // (Cheaper Plans with more Stores don't count: fewer Stores is why a Short Plan exists. At a tie, fewer Stores wins.)
+      // Only when the buyer has switched the Short Plan limit on; otherwise every Short Plan is shown.
+      const full = this.problem?.shortCap != null ? this.bestAtMost(this.kmin) : null;
+      if (full && full.total < s.plan.total - 1e-9) continue;
       const o = s.outcome;
       const status: RungStatus = o?.kind === 'optimal' ? 'optimal' : o?.kind === 'timed-out' || final ? 'timed-out' : 'refining';
       const rung: Rung = { k, plan: s.plan, status, saves: null, cheapestOverall: false, short: { covered: copiesIn(s.plan), wanted: this.wanted } };

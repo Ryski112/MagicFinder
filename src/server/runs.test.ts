@@ -105,9 +105,39 @@ describe('RunManager on the desktop', () => {
     expect(runs.get(b.id)).toBe(b);
     expect(src.aborted).toEqual(['Sol Ring']);
   });
+
+  it('stops and drops a search the buyer cancels', async () => {
+    const src = gatedSource('fetch');
+    const runs = manager(null, [src.source]);
+    const a = runs.start('1 Sol Ring', choices);
+    await tick();
+    expect(runs.cancel(a.id)).toBe(true);
+    await tick();
+    expect(runs.get(a.id)).toBeUndefined();
+    expect(src.aborted).toEqual(['Sol Ring']);
+    expect(runs.cancel(a.id)).toBe(false);
+  });
 });
 
 describe('RunManager in hosted mode', () => {
+  it('frees a cancelled search\'s slot for the next in the queue, and forgets it for a reload', async () => {
+    const src = gatedSource('fetch');
+    const runs = manager({ ...HOSTED, maxActive: 1 }, [src.source]);
+    const a = runs.start('1 Sol Ring', choices, 'a');
+    const b = runs.start('1 Counterspell', choices, 'b');
+    const c = runs.start('1 Lava Axe', choices, 'c');
+    await tick();
+    runs.cancel(b.id);
+    await tick();
+    expect(runs.forBrowser('b')).toBeUndefined();
+    expect(c.queuedAhead).toBe(1);
+    runs.cancel(a.id);
+    await until(() => src.calls.length === 2);
+    expect(src.calls).toEqual(['Sol Ring', 'Lava Axe']);
+    expect(src.aborted).toEqual(['Sol Ring']);
+    expect(runs.forBrowser('a')).toBeUndefined();
+  });
+
   it('runs different browsers side by side and replaces only the same browser\'s search', async () => {
     const src = gatedSource('fetch');
     const runs = manager(HOSTED, [src.source]);

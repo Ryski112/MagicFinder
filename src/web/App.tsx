@@ -230,6 +230,18 @@ export function App() {
     }
   };
 
+  /** Stops the search on the server and goes straight back to the Want List, which is kept as it was. */
+  const cancelSearch = () => {
+    stopFollowing.current?.();
+    stopFollowing.current = null;
+    if (runId) api.cancelRun(runId).catch(() => {});
+    setRunId(null);
+    setProgress(null);
+    setQueuedAhead(null);
+    setLadder(null);
+    setStep('list');
+  };
+
   // Hosted mode: a call that gets no answer means the NAS is unreachable or the Access session expired.
   useEffect(() => {
     if (!hosted) return;
@@ -289,7 +301,7 @@ export function App() {
                 <button
                   type="button"
                   disabled={i > stepIndex && !(s === 'plan' && ladder)}
-                  onClick={() => setStep(s === 'search' && ladder ? 'plan' : s)}
+                  onClick={() => (step === 'search' && s === 'list' ? cancelSearch() : setStep(s === 'search' && ladder ? 'plan' : s))}
                   className={cx('flex items-center gap-2', i === stepIndex ? 'text-indigo-600 dark:text-indigo-300 font-semibold' : i < stepIndex ? '' : 'text-slate-400 dark:text-slate-600')}
                 >
                   <span className={cx('w-6 h-6 rounded-full grid place-items-center text-xs', i <= stepIndex ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800')}>
@@ -344,7 +356,7 @@ export function App() {
             catalogueProgress={status?.catalogue.progress ?? 0}
           />
         )}
-        {step === 'search' && <SearchStep progress={progress} queuedAhead={queuedAhead} lines={includedLines} />}
+        {step === 'search' && <SearchStep progress={progress} queuedAhead={queuedAhead} lines={includedLines} onCancel={cancelSearch} />}
         {settings && step === 'plan' && ladder && runId && (
           <PlanStep
             runId={runId}

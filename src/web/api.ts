@@ -71,6 +71,7 @@ export const api = {
   /** `settings` only in hosted mode, where they live in the browser and go with every request that plans. */
   startRun: (text: string, choices: PlanChoices, settings?: Settings) => call<{ runId: string }>('POST', '/api/runs', { text, choices, browserId: browserId(), settings }),
   replan: (runId: string, choices: PlanChoices, settings?: Settings) => call<{ ok: true }>('POST', `/api/runs/${runId}/plan`, { choices, settings }),
+  cancelRun: (runId: string) => call<{ ok: true }>('DELETE', `/api/runs/${runId}`),
   /** Hosted mode: is this run still alive? */
   run: (runId: string) => runState(`/api/runs/${runId}`),
   /** Hosted mode: this browser's search, if it is still alive. */

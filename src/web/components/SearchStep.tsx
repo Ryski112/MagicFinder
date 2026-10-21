@@ -1,5 +1,5 @@
 import type { ParseResponse, SearchProgressView, SourceRunStatus } from '../../shared/api';
-import { CardImage, cx } from './ui';
+import { Button, CardImage, cx } from './ui';
 
 export function sourceLine(s: SourceRunStatus): { text: string; warn: boolean } {
   switch (s.status) {
@@ -18,7 +18,7 @@ export function sourceLine(s: SourceRunStatus): { text: string; warn: boolean } 
   }
 }
 
-export function SearchStep({ progress, queuedAhead = null, lines }: { progress: SearchProgressView | null; queuedAhead?: number | null; lines: ParseResponse['lines'] }) {
+export function SearchStep({ progress, queuedAhead = null, lines, onCancel }: { progress: SearchProgressView | null; queuedAhead?: number | null; lines: ParseResponse['lines']; onCancel: () => void }) {
   const done = progress?.done ?? 0;
   const total = progress?.total ?? lines.length;
   return (
@@ -37,6 +37,7 @@ export function SearchStep({ progress, queuedAhead = null, lines }: { progress: 
             return <span key={s.source} className={cx(l.warn && 'text-amber-600 dark:text-amber-400')} title={s.message}>{l.text}</span>;
           })}
         </div>
+        <Button onClick={onCancel}>Cancel search</Button>
       </div>
       <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
         {lines.map((l, i) => (

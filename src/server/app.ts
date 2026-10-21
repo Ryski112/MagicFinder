@@ -142,6 +142,11 @@ export function createApp(d: AppDeps) {
     return c.json<RunStateResponse>({ runId: run.id, choices: run.choices });
   });
 
+  app.delete('/api/runs/:id', c => {
+    d.runs.cancel(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
   app.get('/api/runs/:id/events', c => {
     const run = d.runs.get(c.req.param('id'));
     if (!run) return c.json({ error: gone ?? 'That search has finished or been replaced. Search again.' }, 404);

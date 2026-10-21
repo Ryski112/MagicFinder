@@ -1,7 +1,7 @@
 // Searches every enabled Source for every card on the Want List, applying the agreed rules for Sources that
 // block, slow down, go down or change. See "What happens when a Source blocks MagicFinder?".
 import type { Catalogue } from '../catalogue/catalogue';
-import { matchListing, NOT_A_CARD } from '../core/matchListing';
+import { matchByImage, matchListing, NOT_A_CARD } from '../core/matchListing';
 import type { Listing, SourceId } from '../core/types';
 import { SourceError, type Source, type SourceListing, type SourceStatus } from '../sources/types';
 import { FRESH_MS, STALE_MS, type SearchCache } from './searchCache';
@@ -219,6 +219,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   const listings: Listing[] = [];
   const unidentified: UnidentifiedListing[] = [];
   const nameOf = new Map(cards.map(c => [c.oracleId, c.name]));
+  const matched: { source: SourceListing; listing: Listing }[] = [];
   const foundBy = new Map<SourceId, Set<string>>();
   for (const [source, byCard] of raw) {
     const found = new Set<string>();
@@ -228,6 +229,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
         if (seen.has(s.id)) continue;
         seen.add(s.id);
         const m = matchListing(deps.catalogue, s);
+        matched.push({ source: s, listing: m });
         if (m.confidence === 'unmatched') {
           if (!NOT_A_CARD.test(s.title)) {
             unidentified.push({ title: s.title, source: s.source, storeName: s.storeName, price: s.price, url: s.url, searchedFor: nameOf.get(oracleId) ?? '' });
@@ -238,6 +240,8 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
       }
     }
   }
+
+  matchByImage(deps.catalogue, matched);
 
   // A Source that answers but finds nothing for most of the list, while the other Source finds those cards, may be
   // blocking silently. Only then, ask it for a basket of everyday cards.

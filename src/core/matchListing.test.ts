@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import { mapFetchListing } from '../sources/fetchTcg';
 import type { SourceListing } from '../sources/types';
-import { findCardForTitle, matchListing, nameCandidates } from './matchListing';
+import { imageIds } from '../sources/mtgSingles';
+import { findCardForTitle, matchByImage, matchListing, nameCandidates } from './matchListing';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-match-'));
 let cat: Catalogue;
@@ -85,5 +86,45 @@ describe('matchListing', () => {
 
   it('leaves unknown titles unmatched', () => {
     expect(matchListing(cat, listing({ title: 'Totally Not A Card' })).confidence).toBe('unmatched');
+  });
+});
+
+
+describe('printings from Store pictures', () => {
+  it('reads a Scryfall id, or a platform card id, out of a picture address', () => {
+    expect(imageIds('https://cards.scryfall.io/normal/front/c/b/cba33bf7-0919-408c-8eb0-0bb9fe920c81.jpg?1')).toEqual({ scryfallId: 'cba33bf7-0919-408c-8eb0-0bb9fe920c81' });
+    const uuid = '71b54704-2a9f-5111-a1d4-d8843dfa90b1';
+    expect(imageIds(`https://cdn.shopify.com/s/files/1/0558/files/${uuid}_370x480.png`)).toEqual({ scryfallId: uuid, imageKey: uuid });
+    expect(imageIds('https://cdn.shopify.com/s/files/1/0400/files/532935_370x480.jpg')).toEqual({ imageKey: '532935' });
+    expect(imageIds('https://cdn.shopify.com/s/files/1/1629/products/07fec4a2db5aca3da38dcd1404ef596c_370x480.png')).toEqual({});
+    expect(imageIds(undefined)).toEqual({});
+  });
+
+  it('takes a title with no treatment as the plain printing when the set has variants', () => {
+    const plain = matchListing(cat, listing({ title: 'Bonecrusher Giant', setName: 'Throne of Eldraine' }));
+    expect(plain).toMatchObject({ confidence: 'exact' });
+    expect(cat.getPrinting(plain.printingId!)).toMatchObject({ setCode: 'eld', collectorNumber: '115' });
+    const showcase = matchListing(cat, listing({ title: 'Bonecrusher Giant (Showcase)', setName: 'Throne of Eldraine', treatments: ['Showcase'] }));
+    expect(cat.getPrinting(showcase.printingId!)).toMatchObject({ collectorNumber: '291' });
+  });
+
+  it('settles a Listing by the picture it shares with an identified one, if the Printing fits its title', () => {
+    const a = listing({ id: 'a', title: 'Sol Ring', setCode: 'msc', collectorNumber: '212', imageKey: '236019' });
+    const b = listing({ id: 'b', title: 'Sol Ring', setCode: 'msc', imageKey: '236019' });
+    const c = listing({ id: 'c', title: 'Sol Ring', setCode: 'msc', imageKey: '999999' });
+    const pairs = [a, b, c].map(source => ({ source, listing: matchListing(cat, source) }));
+    expect(pairs.map(p => p.listing.confidence)).toEqual(['exact', 'card-only', 'card-only']);
+    matchByImage(cat, pairs);
+    expect(pairs.map(p => p.listing.confidence)).toEqual(['exact', 'exact', 'card-only']);
+    expect(pairs[1].listing.printingId).toBe(pairs[0].listing.printingId);
+  });
+
+  it("doesn't trust a picture seen on two different Printings", () => {
+    const a = listing({ id: 'a', title: 'Sol Ring', setCode: 'msc', collectorNumber: '212', imageKey: 'k' });
+    const a2 = listing({ id: 'a2', title: 'Sol Ring', setCode: 'msc', collectorNumber: '213', imageKey: 'k' });
+    const b = listing({ id: 'b', title: 'Sol Ring', setCode: 'msc', imageKey: 'k' });
+    const pairs = [a, a2, b].map(source => ({ source, listing: matchListing(cat, source) }));
+    matchByImage(cat, pairs);
+    expect(pairs[2].listing.confidence).toBe('card-only');
   });
 });

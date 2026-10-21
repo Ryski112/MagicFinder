@@ -255,27 +255,30 @@ export function PlanStep(p: Props) {
               {money(rung.total)}
               <span className="ml-2 text-xs font-normal text-slate-500">Landed Cost · cards {money(rung.cards)} + postage {money(rung.postage)}</span>
             </div>
+            {rung.pickupHints.length > 0 && (
+              <div className="text-xs text-emerald-700 dark:text-emerald-400">
+                {rung.pickupHints.map(h => `Pickup available at ${h.name}, saves ${money(h.saves)}`).join(' · ')}
+              </div>
+            )}
+          </div>
+          {/* The two toggles share one left-aligned line, so they wrap together instead of splitting to opposite ends. */}
+          <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Group by">
               {(['stores', 'cards'] as const).map(v => (
                 <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
-                  className={cx('px-3 py-1', view === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                  className={cx('px-3 py-1 whitespace-nowrap', view === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
                   By {v === 'stores' ? 'Store' : 'card'}
                 </button>
               ))}
             </div>
             <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Sort cards by">
               {(['name', 'price'] as const).map(v => (
-                <button key={v} type="button" aria-pressed={sortBy === v} onClick={() => setSortBy(v)} title={v === 'price' ? 'Dearest first' : 'A to Z'}
-                  className={cx('px-3 py-1', sortBy === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
-                  Sort by {v}
+                <button key={v} type="button" aria-pressed={sortBy === v} onClick={() => setSortBy(v)} title={v === 'price' ? 'Sort by price, dearest first' : 'Sort by name, A to Z'}
+                  className={cx('px-3 py-1 whitespace-nowrap', sortBy === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                  {v === 'price' ? 'Price' : 'Name'}
                 </button>
               ))}
             </div>
-            {rung.pickupHints.length > 0 && (
-              <div className="text-xs text-emerald-700 dark:text-emerald-400">
-                {rung.pickupHints.map(h => `Pickup available at ${h.name}, saves ${money(h.saves)}`).join(' · ')}
-              </div>
-            )}
           </div>
           {base && !base.next && !rung.runnerUp && (
             <div className="text-sm flex flex-wrap items-center gap-2">
@@ -988,36 +991,56 @@ function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, o
 function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onAvoid: () => void; onRemove: () => void }) {
   // A Store's own picture is the best evidence when the title didn't settle the Printing.
   const img = i.printing?.image ?? i.storeImage ?? i.fallbackImage;
+  // The row's actions stay out of the way until the buyer opens them, so narrow windows don't cut them off.
+  const [actions, setActions] = useState(false);
+  const toggleActions = () => setActions(x => !x);
   return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="relative group shrink-0">
-        <CardImage src={img} alt={i.name} className="w-10 aspect-[5/7] rounded" />
-        {(i.printing?.imageLarge ?? img) && (
-          <span className="hidden group-hover:block absolute left-12 top-0 z-30 w-56 shadow-2xl rounded-xl overflow-hidden pointer-events-none">
-            <CardImage src={i.printing?.imageLarge ?? img} alt={i.name} className="w-full aspect-[5/7]" />
-          </span>
-        )}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="tabnum text-slate-500">{i.qty}×</span>
-          <span className="font-medium">{i.name}</span>
-          {i.locked && <span title="Locked Printing">🔒</span>}
-          {pinned && <button type="button" className="text-xs" title="You chose this Store for this card. Click to let MagicFinder choose again" onClick={onUnpin}>📌 ✕</button>}
-          <Tag title={i.condition ? undefined : 'The Store did not state a condition'}>{i.condition ?? 'condition not stated'}</Tag>
-          {i.finish !== 'nonfoil' && <Tag>{i.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
-          {!i.printing && <Tag tone="warn" title="Matched the card but not the exact Printing">Printing not confirmed</Tag>}
-          {(i.overCardKingdom || i.underCardKingdom) && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} unsure={unsure(i.condition, i.printing?.id ?? null)} />}
+    <div>
+      <div className="flex items-center gap-3 text-sm">
+        <span className="relative group shrink-0">
+          <CardImage src={img} alt={i.name} className="w-10 aspect-[5/7] rounded" />
+          {(i.printing?.imageLarge ?? img) && (
+            <span className="hidden group-hover:block absolute left-12 top-0 z-30 w-56 shadow-2xl rounded-xl overflow-hidden pointer-events-none">
+              <CardImage src={i.printing?.imageLarge ?? img} alt={i.name} className="w-full aspect-[5/7]" />
+            </span>
+          )}
+        </span>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleActions}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="tabnum text-slate-500">{i.qty}×</span>
+            <span className="font-medium">{i.name}</span>
+            {i.locked && <span title="Locked Printing">🔒</span>}
+            {pinned && <button type="button" className="text-xs" title="You chose this Store for this card. Click to let MagicFinder choose again" onClick={e => { e.stopPropagation(); onUnpin(); }}>📌 ✕</button>}
+            <Tag title={i.condition ? undefined : 'The Store did not state a condition'}>{i.condition ?? 'condition not stated'}</Tag>
+            {i.finish !== 'nonfoil' && <Tag>{i.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
+            {!i.printing && <Tag tone="warn" title="Matched the card but not the exact Printing">Printing not confirmed</Tag>}
+            {(i.overCardKingdom || i.underCardKingdom) && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} unsure={unsure(i.condition, i.printing?.id ?? null)} />}
+          </div>
+          <div className="text-xs text-slate-500 truncate">{i.printing?.label ?? i.title}</div>
         </div>
-        <div className="text-xs text-slate-500 truncate">
-          {i.printing?.label ?? i.title} · <Button variant="link" className="text-xs" onClick={onToggle}>{open ? 'hide Printings' : 'other Printings'}</Button> · <Button variant="link" className="text-xs" title="Buy this card from another Store; the Plan is made again without this one" onClick={onAvoid}>not from this Store</Button>
+        <div className="flex flex-col items-end sm:flex-row sm:items-center sm:gap-3 shrink-0">
+          <span className="tabnum">{money(i.price)}{i.extra?.priceAud && <span className="text-xs text-slate-500" title="Listed in Australian dollars; converted to NZD"> (A${Number(i.extra.priceAud).toFixed(2)})</span>}</span>
+          <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
         </div>
+        <button type="button" onClick={toggleActions} aria-expanded={actions} aria-label={`${actions ? 'Hide' : 'Show'} actions for ${i.name}`} title={actions ? 'Hide actions' : 'Other Printings, buy elsewhere, or remove'}
+          className={cx('shrink-0 w-7 h-7 grid place-items-center rounded-full border transition-colors',
+            actions
+              ? 'border-indigo-500 bg-indigo-600 text-white'
+              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400')}>
+          {/* Drawn centred on its own 16×16 box, so it sits in the middle of the circle and turns about that middle. */}
+          <svg viewBox="0 0 16 16" aria-hidden="true" className={cx('w-3.5 h-3.5 transition-transform', actions && 'rotate-90')}
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 4l4 4-4 4" />
+          </svg>
+        </button>
       </div>
-      <div className="flex flex-col items-end sm:flex-row sm:items-center sm:gap-3 shrink-0">
-        <span className="tabnum">{money(i.price)}{i.extra?.priceAud && <span className="text-xs text-slate-500" title="Listed in Australian dollars; converted to NZD"> (A${Number(i.extra.priceAud).toFixed(2)})</span>}</span>
-        <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
-      </div>
-      <RemoveButton name={i.name} onClick={onRemove} />
+      {actions && (
+        <div className="mt-2 ml-[3.25rem] flex flex-wrap gap-2">
+          <Button className="text-xs py-1" onClick={onToggle}>{open ? 'Hide other Printings' : 'Other Printings'}</Button>
+          <Button className="text-xs py-1" title="Buy this card from another Store; the Plan is made again without this one" onClick={onAvoid}>Not from this Store</Button>
+          <Button className="text-xs py-1 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-900" onClick={onRemove}>Remove from my list</Button>
+        </div>
+      )}
     </div>
   );
 }

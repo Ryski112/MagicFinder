@@ -1023,10 +1023,16 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }
           <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
         </div>
         <button type="button" onClick={toggleActions} aria-expanded={actions} aria-label={`${actions ? 'Hide' : 'Show'} actions for ${i.name}`} title={actions ? 'Hide actions' : 'Other Printings, buy elsewhere, or remove'}
-          className={cx('shrink-0 w-9 h-9 grid place-items-center rounded-full border text-xl leading-none transition',
+          className={cx('shrink-0 w-7 h-7 grid place-items-center rounded-full border transition-colors',
             actions
-              ? 'rotate-90 border-indigo-500 bg-indigo-600 text-white'
-              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400')}>›</button>
+              ? 'border-indigo-500 bg-indigo-600 text-white'
+              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400')}>
+          {/* Drawn centred on its own 16×16 box, so it sits in the middle of the circle and turns about that middle. */}
+          <svg viewBox="0 0 16 16" aria-hidden="true" className={cx('w-3.5 h-3.5 transition-transform', actions && 'rotate-90')}
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 4l4 4-4 4" />
+          </svg>
+        </button>
       </div>
       {actions && (
         <div className="mt-2 ml-[3.25rem] flex flex-wrap gap-2">

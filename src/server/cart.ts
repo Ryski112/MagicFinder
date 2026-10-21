@@ -1,6 +1,7 @@
 // "Add all to cart" for Shopify Stores: resolve each Listing's variant from the public products/<handle>.js,
 // re-check stock and price, then build a cart permalink that lands on the Store's cart page (never checkout).
 // See "Can each Store's cart be pre-filled from a Plan?".
+import { shopifyHandle } from '../core/stores';
 import type { Listing } from '../core/types';
 import type { CartCheckResponse, CartLineCheck } from '../shared/api';
 import { Throttle } from '../sources/policy';
@@ -36,7 +37,7 @@ function variantFoil(v: ShopifyVariant): boolean {
   return /\bfoil\b/i.test(v.title) && !/non-?foil/i.test(v.title);
 }
 
-/** A Listing's price in the Store's own currency: Australian Listings keep their AUD price, the rest are NZD. */
+/** A Listing's price in the shop's own currency: Australian Listings keep their AUD price, the rest are NZD. */
 function shopPrice(l: Listing): number {
   const aud = Number(l.extra?.priceAud);
   return l.extra?.priceAud && Number.isFinite(aud) ? aud : l.price;
@@ -102,7 +103,7 @@ export async function checkShopifyCart(
       lines.push(base);
       continue;
     }
-    const handle = u.pathname.match(/\/products\/([^/?#]+)/)?.[1];
+    const handle = shopifyHandle(listing.url);
     if (!handle) {
       lines.push(base);
       continue;

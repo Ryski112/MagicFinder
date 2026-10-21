@@ -231,10 +231,40 @@ export interface OfferView {
   condition: Condition | null;
   finish: Finish;
   label: string;
+  /** The Scryfall id of the Printing, or null when the Listing matched the card but not a Printing. */
+  printingId: string | null;
   image: string | null;
+  /** The Store's own picture of this Listing. */
+  storeImage: string | null;
   url: string;
   cardKingdomNzd: number | null;
   overCardKingdom: boolean;
+}
+
+/** A card on the Want List, as the Store browser lists it. */
+export interface WantedCardView {
+  buyKey: string;
+  lineIds: string[];
+  oracleId: string;
+  name: string;
+  /** Copies wanted. */
+  qty: number;
+  image: string | null;
+  locked: boolean;
+}
+
+/** A Store that has at least one wanted card, with what ordering from it costs. */
+export interface ShopView {
+  id: string;
+  name: string;
+  city: string | null;
+  country: 'NZ' | 'AU';
+  sources: SourceId[];
+  storeUrl: string | null;
+  preferred: boolean;
+  postage: number;
+  postageEstimated: boolean;
+  freeOver: number | null;
 }
 
 export interface CardKingdomView {
@@ -264,6 +294,49 @@ export interface LadderView {
   partialCards: string[];
   cardKingdom: CardKingdomView | null;
   offers: Record<string, OfferView[]>;
+  /** Every wanted card, and every Store with some of them, for browsing by Store. */
+  cards: WantedCardView[];
+  shops: ShopView[];
+}
+
+/** The cheapest way to divide the list between CardKingdom and the NZ Stores of a Plan. */
+export interface SplitView {
+  /** The NZ Store count (not counting preferred Stores) the split may use. */
+  k: number;
+  planId: number;
+  status: 'optimal' | 'timed-out';
+  /** The selected Plan with no CardKingdom. */
+  nzOnly: number;
+  /** Everything from CardKingdom (shipping and GST included); null when it lacks a card. */
+  ckOnly: number | null;
+  /** The two parts together. */
+  split: number;
+  /** How much cheaper the split is than the NZ-only Plan. */
+  saves: number;
+  /** Null when nothing is better bought at CardKingdom. */
+  ck: {
+    items: { buyKey: string; lineIds: string[]; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; label: string; url: string }[];
+    subtotalUsd: number;
+    shippingUsd: number;
+    shippingNzd: number;
+    /** NZD with GST, before shipping. */
+    cardsNzd: number;
+    totalNzd: number;
+  } | null;
+  nz: { stores: { id: string; name: string; subtotal: number; postage: number; cards: number }[]; total: number };
+}
+
+/** The Plan's cards moved to CardKingdom dearest first, one more each step, with the total at every step. */
+export interface SweepView {
+  k: number;
+  planId: number;
+  shippingUsd: number;
+  /** The cards CardKingdom can supply, dearest first. `nzd` is what the NZ Plan pays; `ckNzd` is CardKingdom with GST. */
+  order: { buyKey: string; lineIds: string[]; name: string; qty: number; nzd: number; ckNzd: number; ckUsd: number }[];
+  /** Step `n` moves the first `n` cards of `order` to CardKingdom. */
+  points: { n: number; ckTotal: number; nzTotal: number; total: number; status: 'optimal' | 'timed-out' }[];
+  /** Index into `points` of the cheapest step. */
+  best: number;
 }
 
 export interface SearchProgressView {

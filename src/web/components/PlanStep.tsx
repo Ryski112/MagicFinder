@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { CardKingdomView, Exclusion, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, RungView, Settings, StoreView } from '../../shared/api';
+import type { CardKingdomView, Exclusion, Finish, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, PrintingView, RungView, Settings, SplitView, StoreView, SweepView } from '../../shared/api';
 import { api } from '../api';
+import { ShopsView, type StorePick } from './ShopsView';
 import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
 import { cardsElsewhere, costAtStore, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
@@ -22,7 +23,18 @@ interface Props {
 const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
 
 export function PlanStep(p: Props) {
-  const rung = p.ladder.rungs.find(r => r.k === p.selectedK) ?? p.ladder.rungs.find(r => r.cheapestOverall) ?? null;
+  const base = p.ladder.rungs.find(r => r.k === p.selectedK) ?? p.ladder.rungs.find(r => r.cheapestOverall) ?? null;
+  // The runner-up is the next best Plan with a different set of Stores; picking another rung goes back to the best one.
+  const [mode, setMode] = useState<'plans' | 'shops'>('plans');
+  const [showRunnerUp, setShowRunnerUp] = useState(false);
+  useEffect(() => setShowRunnerUp(false), [base?.k]);
+  const rung = showRunnerUp && base?.next ? base.next : base;
+  /** Names the Plan to the cart check: negative for a runner-up. */
+  const cartK = base ? (rung?.runnerUp ? -base.k : base.k) : 0;
+  const [finding, setFinding] = useState<number | null>(null);
+  useEffect(() => setFinding(null), [base?.k, base?.next, base?.noRunnerUp, p.ladder.planId]);
+  const anyPreferred = Object.keys(p.settings.preferredStores).length > 0;
+  const hasPreferred = anyPreferred && p.settings.preferredOn;
   const [cart, setCart] = useState<CartTarget | null>(null);
   const [view, setView] = useState<'stores' | 'cards'>('stores');
   // Toggling pickup changes a Store's total, which would re-sort it; hold the order it had when the switch was flipped.
@@ -706,6 +718,10 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
               </Button>
               {elsewhereOpen && (
                 <ul className="mt-2 divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  <li className="flex flex-wrap items-center gap-2 py-1">
+                    <span className="text-slate-500 flex-1">Together: {money(elsewhere.reduce((t, e) => t + e.cost, 0))} here, against {money(elsewhere.reduce((t, e) => t + e.current, 0))} now (before postage).</span>
+                    <Button className="text-xs py-0.5" onClick={() => onPinAll(elsewhere.map(e => e.card.buyKey), s.id)}>Move all {elsewhere.length} here</Button>
+                  </li>
                   {elsewhere.map(e => (
                     <li key={e.card.buyKey} className="flex flex-wrap items-center gap-2 py-1">
                       <span className="tabnum text-slate-500">{e.card.qty}×</span>

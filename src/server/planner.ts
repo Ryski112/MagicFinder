@@ -279,7 +279,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
   const partialCards = prep.buy.filter(b => partial.has(b.oracleId)).map(b => b.name);
   return {
     planId: x.planId, rungs, kmin: state.kmin, final: state.final, notFound: prep.notFound, unidentified: x.search.unidentified,
-    sources: x.search.sources, skippedBasics, unrecognised: x.want.unrecognised, partialCards, offers,
+    sources: x.search.sources, cards, shops, skippedBasics, unrecognised: x.want.unrecognised, partialCards, offers,
     cardKingdom: ck && prep.buy.length
       ? compareAtCardKingdom(prep.buy, catalogue, ck, { allowFoils: settings.allowFoils, shippingUsd: settings.cardKingdom.shippingUsd })
       : null,

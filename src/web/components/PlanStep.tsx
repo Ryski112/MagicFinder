@@ -18,6 +18,8 @@ interface Props {
   onSettings: (p: Partial<Settings>) => void;
   onEdit: () => void;
   onSearchAgain: () => void;
+  /** A change was just made and the re-planned result hasn't arrived yet. */
+  updating?: boolean;
 }
 
 const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
@@ -78,7 +80,7 @@ export function PlanStep(p: Props) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Button variant="link" onClick={p.onEdit}>← Edit Want List</Button>
         <div className="text-sm text-slate-500">
-          {refining ? 'Finding cheaper Plans…' : 'Final'}
+          {p.updating ? 'Updating your Plan…' : refining ? 'Finding cheaper Plans…' : 'Final'}
           {p.ladder.kmin !== null && ` · Fewest Stores that cover your list: ${p.ladder.kmin}`}
         </div>
       </div>

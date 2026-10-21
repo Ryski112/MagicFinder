@@ -31,7 +31,7 @@ export interface Prepared {
 }
 
 export function listChoices(choices: PlanChoices, s: Settings): ListChoices {
-  return { included: choices.included, locks: choices.locks, relaxed: choices.relaxed, required: choices.required, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
+  return { included: choices.included, locks: choices.locks, relaxed: choices.relaxed, required: choices.required, avoid: choices.avoid, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
 }
 
 export function buyerContext(s: Settings): BuyerContext {
@@ -72,7 +72,8 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
   const searched = (oracleId: string) => search.sources.filter(s => s.status !== 'off' && !s.notSearched.includes(oracleId)).map(s => s.name);
 
   for (const line of buy) {
-    const usable = (byOracle.get(line.oracleId) ?? []).filter(l => isEligible(l, line, ctx.catalogue, settings));
+    const avoided = (l: Listing) => !!line.avoid?.includes(ctx.directory.forListing(l).id);
+    const usable = (byOracle.get(line.oracleId) ?? []).filter(l => isEligible(l, line, ctx.catalogue, settings) && !avoided(l));
     const pinned = applyPin(
       usable,
       choices.pins?.[line.key],
@@ -85,7 +86,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
     if (need < line.quantity) {
       const excluded: Partial<Record<Exclusion, number>> = {};
       for (const l of byOracle.get(line.oracleId) ?? []) {
-        const why = exclusion(l, line, ctx.catalogue, settings);
+        const why = exclusion(l, line, ctx.catalogue, settings) ?? (avoided(l) ? 'avoided-store' : null);
         if (why) excluded[why] = (excluded[why] ?? 0) + 1;
       }
       notFound.push({

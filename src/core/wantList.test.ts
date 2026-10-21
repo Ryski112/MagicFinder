@@ -84,6 +84,14 @@ describe('buyLines', () => {
     expect(b.find(l => l.name === 'Counterspell')?.relaxed).toBe(true);
     expect(b.find(l => l.name === 'Sol Ring')?.relaxed).toBe(false);
   });
+
+  it('carries the Stores a card must not come from onto its merged line', () => {
+    const r = resolveWantList(LIST, cat);
+    const one = r.lines.find(l => l.name === 'Counterspell')!;
+    const b = buyLines(r.lines, choices({ avoid: { [one.id]: ['badgers-sett'] } }));
+    expect(b.find(l => l.name === 'Counterspell')?.avoid).toEqual(['badgers-sett']);
+    expect(b.find(l => l.name === 'Sol Ring')?.avoid).toEqual([]);
+  });
 });
 
 describe('isEligible', () => {

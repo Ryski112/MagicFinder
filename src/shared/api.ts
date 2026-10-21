@@ -89,6 +89,8 @@ export interface PlanChoices {
   relaxed?: Record<string, boolean>;
   /** Line ids a Short Plan must cover. */
   required?: Record<string, boolean>;
+  /** Store ids a line's card must not come from, by line id. */
+  avoid?: Record<string, string[]>;
   pins?: Record<string, string>;
 }
 

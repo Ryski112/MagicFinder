@@ -98,6 +98,13 @@ export function PlanStep(p: Props) {
     pins[`${item.oracleId}|${lock.printingId}:${lock.finish}`] = storeId;
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(item.lineIds.map(id => [id, lock])) }, pins });
   };
+  /** Don't buy this card from this Store: the Plan is made again without it. */
+  const avoidStore = (item: { lineIds: string[] }, storeId: string) => {
+    if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    const avoid = { ...p.choices.avoid };
+    for (const id of item.lineIds) avoid[id] = [...new Set([...(avoid[id] ?? []), storeId])];
+    p.onChoices({ ...p.choices, avoid });
+  };
   /** Take a Listing whose Printing isn't known: any Printing is allowed, and the line is pinned to its Store. */
   const pinStore = (item: { buyKey: string; oracleId: string; lineIds: string[] }, storeId: string) => {
     if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
@@ -142,6 +149,8 @@ export function PlanStep(p: Props) {
       <div className={cx('space-y-6', p.updating && 'opacity-50 pointer-events-none transition-opacity')} aria-busy={p.updating}>
       <OverridesBar
         cards={p.ladder.cards}
+        shops={p.ladder.shops}
+        onUnavoid={(ids, storeId) => p.onChoices({ ...p.choices, avoid: Object.fromEntries(Object.entries(p.choices.avoid ?? {}).map(([id, list]) => [id, ids.includes(id) ? list.filter(x => x !== storeId) : list])) })}
         choices={p.choices}
         settings={p.settings}
         onUndoRelax={ids => p.onChoices({ ...p.choices, relaxed: { ...p.choices.relaxed, ...Object.fromEntries(ids.map(id => [id, false])) }, required: { ...p.choices.required, ...Object.fromEntries(ids.map(id => [id, false])) } })}
@@ -296,7 +305,7 @@ export function PlanStep(p: Props) {
                     : { kind: 'store', store: s, k: cartK, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
                 )
               }
-              onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onExclude={() => excludeStore(s)} />
+              onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onAvoid={avoidStore} onExclude={() => excludeStore(s)} />
           ))}
         </section>
       )}
@@ -760,13 +769,16 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRela
 }
 
 /** Everything the buyer has overridden for this Plan, in one place, each with a way to undo it. */
-function OverridesBar({ cards, choices, settings, onUndoRelax, onUnlock, onUnpin, onSettings }: {
-  cards: LadderView['cards']; choices: PlanChoices; settings: Settings;
-  onUndoRelax: (lineIds: string[]) => void; onUnlock: (lineIds: string[]) => void; onUnpin: (keys: string[]) => void; onSettings: (p: Partial<Settings>) => void;
+function OverridesBar({ cards, shops, choices, settings, onUnavoid, onUndoRelax, onUnlock, onUnpin, onSettings }: {
+  cards: LadderView['cards']; shops: LadderView['shops']; choices: PlanChoices; settings: Settings;
+  onUnavoid: (lineIds: string[], storeId: string) => void; onUndoRelax: (lineIds: string[]) => void; onUnlock: (lineIds: string[]) => void; onUnpin: (keys: string[]) => void; onSettings: (p: Partial<Settings>) => void;
 }) {
   const [open, setOpen] = useState(true);
   const chips: { key: string; kind: string; text: string; undo: () => void; undoLabel: string }[] = [];
   for (const c of cards) {
+    for (const storeId of new Set(c.lineIds.flatMap(id => choices.avoid?.[id] ?? []))) {
+      chips.push({ key: `avoid:${c.buyKey}:${storeId}`, kind: 'Not from', text: `${shops.find(x => x.id === storeId)?.name ?? storeId}: ${c.name}`, undo: () => onUnavoid(c.lineIds, storeId), undoLabel: 'Allow again' });
+    }
     if (c.lineIds.some(id => choices.relaxed?.[id])) chips.push({ key: `relax:${c.buyKey}`, kind: "Don't exclude", text: c.name, undo: () => onUndoRelax(c.lineIds), undoLabel: 'Exclude again' });
     if (c.lineIds.some(id => choices.locks[id])) chips.push({ key: `lock:${c.buyKey}`, kind: 'Locked to one Printing', text: c.name, undo: () => onUnlock(c.lineIds), undoLabel: 'Allow any Printing' });
   }
@@ -845,7 +857,8 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onExclude }: {
+function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onAvoid, onExclude }: {
+  onAvoid: (item: ItemView, storeId: string) => void;
   onExclude: () => void; onPinAll: (buyKeys: string[], storeId: string) => void; qtyOf: Map<string, number>;
   planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing'];
   store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
@@ -901,7 +914,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
         <ul className="divide-y divide-slate-100 dark:divide-slate-800 min-w-0">
           {s.items.map(i => (
             <li key={i.listingId} className="px-4 py-2">
-              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onRemove={() => onRemove(i.name, i.lineIds)} />
+              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onAvoid={() => onAvoid(i, s.id)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (
                 <PrintingGrid runId={runId} lineId={i.lineIds[0]} planStoreIds={planStoreIds} need={qtyOf.get(i.buyKey) ?? i.qty} current={s.items.filter(x => x.buyKey === i.buyKey).map(x => ({ storeId: s.id, printingId: x.printing?.id ?? null, finish: x.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
                   onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} onBuyFrom={(lock, storeId) => { onBuyFrom(i, lock, storeId); setOpen(null); }} onPinStore={storeId => { onPinStore(i, storeId); setOpen(null); }} />
@@ -944,7 +957,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
   );
 }
 
-function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onRemove: () => void }) {
+function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onAvoid: () => void; onRemove: () => void }) {
   // A Store's own picture is the best evidence when the title didn't settle the Printing.
   const img = i.printing?.image ?? i.storeImage ?? i.fallbackImage;
   return (
@@ -969,7 +982,7 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onRemove }: { item:
           {i.overCardKingdom && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} />}
         </div>
         <div className="text-xs text-slate-500 truncate">
-          {i.printing?.label ?? i.title} · <Button variant="link" className="text-xs" onClick={onToggle}>{open ? 'hide Printings' : 'other Printings'}</Button>
+          {i.printing?.label ?? i.title} · <Button variant="link" className="text-xs" onClick={onToggle}>{open ? 'hide Printings' : 'other Printings'}</Button> · <Button variant="link" className="text-xs" title="Buy this card from another Store; the Plan is made again without this one" onClick={onAvoid}>not from this Store</Button>
         </div>
       </div>
       <div className="flex flex-col items-end sm:flex-row sm:items-center sm:gap-3 shrink-0">
@@ -1163,6 +1176,7 @@ function excludedNote(n: NotFoundView, settings: Settings): string {
     'non-tournament': 'not tournament legal',
     'blocked-printing': 'on your never-buy Printings list',
     'blocked-listing': 'on your never-buy Listings list',
+    'avoided-store': 'at a Store you ruled out for this card',
   };
   const parts = (Object.entries(n.excluded) as [Exclusion, number][]).sort((a, b) => b[1] - a[1]).map(([why, count]) => `${count} ${reasons[why]}`);
   return parts.length ? `found but left out: ${parts.join(', ')}` : '';

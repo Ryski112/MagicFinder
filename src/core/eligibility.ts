@@ -15,7 +15,7 @@ export interface EligibilitySettings {
 }
 
 /** Why a Listing of the right card can't fill a line, so Not Found can say what was left out. */
-export type Exclusion = 'non-english' | 'not-buyable' | 'unmatched' | 'sold-out' | 'condition' | 'other-printing' | 'foil' | 'non-tournament' | 'blocked-printing' | 'blocked-listing';
+export type Exclusion = 'non-english' | 'not-buyable' | 'unmatched' | 'sold-out' | 'condition' | 'other-printing' | 'foil' | 'non-tournament' | 'blocked-printing' | 'blocked-listing' | 'avoided-store';
 
 /** The reasons that come from the buyer's own settings, which they can waive for one card. */
 export const WAIVABLE: ReadonlySet<Exclusion> = new Set<Exclusion>(['condition', 'foil', 'non-tournament']);

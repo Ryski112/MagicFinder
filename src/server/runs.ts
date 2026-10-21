@@ -420,6 +420,15 @@ export class RunManager {
     return this.hosted ? this.byBrowser.get(browserId) : undefined;
   }
 
+  /** The buyer cancelled the search: stop it and drop it, so its queue slot frees and a reload doesn't pick it up. */
+  cancel(id: string): boolean {
+    const run = this.runs.get(id);
+    if (!run) return false;
+    this.forget(run);
+    run.cancel();
+    return true;
+  }
+
   /** Settings changed: re-plan the active run. Desktop only; in hosted mode each browser re-plans its own run. */
   replanAll() {
     for (const r of this.runs.values()) void r.replan().catch(() => {});

@@ -8,5 +8,5 @@ export default defineConfig({
   root: 'src/web',
   plugins: [react(), tailwindcss()],
   build: { outDir: '../../dist/web', emptyOutDir: true },
-  server: { proxy: { '/api': `http://localhost:${SERVER_PORT}` } },
+  server: { proxy: { '^/api/': `http://localhost:${SERVER_PORT}` } },
 });

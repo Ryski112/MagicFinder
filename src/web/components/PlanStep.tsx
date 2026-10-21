@@ -194,6 +194,11 @@ function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }:
                     📌 You chose this Store. <Button variant="link" className="text-xs" onClick={() => onPin(c.buyKey, null)}>Let MagicFinder choose</Button>
                   </div>
                 )}
+                {c.lineIds.length > 0 && c.bought.length > 0 && (
+                  <Button variant="link" className="text-xs mt-1 mr-3" onClick={() => setPrintingsOpen(printingsOpen === c.buyKey ? null : c.buyKey)}>
+                    {printingsOpen === c.buyKey ? 'hide Printings' : 'Printings & Stores'}
+                  </Button>
+                )}
                 {all.length > chosen.size && (
                   <Button variant="link" className="text-xs mt-1" onClick={() => setOpen(open === c.buyKey ? null : c.buyKey)}>
                     {open === c.buyKey ? 'hide other Stores' : `${all.length - chosen.size} other Listing${all.length - chosen.size > 1 ? 's' : ''}`}
@@ -201,6 +206,11 @@ function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }:
                 )}
               </div>
             </div>
+            {printingsOpen === c.buyKey && c.bought.length > 0 && (
+              <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock}
+                onLock={lock => { onLock(c.lineIds, lock); setPrintingsOpen(null); }}
+                onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); setPrintingsOpen(null); }} />
+            )}
             {open === c.buyKey && (
               <div className="mt-3 grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {all.filter(o => !chosen.has(o.listingId)).map(o => {
@@ -412,7 +422,9 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin }: {
+function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onBlock, onExclude }: {
+  onExclude: () => void; onPinAll: (buyKeys: string[], storeId: string) => void; qtyOf: Map<string, number>;
+  planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onBlock: PrintingActions['onBlock'];
   store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -454,7 +466,8 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
             <li key={i.listingId} className="px-4 py-2">
               <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (
-                <PrintingGrid runId={runId} lineId={i.lineIds[0]} onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} />
+                <PrintingGrid runId={runId} lineId={i.lineIds[0]} planStoreIds={planStoreIds} need={qtyOf.get(i.buyKey) ?? i.qty} current={s.items.filter(x => x.buyKey === i.buyKey).map(x => ({ storeId: s.id, printingId: x.printing?.id ?? null, finish: x.finish }))} onBlock={onBlock}
+                  onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} onBuyFrom={(lock, storeId) => { onBuyFrom(i, lock, storeId); setOpen(null); }} />
               )}
             </li>
           ))}
@@ -534,9 +547,23 @@ function RemoveButton({ name, onClick, className }: { name: string; onClick: () 
   );
 }
 
-function PrintingGrid({ runId, lineId, onLock }: { runId: string; lineId: string; onLock: (lock: Lock | null) => void }) {
+interface PrintingActions {
+  /** Store ids already in the selected Plan, so their Listings can be marked. */
+  planStoreIds: Set<string>;
+  /** Copies the line needs, to warn when a Store has fewer. */
+  need: number;
+  /** The Listings the Plan already buys for this line, which aren't offered again as alternatives. */
+  current: { storeId: string; printingId: string | null; finish: Finish }[];
+  onLock: (lock: Lock | null) => void;
+  /** Lock the Printing and pin the line to a Store in one go. */
+  onBuyFrom: (lock: Lock, storeId: string) => void;
+  onBlock: (printing: PrintingView, blocked: boolean, cardName: string) => void;
+}
+
+function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBuyFrom, onBlock }: { runId: string; lineId: string } & PrintingActions) {
   const [data, setData] = useState<PrintingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blockedHere, setBlockedHere] = useState<Record<string, boolean>>({});
   useEffect(() => {
     api.printings(runId, lineId).then(setData, e => setError((e as Error).message));
   }, [runId, lineId]);
@@ -627,6 +654,7 @@ function excludedNote(n: NotFoundView, settings: Settings): string {
     'other-printing': 'other Printings (this one is locked)',
     foil: 'foil (foils are off)',
     'non-tournament': 'not tournament legal',
+    'blocked-printing': 'on your never-buy Printings list',
   };
   const parts = (Object.entries(n.excluded) as [Exclusion, number][]).sort((a, b) => b[1] - a[1]).map(([why, count]) => `${count} ${reasons[why]}`);
   return parts.length ? `found but left out: ${parts.join(', ')}` : '';

@@ -270,7 +270,9 @@ export function printingOptions(want: ResolvedWantList, search: SearchResult, li
       printing: printingView(g.printing, g.finish),
       cheapest: g.prices.length ? Math.min(...g.prices) : null,
       stores: g.stores.size,
+      offers: g.offers.sort((a, b) => a.price - b.price),
       locked: !!lock && lockKey(lock) === key,
+      blocked: !!ctx.settings.blockedPrintings[g.printing.id],
     }))
     .sort((a, b) => (a.cheapest ?? Infinity) - (b.cheapest ?? Infinity));
 }

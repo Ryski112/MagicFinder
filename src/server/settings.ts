@@ -23,6 +23,8 @@ export interface Settings {
   allowFoils: boolean;
   useListPrintings: boolean;
   includeBasics: boolean;
+  /** Printings the buyer never wants bought (unless a line is locked to one), by Scryfall id, with a label to show in Settings. */
+  blockedPrintings: Record<string, string>;
   sources: Record<SourceId, boolean>;
   theme: 'dark' | 'light';
   /** Everyday cards used to tell a silent block from real Not Founds. Edit here to change the basket. */
@@ -46,7 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   allowFoils: true,
   useListPrintings: false,
   includeBasics: false,
-  sources: { fetch: true, mtgsingles: true },
+  blockedPrintings: {},
+  sources: { fetch: true, mtgsingles: true, 'mtgsingles-au': false },
   theme: 'dark',
   staples: ['Lightning Bolt', 'Counterspell', 'Swords to Plowshares', 'Llanowar Elves', 'Sol Ring'],
   rungTimeLimitS: 10,

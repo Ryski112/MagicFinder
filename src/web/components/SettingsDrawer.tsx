@@ -68,6 +68,7 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
           <Switch checked={s.allowFoils} onChange={v => onChange({ allowFoils: v })} label="Allow foils" />
           <Switch checked={s.useListPrintings} onChange={v => onChange({ useListPrintings: v })} label="Use the Printings from my list" />
           <Switch checked={s.includeBasics} onChange={v => onChange({ includeBasics: v })} label="Include basic lands" />
+          <BlockedPrintings blocked={s.blockedPrintings} onChange={blockedPrintings => onChange({ blockedPrintings })} />
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">

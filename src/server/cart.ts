@@ -36,11 +36,17 @@ function variantFoil(v: ShopifyVariant): boolean {
   return /\bfoil\b/i.test(v.title) && !/non-?foil/i.test(v.title);
 }
 
+/** A Listing's price in the Store's own currency: Australian Listings keep their AUD price, the rest are NZD. */
+function shopPrice(l: Listing): number {
+  const aud = Number(l.extra?.priceAud);
+  return l.extra?.priceAud && Number.isFinite(aud) ? aud : l.price;
+}
+
 /** Picks the variant matching a Listing's condition and finish, falling back to the one with the same price. */
 export function pickVariant(l: Listing, variants: ShopifyVariant[], variantId?: string | null): ShopifyVariant | null {
   if (variantId) return variants.find(v => String(v.id) === variantId) ?? null;
   if (variants.length === 1) return variants[0];
-  const cents = Math.round(l.price * 100);
+  const cents = Math.round(shopPrice(l) * 100);
   const rank = RAW_RANK[l.extra?.rawCondition ?? ''] ?? (l.condition ? RAW_RANK[l.condition] : undefined);
   const foil = l.finish !== 'nonfoil';
   const matching = variants.filter(v => (rank === undefined || variantRank(v) === rank) && variantFoil(v) === foil);
@@ -101,7 +107,6 @@ export async function checkShopifyCart(
       lines.push(base);
       continue;
     }
-    host ??= u.host;
     await (throttle ?? storeThrottle(u.host)).wait();
     const r = await get(`https://${u.host}/products/${handle}.js`);
     if (r.redirectedTo && /\/password/.test(r.redirectedTo)) {
@@ -115,17 +120,21 @@ export async function checkShopifyCart(
       lines.push(base);
       continue;
     }
+    // A shop can answer from another domain (singles.area52.com.au moves to shop.area52.com.au); its cart lives there.
+    host ??= r.redirectedTo ? new URL(r.redirectedTo).host : u.host;
     const v = pickVariant(listing, variants, u.searchParams.get('variant'));
     if (!v) {
       lines.push(base);
       continue;
     }
+    // Compare in the shop's currency, then show the buyer today's price in NZD at the rate the Listing was priced at.
+    const expected = shopPrice(listing);
     const current = v.price / 100;
     lines.push({
       ...base,
       variantId: String(v.id),
-      currentPrice: current,
-      status: !v.available ? 'unavailable' : Math.abs(current - listing.price) > 0.005 ? 'price-changed' : 'ok',
+      currentPrice: Math.round(current * (listing.price / expected) * 100) / 100,
+      status: !v.available ? 'unavailable' : Math.abs(current - expected) > 0.005 ? 'price-changed' : 'ok',
     });
   }
   const cartable = lines.filter(l => (l.status === 'ok' || l.status === 'price-changed') && l.variantId);

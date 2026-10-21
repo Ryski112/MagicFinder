@@ -115,6 +115,10 @@ export function postageFor(cost: StoreCost, subtotal: number): number {
   return cost.freeOver !== null && subtotal >= cost.freeOver ? 0 : cost.postage;
 }
 
+// A Listing link to a Shopify product page; Stores not in the Store table (the Australian ones) that link like this get
+// "Add all to cart", and the cart pre-check falls back to Open Listings if the shop turns out not to be Shopify.
+const SHOPIFY_PRODUCT = /^https?:\/\/[^/]+(?:\/[^?#]*)?\/products\/[^/?#]+/;
+
 /** Looks up the Store a Listing belongs to; Fetch sellers and unknown Stores get a default record. */
 export class StoreDirectory {
   private byKey = new Map<string, StoreRecord>();
@@ -146,7 +150,7 @@ export class StoreDirectory {
         site: null,
         location: { city: l.city ?? null, region: regionOf(l.city) },
         pickup: { available: l.pickupOffered ?? null, fee: 0 },
-        cart: l.source === 'fetch' ? 'fetch' : 'open-listings',
+        cart: l.source === 'fetch' ? 'fetch' : SHOPIFY_PRODUCT.test(l.url) ? 'shopify' : 'open-listings',
         country: l.source === 'mtgsingles-au' ? 'AU' : undefined,
       };
       this.dynamic.set(l.storeKey, r);

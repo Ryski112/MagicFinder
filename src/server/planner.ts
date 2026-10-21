@@ -9,7 +9,7 @@ import { buyLines, isIncluded, lockFor, lockKey, type BuyLine, type ListChoices,
 import type { LadderState, Rung } from '../optimiser/ladder';
 import { cheapestPrices, pruneDominated, type Problem } from '../optimiser/problem';
 import type { ItemView, LadderView, ShopView, UnconfirmedListingView, WantedCardView, NotFoundView, OfferView, PlanChoices, PrintingOption, PrintingView, RungView, StoreView } from '../shared/api';
-import { cardKingdomUnitNzd, compareAtCardKingdom, overCardKingdom, type CardKingdomContext } from './cardKingdom';
+import { cardKingdomUnitNzd, compareAtCardKingdom, overCardKingdom, underCardKingdom, type CardKingdomContext } from './cardKingdom';
 import type { SearchResult } from './search';
 import type { Settings } from './settings';
 
@@ -186,7 +186,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         const ckNzd = ck ? cardKingdomUnitNzd(ck, catalogue, b.oracleId, l.finish) : null;
         return {
           listingId: l.id, storeId: store.id, storeName: store.name, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish,
-          label: p ? printingView(p, l.finish).label : l.title, printingId: p?.id ?? null, storeImage: l.imageUrl ?? null, image: p?.imageSmall ?? cardImage(catalogue, b.oracleId), url: l.url, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd),
+          label: p ? printingView(p, l.finish).label : l.title, printingId: p?.id ?? null, storeImage: l.imageUrl ?? null, image: p?.imageSmall ?? cardImage(catalogue, b.oracleId), url: l.url, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd), underCardKingdom: underCardKingdom(l.price, ckNzd),
         };
       })
       .sort((a, b) => a.price - b.price);
@@ -218,7 +218,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
           listingId: l.id, buyKey: b.key, lineIds: b.lineIds, oracleId: b.oracleId, name: b.name, qty, price: l.price,
           condition: l.condition, finish: l.finish, printing: p ? printingView(p, l.finish) : null,
           fallbackImage: p?.imageSmall ? null : cardImage(catalogue, b.oracleId), title: l.title, storeImage: l.imageUrl ?? null, url: l.url, source: l.source,
-          locked: !!b.lock, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd), extra: l.extra,
+          locked: !!b.lock, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd), underCardKingdom: underCardKingdom(l.price, ckNzd), extra: l.extra,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
       return {

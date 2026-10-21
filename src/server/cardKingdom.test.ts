@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import type { BuyLine } from '../core/wantList';
-import { cardKingdomUnitNzd, CardKingdomPrices, compareAtCardKingdom, overCardKingdom } from './cardKingdom';
+import { cardKingdomUnitNzd, CardKingdomPrices, compareAtCardKingdom, overCardKingdom, underCardKingdom } from './cardKingdom';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-ck-'));
 let cat: Catalogue;
@@ -78,6 +78,20 @@ describe('overCardKingdom', () => {
     expect(overCardKingdom(5, 1)).toBe(false);
     expect(overCardKingdom(4, 1)).toBe(false);
     expect(overCardKingdom(20, null)).toBe(false);
+  });
+});
+
+describe('underCardKingdom', () => {
+  it('flags prices 25% or more under CardKingdom', () => {
+    expect(underCardKingdom(7.5, 10)).toBe(true);
+    expect(underCardKingdom(3, 10)).toBe(true);
+    expect(underCardKingdom(7.51, 10)).toBe(false);
+  });
+
+  it('never flags cards CardKingdom sells for under NZ$5, or does not have', () => {
+    expect(underCardKingdom(1, 4.99)).toBe(false);
+    expect(underCardKingdom(1, 5)).toBe(true);
+    expect(underCardKingdom(1, null)).toBe(false);
   });
 });
 

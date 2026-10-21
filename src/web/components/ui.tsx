@@ -105,18 +105,23 @@ export function Tag({ children, tone = 'plain', title }: { children: ReactNode; 
   );
 }
 
-export function CardKingdomChip({ price, cardKingdomNzd }: { price: number; cardKingdomNzd: number }) {
+/** True when a Listing's price may not be like-for-like: below NM, or the Printing isn't confirmed. */
+export const unsure = (condition: string | null, printingId: string | null) => condition !== 'NM' || printingId === null;
+
+/** "+X%" over CardKingdom (orange, red from +60%), or "−X%" under it (green, darker from −50%). `unsure` warns that a bargain may not be like-for-like. */
+export function CardKingdomChip({ price, cardKingdomNzd, unsure = false }: { price: number; cardKingdomNzd: number; unsure?: boolean }) {
   const pct = Math.round((price / cardKingdomNzd - 1) * 100);
-  const severe = pct >= 60;
+  const bargain = pct < 0;
+  const severe = bargain ? pct <= -50 : pct >= 60;
   return (
     <span
-      title={`${money(price)} here vs ${money(cardKingdomNzd)} at CardKingdom, before shipping`}
+      title={`${money(price)} here vs ${money(cardKingdomNzd)} at CardKingdom, before shipping${bargain ? ` — a bargain${unsure ? '. Check the condition and Printing' : ''}` : ''}`}
       className={cx(
         'text-[11px] font-bold px-1.5 rounded-full tabnum cursor-help whitespace-nowrap shrink-0',
-        severe ? 'bg-rose-600 text-white' : 'bg-orange-500 text-white',
+        bargain ? (severe ? 'bg-emerald-700 text-white' : 'bg-emerald-500 text-white') : severe ? 'bg-rose-600 text-white' : 'bg-orange-500 text-white',
       )}
     >
-      +{pct}%
+      {bargain ? `−${-pct}` : `+${pct}`}%
     </span>
   );
 }

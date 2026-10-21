@@ -5,7 +5,7 @@ import { ShopsView, type StorePick } from './ShopsView';
 import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
 import { cardsElsewhere, costAtStore, isWaivable, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
-import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo } from './ui';
+import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo, unsure } from './ui';
 
 interface Props {
   runId: string;
@@ -349,7 +349,11 @@ function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock
       {cards.map(c => {
         const all = offers[c.buyKey] ?? [];
         const chosen = new Set(c.bought.map(b => b.item.listingId));
-        const worst = c.bought.map(b => b.item).filter(i => i.overCardKingdom && i.cardKingdomNzd !== null).sort((a, b) => b.price / b.cardKingdomNzd! - a.price / a.cardKingdomNzd!)[0];
+        // One chip per card: the dearest Listing over CardKingdom, else the best bargain under it.
+        const ratio = (i: ItemView) => i.price / i.cardKingdomNzd!;
+        const items = c.bought.map(b => b.item).filter(i => i.cardKingdomNzd !== null);
+        const worst = items.filter(i => i.overCardKingdom).sort((a, b) => ratio(b) - ratio(a))[0]
+          ?? items.filter(i => i.underCardKingdom).sort((a, b) => ratio(a) - ratio(b))[0];
         return (
           <li key={c.buyKey} className="px-4 py-2 text-sm">
             <div className="flex items-start gap-3">
@@ -358,7 +362,7 @@ function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="tabnum text-slate-500">{c.qty}×</span>
                   <span className="font-medium">{c.name}</span>
-                  {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} />}
+                  {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} unsure={unsure(worst.condition, worst.printing?.id ?? null)} />}
                   {c.notFound && <Tag tone="warn">{c.bought.length ? `${c.missing} not found` : 'Not found'}</Tag>}
                   {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
                   {c.lineIds.length > 0 && <RemoveButton className="ml-auto" name={c.name} onClick={() => onRemove(c.name, c.lineIds)} />}
@@ -409,7 +413,7 @@ function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock
                       <div className="flex flex-wrap items-center gap-1 my-1">
                         {o.condition && <Tag>{o.condition}</Tag>}
                         {o.finish !== 'nonfoil' && <Tag>{o.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
-                        {o.overCardKingdom && o.cardKingdomNzd !== null && <CardKingdomChip price={o.price} cardKingdomNzd={o.cardKingdomNzd} />}
+                        {(o.overCardKingdom || o.underCardKingdom) && o.cardKingdomNzd !== null && <CardKingdomChip price={o.price} cardKingdomNzd={o.cardKingdomNzd} unsure={unsure(o.condition, o.printingId)} />}
                       </div>
                       <div className="text-sm font-semibold tabnum">{money(o.price)}</div>
                       <div className="text-[11px] text-slate-500">{o.qty} in stock</div>
@@ -1003,7 +1007,7 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }
           <Tag title={i.condition ? undefined : 'The Store did not state a condition'}>{i.condition ?? 'condition not stated'}</Tag>
           {i.finish !== 'nonfoil' && <Tag>{i.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
           {!i.printing && <Tag tone="warn" title="Matched the card but not the exact Printing">Printing not confirmed</Tag>}
-          {i.overCardKingdom && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} />}
+          {(i.overCardKingdom || i.underCardKingdom) && i.cardKingdomNzd !== null && <CardKingdomChip price={i.price} cardKingdomNzd={i.cardKingdomNzd} unsure={unsure(i.condition, i.printing?.id ?? null)} />}
         </div>
         <div className="text-xs text-slate-500 truncate">
           {i.printing?.label ?? i.title} · <Button variant="link" className="text-xs" onClick={onToggle}>{open ? 'hide Printings' : 'other Printings'}</Button> · <Button variant="link" className="text-xs" title="Buy this card from another Store; the Plan is made again without this one" onClick={onAvoid}>not from this Store</Button>

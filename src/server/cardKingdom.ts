@@ -107,6 +107,9 @@ export class CardKingdom {
 
 export const FLAG_MIN_NZD = 5;
 export const FLAG_MARGIN = 0.3;
+/** A bargain is at least 25% under CardKingdom, on a card CardKingdom sells for at least NZ$5. */
+export const BARGAIN_MIN_NZD = 5;
+export const BARGAIN_MARGIN = 0.25;
 export const GST_RATE = 0.15;
 
 const withGst = (ck: CardKingdomContext, nzd: number) => (ck.gst ? nzd * (1 + GST_RATE) : nzd);
@@ -125,6 +128,10 @@ export function cardKingdomUnitNzd(ck: CardKingdomContext, catalogue: Catalogue,
 
 export function overCardKingdom(priceNzd: number, ckNzd: number | null): boolean {
   return ckNzd !== null && priceNzd > FLAG_MIN_NZD && priceNzd > ckNzd * (1 + FLAG_MARGIN);
+}
+
+export function underCardKingdom(priceNzd: number, ckNzd: number | null): boolean {
+  return ckNzd !== null && ckNzd >= BARGAIN_MIN_NZD && priceNzd <= ckNzd * (1 - BARGAIN_MARGIN);
 }
 
 export interface CardKingdomOptions {

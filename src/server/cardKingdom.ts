@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Catalogue } from '../catalogue/catalogue';
+import type { Catalogue, Printing } from '../catalogue/catalogue';
 import type { Finish } from '../core/types';
 import type { BuyLine } from '../core/wantList';
 import type { CardKingdomView } from '../shared/api';
@@ -17,7 +17,10 @@ export interface CkEntry {
   url: string;
 }
 
-const key = (printingId: string, finish: Finish) => `${printingId}:${finish}`;
+/** CardKingdom knows only foil and non-foil; it lists etched foils as foil. */
+export type CkFinish = 'nonfoil' | 'foil';
+
+const key = (printingId: string, finish: CkFinish) => `${printingId}:${finish}`;
 const cents = (n: number) => Math.round(n * 100) / 100;
 
 export class CardKingdomPrices {
@@ -43,11 +46,11 @@ export class CardKingdomPrices {
     return this.entries.size > 0;
   }
 
-  get(printingId: string, finish: Finish): CkEntry | undefined {
+  get(printingId: string, finish: CkFinish): CkEntry | undefined {
     return this.entries.get(key(printingId, finish));
   }
 
-  replace(rows: { printingId: string; finish: Finish; entry: CkEntry }[]) {
+  replace(rows: { printingId: string; finish: CkFinish; entry: CkEntry }[]) {
     this.entries = new Map(rows.map(r => [key(r.printingId, r.finish), r.entry]));
     this.fetchedAt = Date.now();
   }
@@ -114,16 +117,13 @@ export const GST_RATE = 0.15;
 
 const withGst = (ck: CardKingdomContext, nzd: number) => (ck.gst ? nzd * (1 + GST_RATE) : nzd);
 
-export function cardKingdomUnitNzd(ck: CardKingdomContext, catalogue: Catalogue, oracleId: string, finish: Finish): number | null {
-  if (finish === 'etched') return null;
-  const usd = Math.min(
-    Infinity,
-    ...catalogue.printingsOf(oracleId).filter(p => !p.nonTournament).flatMap(p => {
-      const entry = ck.prices.get(p.id, finish);
-      return entry ? [entry.usd] : [];
-    }),
-  );
-  return Number.isFinite(usd) ? cents(withGst(ck, usd * ck.usdToNzd)) : null;
+/**
+ * CardKingdom's price per copy of a line, NZD with GST when that is on: its locked Printing, or else the cheapest Printing
+ * and finish CardKingdom has. Every Listing of the line is compared against this one price, whatever its own Printing.
+ */
+export function cardKingdomUnitNzd(ck: CardKingdomContext, catalogue: Catalogue, line: CardKingdomLine, allowFoils: boolean): number | null {
+  const cheapest = cardKingdomOffers(line, catalogue, ck, allowFoils)[0];
+  return cheapest ? cardKingdomPaidNzd(ck, cheapest.entry.usd) : null;
 }
 
 export function overCardKingdom(priceNzd: number, ckNzd: number | null): boolean {
@@ -139,18 +139,31 @@ export interface CardKingdomOptions {
   shippingUsd: number;
 }
 
+export type CardKingdomLine = Pick<BuyLine, 'oracleId' | 'lock'>;
+
+/**
+ * The finish a CardKingdom copy of a Printing has, or null when it doesn't fit the Printing. CardKingdom only knows foil
+ * and non-foil, so its foil of an etched-only Printing is the etched foil; and when Scryfall knows a Printing in just one
+ * finish, CardKingdom's word is taken for the copy it actually sells.
+ */
+function cardKingdomFinish(printing: Printing, ckFinish: CkFinish): Finish | null {
+  const finish: Finish = ckFinish === 'foil' && !printing.finishes.includes('foil') && printing.finishes.includes('etched') ? 'etched' : ckFinish;
+  return printing.finishes.includes(finish) || printing.finishes.length === 1 ? finish : null;
+}
+
 /** What CardKingdom sells of one line (a locked Printing, or any Printing), cheapest first. */
-export function cardKingdomOffers(line: BuyLine, catalogue: Catalogue, ck: CardKingdomContext, allowFoils: boolean) {
-  const candidates = line.lock
-    ? [{ printingId: line.lock.printingId, finish: line.lock.finish }]
-    : catalogue.printingsOf(line.oracleId)
-        .filter(p => !p.nonTournament)
-        .flatMap(p => (['nonfoil', ...(allowFoils ? ['foil'] : [])] as Finish[]).filter(f => p.finishes.includes(f)).map(finish => ({ printingId: p.id, finish })));
-  return candidates
-    .flatMap(c => {
-      const entry = ck.prices.get(c.printingId, c.finish);
-      return entry ? [{ ...c, entry }] : [];
-    })
+export function cardKingdomOffers(line: CardKingdomLine, catalogue: Catalogue, ck: CardKingdomContext, allowFoils: boolean) {
+  const lock = line.lock;
+  const printings = lock
+    ? [catalogue.getPrinting(lock.printingId)].filter((p): p is Printing => !!p)
+    : catalogue.printingsOf(line.oracleId).filter(p => !p.nonTournament);
+  const ckFinishes: CkFinish[] = lock || allowFoils ? ['nonfoil', 'foil'] : ['nonfoil'];
+  return printings
+    .flatMap(p => ckFinishes.flatMap(ckFinish => {
+      const entry = ck.prices.get(p.id, ckFinish);
+      const finish = entry ? cardKingdomFinish(p, ckFinish) : null;
+      return entry && finish && (!lock || finish === lock.finish) ? [{ printingId: p.id, finish, entry }] : [];
+    }))
     .sort((a, b) => a.entry.usd - b.entry.usd);
 }
 

@@ -87,7 +87,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
       l => ctx.directory.forListing(l).id,
       line.quantity,
     );
-    const eligible = ck ? withoutOverpriced(pinned, line, ctx.catalogue, ck) : pinned;
+    const eligible = ck ? withoutOverpriced(pinned, line, ctx.catalogue, ck, ctx.settings.allowFoils) : pinned;
     const available = eligible.reduce((s, l) => s + l.quantity, 0);
     const need = Math.min(line.quantity, available);
     if (need < line.quantity) {
@@ -109,7 +109,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
     const lineOffers: { listing: Listing; store: StoreRecord }[] = [];
     offers.set(line.key, lineOffers);
     // The Store a card is pinned to is the only one the Plan may use, but every Store's Listings stay visible.
-    for (const l of ck ? withoutOverpriced(usable, line, ctx.catalogue, ck) : usable) {
+    for (const l of ck ? withoutOverpriced(usable, line, ctx.catalogue, ck, ctx.settings.allowFoils) : usable) {
       listings.set(l.id, l);
       lineOffers.push({ listing: l, store: ctx.directory.forListing(l) });
     }
@@ -133,8 +133,9 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
  * Drops Listings flagged as over CardKingdom's price. If the rest couldn't cover the line, the overpriced ones stay
  * (all of them when nothing else matches), so a card is never reported Not Found just because it's dear.
  */
-function withoutOverpriced(listings: Listing[], line: BuyLine, catalogue: Catalogue, ck: CardKingdomContext): Listing[] {
-  const fair = listings.filter(l => !overCardKingdom(l.price, cardKingdomUnitNzd(ck, catalogue, line.oracleId, l.finish)));
+function withoutOverpriced(listings: Listing[], line: BuyLine, catalogue: Catalogue, ck: CardKingdomContext, allowFoils: boolean): Listing[] {
+  const ckNzd = cardKingdomUnitNzd(ck, catalogue, line, allowFoils);
+  const fair = listings.filter(l => !overCardKingdom(l.price, ckNzd));
   return fair.reduce((s, l) => s + l.quantity, 0) >= line.quantity ? fair : listings;
 }
 
@@ -184,13 +185,19 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
   const { catalogue, settings } = ctx;
   const buyByKey = new Map(prep.buy.map(b => [b.key, b]));
   const ck = ctx.cardKingdom && settings.cardKingdom.enabled ? { ...ctx.cardKingdom, gst: settings.cardKingdom.addGst } : null;
+  const ckByKey = new Map<string, number | null>();
+  const ckUnit = (b: BuyLine) => {
+    if (!ck) return null;
+    if (!ckByKey.has(b.key)) ckByKey.set(b.key, cardKingdomUnitNzd(ck, catalogue, b, settings.allowFoils));
+    return ckByKey.get(b.key)!;
+  };
   const offers: LadderView['offers'] = {};
   for (const [key, list] of prep.offers) {
     const b = buyByKey.get(key)!;
     offers[key] = list
       .map(({ listing: l, store }): OfferView => {
         const p = l.printingId ? catalogue.getPrinting(l.printingId) : null;
-        const ckNzd = ck ? cardKingdomUnitNzd(ck, catalogue, b.oracleId, l.finish) : null;
+        const ckNzd = ckUnit(b);
         return {
           listingId: l.id, storeId: store.id, storeName: store.name, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish,
           label: p ? printingView(p, l.finish).label : l.title, printingId: p?.id ?? null, storeImage: l.imageUrl ?? null, image: p?.imageSmall ?? cardImage(catalogue, b.oracleId), url: l.url, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd), underCardKingdom: underCardKingdom(l.price, ckNzd),
@@ -220,7 +227,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
       const items: ItemView[] = entries.map(({ listing: l, qty, line }) => {
         const b = buyByKey.get(prep.problem.lines[line].key)!;
         const p = l.printingId ? catalogue.getPrinting(l.printingId) : null;
-        const ckNzd = ck ? cardKingdomUnitNzd(ck, catalogue, b.oracleId, l.finish) : null;
+        const ckNzd = ckUnit(b);
         return {
           listingId: l.id, buyKey: b.key, lineIds: b.lineIds, oracleId: b.oracleId, name: b.name, qty, price: l.price,
           condition: l.condition, finish: l.finish, printing: p ? printingView(p, l.finish) : null,

@@ -518,7 +518,7 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onRemove }: { item:
         </div>
       </div>
       <div className="flex flex-col items-end sm:flex-row sm:items-center sm:gap-3 shrink-0">
-        <span className="tabnum">{money(i.price)}</span>
+        <span className="tabnum">{money(i.price)}{i.extra?.priceAud && <span className="text-xs text-slate-500" title="Listed in Australian dollars; converted to NZD"> (A${Number(i.extra.priceAud).toFixed(2)})</span>}</span>
         <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
       </div>
       <RemoveButton name={i.name} onClick={onRemove} />
@@ -578,6 +578,7 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
           {postageLabel}
           {s.postageEstimated && <Button variant="link" className="ml-1 text-xs text-amber-600 dark:text-amber-400" title="This Store doesn't publish postage; click to enter what it charges you" onClick={() => setEditing(true)}>est.</Button>}
           {override !== undefined && s.postageKind !== 'pickup' && <Button variant="link" className="ml-1 text-xs" title="Your price for this Store" onClick={() => setEditing(true)}>yours</Button>}
+          {override === undefined && !s.postageEstimated && s.postageKind === 'postage' && <Button variant="link" className="ml-1 text-xs" title="Enter what this Store really charges you" onClick={() => setEditing(true)}>edit</Button>}
         </span>
         <span>{s.postageKind === 'free' ? 'Free' : money(s.postage)}</span>
       </div>
@@ -587,6 +588,13 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
           <input autoFocus type="number" min={0} step={0.1} value={value} onChange={e => setValue(e.target.value)} className="w-20 border rounded px-1 py-0.5 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600" />
           <Button variant="primary" className="text-xs py-0.5" type="submit">Save</Button>
           <Button variant="ghost" className="text-xs py-0.5" onClick={() => setEditing(false)}>Cancel</Button>
+          {override !== undefined && (
+            <Button variant="link" className="text-xs" title="Go back to the Store's usual postage" onClick={() => {
+              const { [s.id]: _gone, ...rest } = settings.postageOverrides;
+              onSettings({ postageOverrides: rest });
+              setEditing(false);
+            }}>Reset</Button>
+          )}
         </form>
       )}
       {s.postageKind === 'postage' && s.freeOver !== null && s.subtotal < s.freeOver && (

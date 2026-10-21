@@ -22,6 +22,8 @@ export interface StoreRecord {
   postage?: PostageOption[];
   free_postage?: { threshold: RegionValue; applies_to: 'all' | 'singles_only' };
   cart: CartKind;
+  /** Where the Store is; Australian Stores ship internationally, so their postage is a guess unless the buyer sets it. */
+  country?: 'NZ' | 'AU';
   provenance?: { url: string | null; checked_on: string; confidence: 'checkout' | 'published' | 'inferred' | 'default' };
 }
 
@@ -91,6 +93,8 @@ export function storeCost(store: StoreRecord, buyer: BuyerContext): StoreCost {
   const override = buyer.postageOverrides[store.id];
   if (override !== undefined) return { postage: override, freeOver: threshold, kind: 'postage', estimated: false };
 
+  if (store.country === 'AU') return { postage: buyer.australiaPostage, freeOver: threshold, kind: 'postage', estimated: true };
+
   const options = (store.postage ?? []).filter(o => buyer.postageType === 'standard' || o.tracked !== false);
   if (!options.length) {
     const { tracked, rural } = buyer.defaultPostage;
@@ -128,7 +132,7 @@ export class StoreDirectory {
     if (known) return known;
     let r = this.dynamic.get(l.storeKey);
     if (!r) {
-      if (l.source === 'mtgsingles') this.unknownKeys.add(l.storeKey);
+      if (l.source.startsWith('mtgsingles')) this.unknownKeys.add(l.storeKey);
       r = {
         id: l.storeKey,
         name: l.storeName,
@@ -137,6 +141,7 @@ export class StoreDirectory {
         location: { city: l.city ?? null, region: regionOf(l.city) },
         pickup: { available: l.pickupOffered ?? null, fee: 0 },
         cart: l.source === 'fetch' ? 'fetch' : 'open-listings',
+        country: l.source === 'mtgsingles-au' ? 'AU' : undefined,
       };
       this.dynamic.set(l.storeKey, r);
     }

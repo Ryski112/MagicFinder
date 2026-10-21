@@ -132,6 +132,15 @@ export function cardImage(catalogue: Catalogue, oracleId: string): string | null
 
 function storeUrl(rec: StoreRecord, items: Listing[]): string | null {
   if (rec.site) return rec.site;
+  // A Store missing from the table (every Australian one): its Listings' own web address leads to its shop.
+  const own = items.find(l => l.source === 'mtgsingles-au')?.url;
+  if (own) {
+    try {
+      return new URL(own).origin;
+    } catch {
+      return null;
+    }
+  }
   const profile = items.find(l => l.source === 'fetch')?.extra?.profile;
   return profile ? `https://www.fetchtcg.com/profiles/${encodeURIComponent(profile)}` : null;
 }
@@ -238,20 +247,23 @@ export function printingOptions(want: ResolvedWantList, search: SearchResult, li
   if (!line) return [];
   const lock = lockFor(line, listChoices(choices, ctx.settings));
   const settings = { minCondition: ctx.settings.minCondition, allowFoils: true };
-  const groups = new Map<string, { printing: Printing; finish: Finish; prices: number[]; stores: Set<string> }>();
+  const groups = new Map<string, { printing: Printing; finish: Finish; prices: number[]; stores: Set<string>; offers: PrintingOption['offers'] }>();
   for (const l of search.listings) {
     if (l.oracleId !== line.oracleId || l.confidence !== 'exact' || !l.printingId || !passesListingFilters(l, settings)) continue;
+    if (ctx.settings.excludedStores[ctx.directory.forListing(l).id]) continue;
     const p = ctx.catalogue.getPrinting(l.printingId);
     if (!p) continue;
     const key = lockKey({ printingId: p.id, finish: l.finish });
     let g = groups.get(key);
-    if (!g) groups.set(key, (g = { printing: p, finish: l.finish, prices: [], stores: new Set() }));
+    if (!g) groups.set(key, (g = { printing: p, finish: l.finish, prices: [], stores: new Set(), offers: [] }));
+    const rec = ctx.directory.forListing(l);
     g.prices.push(l.price);
-    g.stores.add(ctx.directory.forListing(l).id);
+    g.stores.add(rec.id);
+    g.offers.push({ storeId: rec.id, storeName: rec.name, price: l.price, qty: l.quantity, condition: l.condition, url: l.url });
   }
   if (lock && !groups.has(lockKey(lock))) {
     const p = ctx.catalogue.getPrinting(lock.printingId);
-    if (p) groups.set(lockKey(lock), { printing: p, finish: lock.finish, prices: [], stores: new Set() });
+    if (p) groups.set(lockKey(lock), { printing: p, finish: lock.finish, prices: [], stores: new Set(), offers: [] });
   }
   return [...groups.entries()]
     .map(([key, g]) => ({

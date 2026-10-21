@@ -67,7 +67,7 @@ let n = 0;
 function manager(hosted: HostedRunOptions | null, sources: Source[], onSettings?: (s: SettingsStore) => void) {
   const d = mkdtempSync(join(dir, `m${n++}-`));
   const settings = new SettingsStore(d);
-  settings.update({ sources: { fetch: sources.some(s => s.id === 'fetch'), mtgsingles: sources.some(s => s.id === 'mtgsingles') } });
+  settings.update({ sources: { fetch: sources.some(s => s.id === 'fetch'), mtgsingles: sources.some(s => s.id === 'mtgsingles'), 'mtgsingles-au': false } });
   onSettings?.(settings);
   return new RunManager(
     {
@@ -189,7 +189,7 @@ describe('RunManager in hosted mode', () => {
   it('plans each search with its own friend\'s settings, and re-plans only that search when they change', async () => {
     const fetch = gatedSource('fetch');
     const mtg = gatedSource('mtgsingles');
-    const runs = manager(HOSTED, [fetch.source, mtg.source], s => s.update({ sources: { fetch: true, mtgsingles: true } }));
+    const runs = manager(HOSTED, [fetch.source, mtg.source], s => s.update({ sources: { fetch: true, mtgsingles: true, 'mtgsingles-au': false } }));
     // Card Kingdom off, so a late price refresh doesn't send an extra Plan.
     const both = friendSettings({ cardKingdom: { enabled: false } });
     const noMtg = friendSettings({ cardKingdom: { enabled: false }, sources: { mtgsingles: false } });

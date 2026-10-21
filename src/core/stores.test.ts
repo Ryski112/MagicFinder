@@ -38,6 +38,12 @@ describe('regionOf', () => {
 });
 
 describe('storeCost', () => {
+  it("charges an Australian Store the buyer's Australia postage guess, marked as estimated", () => {
+    const au = { ...stores[0], id: 'mtgsingles:AU/X', country: 'AU' as const };
+    expect(storeCost(au, buyer({ australiaPostage: 18 }))).toMatchObject({ postage: 18, estimated: true, kind: 'postage' });
+    expect(storeCost(au, buyer({ australiaPostage: 18, postageOverrides: { [au.id]: 12 } }))).toMatchObject({ postage: 12, estimated: false });
+  });
+
   it('uses the published tracked price and free-postage threshold', () => {
     const c = storeCost(byId('hobby-master'), buyer());
     expect(c).toMatchObject({ postage: 6, freeOver: 100, kind: 'postage', estimated: false });

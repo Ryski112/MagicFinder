@@ -44,6 +44,8 @@ export function createApp(d: AppDeps) {
     }),
   );
 
+  app.get('/api/stores', c => c.json<StoreChoice[]>((d.stores?.() ?? []).map(s => ({ id: s.id, name: s.name, city: s.location.city, country: s.country ?? 'NZ' }))));
+
   app.get('/api/settings', c => c.json<Settings>(d.settings.get()));
 
   // Hosted mode: the page sends the settings its browser keeps; the answer is them merged onto the server's own.

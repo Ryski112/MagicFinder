@@ -9,14 +9,14 @@ This spec gathers the decisions made on the [Wayfinder map](https://github.com/R
 **In scope**
 - A locally run app on each user's own computer. It's started with one command and opens in the browser. Friends with some coding knowledge can install it.
 - Two Sources: Fetch TCG and MtgSingles. The data layer takes more Sources later as plug-ins.
-- NZ-based Stores only.
+- NZ-based Stores, plus an optional "Australian Stores" mode (off by default, MtgSingles AU only): prices are converted from AUD, postage to NZ is a buyer-editable guess, and the buyer excludes any Store that turns out not to ship to NZ (excluded Stores are remembered). Plans combine NZ and AU Stores.
 - Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL, plus a card searcher that adds cards by name.
 - Live search per run with about a 1 h cache, then a Trade-off Ladder of Plans and a per-Store breakdown with clean links.
 - A per-Store button that opens the Store with the Plan's cards in the cart (where the Store supports it). The buyer checks out themselves.
 
 **Out of scope**
 - Sources beyond Fetch TCG and MtgSingles (design for them, don't build them). This includes reading Stores' own Shopify shops as a Source.
-- Australian Stores.
+- Australian Stores beyond MtgSingles AU, and knowing which ones ship to NZ (the buyer checks and excludes).
 - A public hosted site.
 - Docker/NAS and shared multi-user installs.
 - Automating checkout or placing orders.

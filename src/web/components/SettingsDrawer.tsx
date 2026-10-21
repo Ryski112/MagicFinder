@@ -73,6 +73,15 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex flex-col gap-3">
           <Switch checked={s.sources.fetch} onChange={v => onChange({ sources: { ...s.sources, fetch: v } })} label="Search Fetch TCG" />
           <Switch checked={s.sources.mtgsingles} onChange={v => onChange({ sources: { ...s.sources, mtgsingles: v } })} label="Search MtgSingles" />
+          <Switch checked={s.sources['mtgsingles-au']} onChange={v => onChange({ sources: { ...s.sources, 'mtgsingles-au': v } })} label="Include Australian Stores (MtgSingles AU)" />
+          {s.sources['mtgsingles-au'] && (
+            <label className="block">Australian Store postage to NZ (NZ$)
+              <input type="number" min={0} step={1} className={field} value={s.australiaPostage}
+                onChange={e => onChange({ australiaPostage: Number(e.target.value) })} />
+              <span className="text-xs text-slate-500">A guess for each Australian Store. Prices are converted from AUD. Not every Store ships to NZ: use "Doesn't ship to NZ" on the Plan screen to drop one.</span>
+            </label>
+          )}
+          <ExcludedStores excluded={s.excludedStores} onChange={excludedStores => onChange({ excludedStores })} />
           {/* Hosted mode: the cache is shared by everyone and at most an hour old. */}
           {!hosted && <ClearCache />}
         </div>

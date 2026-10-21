@@ -137,6 +137,8 @@ export interface StoreView {
   id: string;
   name: string;
   city: string | null;
+  /** 'AU' for an Australian Store, whose postage to NZ is a guess and which may not ship here at all. */
+  country: 'NZ' | 'AU';
   sources: SourceId[];
   site: string | null;
   storeUrl: string | null;

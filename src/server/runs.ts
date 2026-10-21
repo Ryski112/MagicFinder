@@ -92,6 +92,13 @@ export class Run {
   }
 
   private searchedCards = new Set<string>();
+  /** Which Sources the cards were searched with, so switching one on (e.g. Australia) searches again. */
+  private searchedWith = '';
+
+  private enabledSources() {
+    const s = this.deps.settings.get();
+    return this.deps.sources.filter(src => s.sources[src.id]).map(src => src.id).join(',');
+  }
 
   /** Follows this run's events until the returned function is called. */
   listen(l: Listener): () => void {
@@ -159,6 +166,7 @@ export class Run {
       this.searchAbort.signal,
     ).finally(() => (this.searchingNow = false));
     for (const c of cards) this.searchedCards.add(c.oracleId);
+    this.searchedWith = this.enabledSources();
     this.search = this.search ? mergeResults(this.search, result) : result;
   }
 
@@ -168,6 +176,11 @@ export class Run {
     if (friend && this.friend) this.friend = friend;
     this.working++;
     try {
+      // Searches are cached, so Sources that were already asked answer instantly; only the newly enabled one is slow.
+      if (this.search && this.searchedWith !== this.enabledSources()) {
+        this.searchedCards.clear();
+        this.search = null;
+      }
       this.searching ??= this.searchMissing().finally(() => (this.searching = null));
       await this.searching;
       await this.plan();
@@ -282,7 +295,7 @@ export interface HostedRunOptions {
 export const HOSTED_RUNS: HostedRunOptions = { maxActive: 10, idleStopMs: 2 * 60 * 1000, idleDropMs: 30 * 60 * 1000 };
 
 /** Rough seconds per live card search until one has been measured (MtgSingles pages ~1.8 times a card, 1.5 s apart). */
-const SECONDS_PER_CARD: Record<SourceId, number> = { mtgsingles: 2.7, fetch: 1.2 };
+const SECONDS_PER_CARD: Record<SourceId, number> = { mtgsingles: 2.7, 'mtgsingles-au': 2.7, fetch: 1.2 };
 
 export class RunManager {
   private runs = new Map<string, Run>();

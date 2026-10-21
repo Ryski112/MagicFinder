@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { httpGet, mapMtgSinglesListing, MtgSinglesSource, parsePrice, storeNameFromKey } from './mtgSingles';
+import { Throttle } from './policy';
 import { SourceError } from './types';
 
 const rows: any[] = JSON.parse(readFileSync('test/fixtures/mtgsingles-counterspell.json', 'utf8'));
@@ -42,6 +43,18 @@ describe('mapMtgSinglesListing', () => {
     expect(mapMtgSinglesListing({ ...rows[0], store: 'AU/Somewhere' })).toBeNull();
     expect(mapMtgSinglesListing({ ...rows[0], availableQty: 0 })).toBeNull();
   });
+
+  it('prices Australian Listings in NZD and marks them as the Australian Source', () => {
+    const au = mapMtgSinglesListing({ ...rows[0], store: 'AU/Somewhere', price: '$2.10' }, undefined, 'AU', 1.1)!;
+    expect(au.price).toBe(2.31);
+    expect(au.source).toBe('mtgsingles-au');
+    expect(au.storeKey).toBe('mtgsingles:AU/Somewhere');
+    expect(au.extra?.priceAud).toBe('2.1');
+  });
+
+  it('leaves NZ Listings out of the Australian Source', () => {
+    expect(mapMtgSinglesListing(rows[0], undefined, 'AU', 1.1)).toBeNull();
+  });
 });
 
 describe('helpers', () => {
@@ -72,7 +85,7 @@ describe('MtgSinglesSource.search', () => {
       urls.push(url);
       return { status: 200, body: '[]', contentType: 'application/json' };
     };
-    await new MtgSinglesSource({ get }).search('Fracture');
+    await new MtgSinglesSource({ get, throttle: new Throttle(0) }).search('Fracture');
     expect(urls).toHaveLength(1);
     expect(new URL(urls[0]).searchParams.get('isExactMatch')).toBe('true');
     expect(new URL(urls[0]).searchParams.get('query')).toBe('Fracture');
@@ -84,7 +97,7 @@ describe('MtgSinglesSource.search', () => {
       queries.push(new URL(url).searchParams.get('query')!);
       return { status: 204, body: '', contentType: null };
     };
-    await new MtgSinglesSource({ get }).search('Bartolomé del Presidio');
+    await new MtgSinglesSource({ get, throttle: new Throttle(0) }).search('Bartolomé del Presidio');
     expect(queries).toEqual(['Bartolomé del Presidio', 'Bartolome del Presidio']);
   });
 
@@ -94,7 +107,7 @@ describe('MtgSinglesSource.search', () => {
       queries.push(new URL(url).searchParams.get('query')!);
       return { status: 200, body: JSON.stringify(rows.slice(0, 3)), contentType: 'application/json' };
     };
-    const found = await new MtgSinglesSource({ get }).search('Fire // Ice');
+    const found = await new MtgSinglesSource({ get, throttle: new Throttle(0) }).search('Fire // Ice');
     expect(queries).toEqual(['Fire', 'Fire // Ice']);
     expect(found).toHaveLength(3);
   });

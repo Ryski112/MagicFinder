@@ -27,6 +27,8 @@ export interface Settings {
   preferredOn: boolean;
   /** Stores the buyer can't or won't use (e.g. an Australian Store that doesn't ship to NZ), by Store id with its name. */
   excludedStores: Record<string, string>;
+  /** Leave out Australian Stores whose checkout doesn't post to NZ. Unknown ones stay, with a warning. */
+  excludeAuNoNzShipping: boolean;
   minCondition: Condition;
   allowFoils: boolean;
   useListPrintings: boolean;
@@ -64,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultPostage: { tracked: 7, rural: 5 },
   australiaPostage: 20,
   excludedStores: {},
+  excludeAuNoNzShipping: true,
   preferredStores: {},
   preferredOn: true,
   minCondition: 'LP',
@@ -94,7 +97,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const FRIEND_KEYS = [
   'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
   'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom', 'australiaPostage', 'excludedStores',
-  'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings', 'shortPlanCap',
+  'excludeAuNoNzShipping', 'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings', 'shortPlanCap',
 ] as const satisfies readonly (keyof Settings)[];
 
 export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;

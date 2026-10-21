@@ -27,6 +27,16 @@ describe('Store table', () => {
     expect(new Set(keys).size).toBe(keys.length);
     for (const s of stores) expect(['shopify', 'open-listings', 'hobbymaster-deckbuilder']).toContain(s.cart);
   });
+
+  it("lists Australian Stores under the ids MagicFinder gave them before, saying whether they ship to NZ", () => {
+    const au = stores.filter(s => s.country === 'AU');
+    expect(au.length).toBeGreaterThan(0);
+    for (const s of au) {
+      expect(s.id).toBe(`mtgsingles:${s.source_keys.mtgsingles}`);
+      expect([true, false, null]).toContain(s.ships_to_nz);
+      if (s.ships_to_nz !== true) expect(s.postage).toBeUndefined();
+    }
+  });
 });
 
 describe('regionOf', () => {
@@ -45,6 +55,13 @@ describe('storeCost', () => {
     const au = { ...stores[0], id: 'mtgsingles:AU/X', country: 'AU' as const };
     expect(storeCost(au, buyer({ australiaPostage: 18 }))).toMatchObject({ postage: 18, estimated: true, kind: 'postage' });
     expect(storeCost(au, buyer({ australiaPostage: 18, postageOverrides: { [au.id]: 12 } }))).toMatchObject({ postage: 12, estimated: false });
+  });
+
+  it("charges an Australian Store its checkout's rate to NZ when known, with no rural extra", () => {
+    const au: StoreRecord = { ...stores[0], id: 'mtgsingles:AU/X', country: 'AU', postage: [{ name: 'Standard (AU$21.00)', tracked: null, price: 25.2, rural_surcharge: 0 }] };
+    expect(storeCost(au, buyer({ australiaPostage: 18 }))).toMatchObject({ postage: 25.2, estimated: false });
+    expect(storeCost(au, buyer({ ruralAddress: true })).postage).toBe(25.2);
+    expect(storeCost(au, buyer({ postageOverrides: { [au.id]: 12 } })).postage).toBe(12);
   });
 
   it('uses the published tracked price and free-postage threshold', () => {

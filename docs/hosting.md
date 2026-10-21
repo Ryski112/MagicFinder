@@ -37,6 +37,7 @@ The data folder holds:
 | `search-cache.sqlite` | Searches from the last day, shared by everyone. Fresh for 1 hour. |
 | `settings.json` | **Server-only** settings: the staples basket, the rung time limit (`rungTimeLimitS`) and Source health. Friends' own settings live in their browsers. |
 | `cardkingdom-prices.json`, `exchange-rate.json` | The Card Kingdom compare's price list and exchange rate. |
+| `au-stores.json` | The weekly Australian Store check: which ship to NZ, and their postage. Delete it to go back to the list the image shipped with; the next check runs within the hour. |
 
 Nothing here needs a backup. Every file rebuilds itself if it's deleted.
 

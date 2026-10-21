@@ -155,8 +155,10 @@ export interface StoreView {
   id: string;
   name: string;
   city: string | null;
-  /** 'AU' for an Australian Store, whose postage to NZ is a guess and which may not ship here at all. */
+  /** 'AU' for an Australian Store, whose postage to NZ may be a guess. */
   country: 'NZ' | 'AU';
+  /** Null for an Australian Store nobody could check: it may not ship to NZ. */
+  shipsToNz: boolean | null;
   sources: SourceId[];
   site: string | null;
   storeUrl: string | null;
@@ -279,6 +281,7 @@ export interface ShopView {
   name: string;
   city: string | null;
   country: 'NZ' | 'AU';
+  shipsToNz: boolean | null;
   sources: SourceId[];
   storeUrl: string | null;
   preferred: boolean;

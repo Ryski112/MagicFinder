@@ -47,6 +47,13 @@ export function buyerContext(s: Settings): BuyerContext {
   };
 }
 
+const shipsToNz = (rec: StoreRecord) => (rec.country === 'AU' ? rec.ships_to_nz ?? null : true);
+
+/** A Store the buyer left out, or an Australian one that doesn't post to NZ (unless the buyer wants those shown). */
+export function storeLeftOut(rec: StoreRecord, s: Pick<Settings, 'excludedStores' | 'excludeAuNoNzShipping'>): boolean {
+  return !!s.excludedStores[rec.id] || (s.excludeAuNoNzShipping && rec.country === 'AU' && rec.ships_to_nz === false);
+}
+
 export function preparePlan(want: ResolvedWantList, search: SearchResult, choices: PlanChoices, ctx: PlanContext): Prepared {
   const buy = buyLines(want.lines, listChoices(choices, ctx.settings));
   const buyer = buyerContext(ctx.settings);
@@ -56,7 +63,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
   const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils, blockedPrintings: ctx.settings.blockedPrintings, blockedListings: ctx.settings.blockedListings };
   const byOracle = new Map<string, Listing[]>();
   for (const l of search.listings) {
-    if (!l.oracleId || ctx.settings.excludedStores[ctx.directory.forListing(l).id]) continue;
+    if (!l.oracleId || storeLeftOut(ctx.directory.forListing(l), ctx.settings)) continue;
     let list = byOracle.get(l.oracleId);
     if (!list) byOracle.set(l.oracleId, (list = []));
     list.push(l);
@@ -222,7 +229,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
       return {
-        id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', sources, site: rec.site ?? null, storeUrl: storeUrl(rec, entries.map(e => e.listing)),
+        id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', shipsToNz: shipsToNz(rec), sources, site: rec.site ?? null, storeUrl: storeUrl(rec, entries.map(e => e.listing)),
         cart: rec.cart, pickupEligible: pickupEligible(rec, prep.buyer), pickupConfirmed: rec.pickup.available === true,
         preferred: prep.buyer.preferredStores.has(rec.id), pickupOn: cost.kind === 'pickup' && !prep.buyer.preferredStores.has(rec.id), pickupFee: rec.pickup.fee, subtotal: ps.subtotal, postage: ps.postage,
         postageKind: cost.kind === 'pickup' ? 'pickup' : ps.postage === 0 ? 'free' : 'postage', postageEstimated: cost.estimated && cost.kind !== 'pickup',
@@ -285,7 +292,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
     const cost = storeCost(rec, prep.buyer);
     const sources = [...new Set(shopListings.get(rec.id)!.map(l => l.source))];
     return {
-      id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', sources, storeUrl: storeUrl(rec, shopListings.get(rec.id)!),
+      id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', shipsToNz: shipsToNz(rec), sources, storeUrl: storeUrl(rec, shopListings.get(rec.id)!),
       preferred: prep.buyer.preferredStores.has(rec.id), postage: cost.postage, postageEstimated: cost.estimated && cost.kind !== 'pickup', freeOver: cost.kind === 'pickup' ? null : cost.freeOver,
     };
   });
@@ -309,7 +316,7 @@ export function unconfirmedListings(want: ResolvedWantList, search: SearchResult
   if (!line) return [];
   const settings = { minCondition: ctx.settings.minCondition, allowFoils: true };
   return search.listings
-    .filter(l => l.oracleId === line.oracleId && l.confidence === 'card-only' && passesListingFilters(l, settings) && !ctx.settings.excludedStores[ctx.directory.forListing(l).id])
+    .filter(l => l.oracleId === line.oracleId && l.confidence === 'card-only' && passesListingFilters(l, settings) && !storeLeftOut(ctx.directory.forListing(l), ctx.settings))
     .map(l => {
       const rec = ctx.directory.forListing(l);
       return { listingId: l.id, blocked: !!ctx.settings.blockedListings[l.id], storeId: rec.id, storeName: rec.name, title: l.title, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish, image: l.imageUrl ?? null, url: l.url };
@@ -326,7 +333,7 @@ export function printingOptions(want: ResolvedWantList, search: SearchResult, li
   const groups = new Map<string, { printing: Printing; finish: Finish; prices: number[]; stores: Set<string>; offers: PrintingOption['offers'] }>();
   for (const l of search.listings) {
     if (l.oracleId !== line.oracleId || l.confidence !== 'exact' || !l.printingId || !passesListingFilters(l, settings)) continue;
-    if (ctx.settings.excludedStores[ctx.directory.forListing(l).id]) continue;
+    if (storeLeftOut(ctx.directory.forListing(l), ctx.settings)) continue;
     const p = ctx.catalogue.getPrinting(l.printingId);
     if (!p) continue;
     const key = lockKey({ printingId: p.id, finish: l.finish });

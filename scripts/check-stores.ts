@@ -36,7 +36,8 @@ async function get(url: string): Promise<{ status: number; body: string; url: st
 }
 
 for (const s of stores) {
-  if (!s.site) continue;
+  // Australian Stores have their own weekly check (npm run probe-au).
+  if (!s.site || s.country === 'AU') continue;
   const policyUrl = s.provenance?.url && !s.provenance.url.endsWith('meta.json') ? s.provenance.url : `${s.site}/policies/shipping-policy`;
   const policy = await get(policyUrl);
   await sleep(1000);

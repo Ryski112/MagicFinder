@@ -90,7 +90,7 @@ npm run package    # the Windows zip and Linux tarball, into release/ (see Relea
 - `src/optimiser`: the Trade-off Ladder: a fast greedy draft, then exact HiGHS solves in worker threads.
 - `src/server`: the local API (Hono), search runs, planning, Archidekt import and the cart pre-check.
 - `src/web`: the React UI.
-- `data/stores.yaml`: the hand-maintained Store table (postage, free-postage thresholds, pickup, cart type). Shopify Stores' postage is read from their checkout with `npm run probe-postage` (`-- --write` updates the file). A monthly GitHub Action (`npm run check-stores`) opens an issue when a Store's shipping policy, checkout postage or location changes.
+- `data/stores.yaml`: the hand-maintained Store table (postage, free-postage thresholds, pickup, cart type). Shopify Stores' postage is read from their checkout with `npm run probe-postage` (`-- --write` updates the file). A monthly GitHub Action (`npm run check-stores`) opens an issue when a Store's shipping policy, checkout postage or location changes. Australian Stores (whether each ships to NZ, and its postage) are rewritten by `npm run probe-au -- --write`, which a weekly GitHub Action runs and commits.
 
 ## Releasing
 

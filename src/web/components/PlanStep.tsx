@@ -5,7 +5,7 @@ import { ShopsView, type StorePick } from './ShopsView';
 import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
 import { cardsElsewhere, costAtStore, isWaivable, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
-import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo, unsure } from './ui';
+import { AustraliaTag, Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo, unsure } from './ui';
 
 interface Props {
   runId: string;
@@ -912,15 +912,13 @@ function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, o
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
         {s.storeUrl ? <a href={s.storeUrl} target="_blank" rel="noreferrer" className="font-semibold hover:underline">{s.name} ↗</a> : <span className="font-semibold">{s.name}</span>}
         {s.city && <span className="text-sm text-slate-500">{s.city}</span>}
-        {s.country === 'AU' && (
-          <Tag tone="warn" title="An Australian Store. Not all of them ship to NZ, so check its site before ordering; postage here is a guess.">Australia · check it ships to NZ</Tag>
-        )}
+        {s.country === 'AU' && <AustraliaTag shipsToNz={s.shipsToNz} estimated={s.postageEstimated} />}
         {s.sources.map(src => <SourceBadge key={src} source={src} />)}
         {s.staleSince && <Tag tone="warn" title="Its Source couldn't be searched just now">prices from {timeAgo(s.staleSince)}</Tag>}
         <div className="ml-auto flex items-center gap-3">
           <Button variant="link" className="text-xs" onClick={onExclude}
             title={`Leave ${s.name} out of every Plan from now on, e.g. because it doesn't ship to you. You can add it back in Settings.`}>
-            🚫 {s.country === 'AU' ? "Doesn't ship to NZ" : 'Exclude Store'}
+            🚫 {s.country === 'AU' && !s.shipsToNz ? "Doesn't ship to NZ" : 'Exclude Store'}
           </Button>
           <Button variant="link" className="text-xs" onClick={() => {
             const { [s.id]: _gone, ...rest } = settings.preferredStores;

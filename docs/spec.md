@@ -83,7 +83,7 @@ Notes:
 
 ### 3.3 CardKingdom comparison
 
-An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there. It only changes a Plan if the buyer switches on "Ignore Listings over 30% above CardKingdom" (off by default), which drops flagged Listings, except where the remaining Listings couldn't cover the copies wanted. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
+An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it ("+X%"), and Listings at least 25% below it as bargains ("−X%", green; only where CardKingdom's price is NZ$5 or more; owner's change, 2026-10-22). A bargain on a Listing below NM, or whose Printing isn't confirmed, says to check both, since it may not be like-for-like. It isn't a Source: nothing is bought there. It only changes a Plan if the buyer switches on "Ignore Listings over 30% above CardKingdom" (off by default), which drops flagged Listings, except where the remaining Listings couldn't cover the copies wanted. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
 
 - **CardKingdom's public price list**, `GET https://api.cardkingdom.com/api/v2/pricelist` (about 22 MB), saved to the user's data directory. Matched by Scryfall id. Planning never waits for it; the Plan's view is updated when it arrives.
 - **frankfurter.dev** for the USD→NZD rate, `GET https://api.frankfurter.dev/v1/latest?base=USD&symbols=NZD`, saved to the user's data directory, with 1.7 as the fallback.

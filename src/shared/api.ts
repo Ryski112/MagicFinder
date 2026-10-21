@@ -145,6 +145,8 @@ export interface ItemView {
   locked: boolean;
   cardKingdomNzd: number | null;
   overCardKingdom: boolean;
+  /** At least 25% under CardKingdom: a bargain. */
+  underCardKingdom: boolean;
   /** Source-specific details (e.g. MtgSingles' raw condition), used by the cart pre-check. */
   extra?: Record<string, string>;
 }
@@ -255,6 +257,8 @@ export interface OfferView {
   url: string;
   cardKingdomNzd: number | null;
   overCardKingdom: boolean;
+  /** At least 25% under CardKingdom: a bargain. */
+  underCardKingdom: boolean;
 }
 
 /** A card on the Want List, as the Store browser lists it. */

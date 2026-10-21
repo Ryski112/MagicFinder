@@ -1,7 +1,7 @@
 // Dividing an order between CardKingdom and the NZ Stores. CardKingdom joins the problem as one more Store whose
 // postage is its shipping (with GST) and whose prices are converted to NZD; it doesn't count toward the Store limit.
 import type { Catalogue } from '../catalogue/catalogue';
-import type { Finish } from '../core/types';
+import type { Condition, Finish } from '../core/types';
 import type { RungSolver } from '../optimiser/ladder';
 import { pruneDominated, round2, type Problem } from '../optimiser/problem';
 import type { SplitView, SweepView } from '../shared/api';
@@ -29,15 +29,15 @@ export async function splitWithCardKingdom(
   const shippingNzd = round2(cardKingdomPaidNzd(ck, opts.shippingUsd));
   problem.stores.push({ id: CK_STORE_ID, postage: shippingNzd, freeOver: null, free: true });
 
-  const ckOffers = new Map<string, { line: number; printingId: string; finish: Finish; usd: number; paid: number; url: string }>();
+  const ckOffers = new Map<string, { line: number; printingId: string; finish: Finish; condition: Condition; usd: number; paid: number; url: string }>();
   let ckOnly: number | null = 0;
   problem.lines.forEach((line, li) => {
     const b = buyByKey.get(line.key)!;
     let need = line.need;
     for (const o of cardKingdomOffers(b, catalogue, ck, opts.allowFoils)) {
-      const id = `ck:${o.printingId}:${o.finish}`;
+      const id = `ck:${o.printingId}:${o.finish}:${o.entry.condition}`;
       const paid = cardKingdomPaidNzd(ck, o.entry.usd);
-      ckOffers.set(id, { line: li, printingId: o.printingId, finish: o.finish, usd: o.entry.usd, paid, url: o.entry.url });
+      ckOffers.set(id, { line: li, printingId: o.printingId, finish: o.finish, condition: o.entry.condition, usd: o.entry.usd, paid, url: o.entry.url });
       problem.offers.push({ id, line: li, store: ckStore, price: paid, qty: o.entry.qty });
       if (need > 0) {
         const q = Math.min(need, o.entry.qty);
@@ -63,7 +63,7 @@ export async function splitWithCardKingdom(
       const b = buyByKey.get(pruned.lines[o.line].key)!;
       const printing = catalogue.getPrinting(c.printingId);
       ckItems.push({
-        buyKey: b.key, lineIds: b.lineIds, name: b.name, qty, priceUsd: c.usd, priceNzd: c.paid, finish: c.finish,
+        buyKey: b.key, lineIds: b.lineIds, name: b.name, qty, priceUsd: c.usd, priceNzd: c.paid, finish: c.finish, condition: c.condition,
         label: printing ? `${printing.setName} #${printing.collectorNumber}` : '', url: c.url,
       });
     } else {

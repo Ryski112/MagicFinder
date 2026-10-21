@@ -276,7 +276,7 @@ export class Run {
     const ctx = this.ctx();
     if (!prepared || !rung || rung.total === null) return { error: 'That Plan has changed. Pick it again.' };
     if (!ctx.cardKingdom || !ctx.settings.cardKingdom.enabled) return { error: 'Turn on "Compare with CardKingdom" in Settings first.' };
-    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst };
+    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst, minCondition: ctx.settings.minCondition };
     const planId = this.planId;
     const result = await splitWithCardKingdom(
       prepared, ctx.catalogue, ck, k, rung.total, planId,
@@ -293,7 +293,7 @@ export class Run {
     const ctx = this.ctx();
     if (!prepared || !rung || rung.total === null) return { error: 'That Plan has changed. Pick it again.' };
     if (!ctx.cardKingdom || !ctx.settings.cardKingdom.enabled) return { error: 'Turn on "Compare with CardKingdom" in Settings first.' };
-    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst };
+    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst, minCondition: ctx.settings.minCondition };
     const planId = this.planId;
     const cost = new Map<string, number>();
     for (const s of rung.stores) for (const i of s.items) cost.set(i.buyKey, (cost.get(i.buyKey) ?? 0) + i.price * i.qty);

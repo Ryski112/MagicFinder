@@ -3,18 +3,19 @@
 import type { Catalogue } from '../catalogue/catalogue';
 import { StoreDirectory } from '../core/stores';
 import { buyLines, resolveWantList, type ResolvedWantList } from '../core/wantList';
-import { buildLadder, LadderKnowledge, type LadderState, type RungSolver } from '../optimiser/ladder';
+import { buildLadder, findRunnerUp, LadderKnowledge, type LadderState, type RungSolver } from '../optimiser/ladder';
 import type { RungOutcome, SolveOptions } from '../optimiser/milp';
 import type { Problem } from '../optimiser/problem';
 import type { SourceId } from '../core/types';
-import type { LadderView, PlanChoices, RunEvent, SearchProgressView } from '../shared/api';
+import type { LadderView, PlanChoices, RunEvent, SearchProgressView, SplitView, SweepView } from '../shared/api';
 import type { Source } from '../sources/types';
 import type { CardKingdom } from './cardKingdom';
-import { ladderView, listChoices, preparePlan, printingOptions, type PlanContext, type Prepared } from './planner';
+import { ladderView, listChoices, preparePlan, printingOptions, unconfirmedListings, type PlanContext, type Prepared } from './planner';
 import { searchAll, type SearchCard, type SearchResult } from './search';
 import { friendSettings } from './settings';
 import type { SearchCache } from './searchCache';
 import type { FriendSettings, Settings, SettingsStore } from './settings';
+import { splitWithCardKingdom, sweepCardKingdom } from './split';
 
 export interface RunDeps {
   catalogue: () => Catalogue;
@@ -92,6 +93,13 @@ export class Run {
   }
 
   private searchedCards = new Set<string>();
+  /** Which Sources the cards were searched with, so switching one on (e.g. Australia) searches again. */
+  private searchedWith = '';
+
+  private enabledSources() {
+    const s = this.deps.settings.get();
+    return this.deps.sources.filter(src => s.sources[src.id]).map(src => src.id).join(',');
+  }
 
   /** Follows this run's events until the returned function is called. */
   listen(l: Listener): () => void {
@@ -159,6 +167,7 @@ export class Run {
       this.searchAbort.signal,
     ).finally(() => (this.searchingNow = false));
     for (const c of cards) this.searchedCards.add(c.oracleId);
+    this.searchedWith = this.enabledSources();
     this.search = this.search ? mergeResults(this.search, result) : result;
   }
 
@@ -168,6 +177,11 @@ export class Run {
     if (friend && this.friend) this.friend = friend;
     this.working++;
     try {
+      // Searches are cached, so Sources that were already asked answer instantly; only the newly enabled one is slow.
+      if (this.search && this.searchedWith !== this.enabledSources()) {
+        this.searchedCards.clear();
+        this.search = null;
+      }
       this.searching ??= this.searchMissing().finally(() => (this.searching = null));
       await this.searching;
       await this.plan();
@@ -193,7 +207,10 @@ export class Run {
     if (ctx.settings.cardKingdom.enabled) {
       void this.deps.cardKingdom.refresh().then(() => {
         if (abort.signal.aborted) return;
+        const hadPrices = !!ctx.cardKingdom;
         ctx = this.ctx();
+        // Ignoring overpriced Listings changes the Plan itself, so it has to be planned again with the prices.
+        if (!hadPrices && ctx.cardKingdom && ctx.settings.cardKingdom.ignoreOver) return void this.plan();
         if (latest) this.emit({ type: 'ladder', ladder: ladderView(prepared, latest, ctx, extras) });
       });
     }
@@ -230,12 +247,71 @@ export class Run {
     if (planId !== this.planId) return;
     if (short) knowledge.recordShort(k, outcome);
     else knowledge.record(k, outcome);
+    // The runner-up was found against the old Plan, so it is not trusted any more.
+    knowledge.alts.delete(LadderKnowledge.altKey(k, short));
     this.emit({ type: 'ladder', ladder: ladderView(prepared, knowledge.state(true), ctx, { planId, want: this.want, search: this.search, choices: this.choices }) });
+  }
+
+  private solver(): RungSolver {
+    return (p, k, o) => this.deps.solve(p, k, o, this.id);
+  }
+
+  /** Finds the runner-up for a rung and sends the Ladder again with it. */
+  async runnerUp(k: number) {
+    const prepared = this.prepared;
+    const knowledge = this.knowledge;
+    if (!prepared || !knowledge || !this.search) return;
+    const planId = this.planId;
+    const ctx = this.ctx();
+    const short = knowledge.kmin !== null && k < knowledge.kmin;
+    await findRunnerUp(prepared.problem, knowledge, k, short, this.solver(), ctx.settings.rungTimeLimitS);
+    if (planId !== this.planId) return;
+    this.emit({ type: 'ladder', ladder: ladderView(prepared, knowledge.state(true), ctx, { planId, want: this.want, search: this.search, choices: this.choices }) });
+  }
+
+  /** The cheapest division of the list between CardKingdom and the NZ Stores of rung `k`'s Plan. */
+  async split(k: number): Promise<SplitView | { error: string }> {
+    const prepared = this.prepared;
+    const rung = this.ladder?.rungs.find(r => r.k === k && !r.short);
+    const ctx = this.ctx();
+    if (!prepared || !rung || rung.total === null) return { error: 'That Plan has changed. Pick it again.' };
+    if (!ctx.cardKingdom || !ctx.settings.cardKingdom.enabled) return { error: 'Turn on "Compare with CardKingdom" in Settings first.' };
+    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst };
+    const planId = this.planId;
+    const result = await splitWithCardKingdom(
+      prepared, ctx.catalogue, ck, k, rung.total, planId,
+      { allowFoils: ctx.settings.allowFoils, shippingUsd: ctx.settings.cardKingdom.shippingUsd, timeLimitS: ctx.settings.rungTimeLimitS * 2 },
+      this.solver(),
+    );
+    return planId === this.planId ? result : { error: 'Your Plan changed while this was worked out. Try again.' };
+  }
+
+  /** CardKingdom against the NZ Stores as the dearest cards move to CardKingdom one by one. */
+  async sweep(k: number): Promise<SweepView | { error: string }> {
+    const prepared = this.prepared;
+    const rung = this.ladder?.rungs.find(r => r.k === k && !r.short);
+    const ctx = this.ctx();
+    if (!prepared || !rung || rung.total === null) return { error: 'That Plan has changed. Pick it again.' };
+    if (!ctx.cardKingdom || !ctx.settings.cardKingdom.enabled) return { error: 'Turn on "Compare with CardKingdom" in Settings first.' };
+    const ck = { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst };
+    const planId = this.planId;
+    const cost = new Map<string, number>();
+    for (const s of rung.stores) for (const i of s.items) cost.set(i.buyKey, (cost.get(i.buyKey) ?? 0) + i.price * i.qty);
+    const result = await sweepCardKingdom(
+      prepared, ctx.catalogue, ck, k, cost, planId,
+      { allowFoils: ctx.settings.allowFoils, shippingUsd: ctx.settings.cardKingdom.shippingUsd, timeLimitS: ctx.settings.rungTimeLimitS },
+      this.solver(),
+    );
+    return planId === this.planId ? result : { error: 'Your Plan changed while this was worked out. Try again.' };
   }
 
   printings(lineId: string) {
     if (!this.search) return [];
     return printingOptions(this.want, this.search, lineId, this.choices, this.ctx());
+  }
+
+  unconfirmed(lineId: string) {
+    return this.search ? unconfirmedListings(this.want, this.search, lineId, this.ctx()) : [];
   }
 
   cancel() {
@@ -282,7 +358,7 @@ export interface HostedRunOptions {
 export const HOSTED_RUNS: HostedRunOptions = { maxActive: 10, idleStopMs: 2 * 60 * 1000, idleDropMs: 30 * 60 * 1000 };
 
 /** Rough seconds per live card search until one has been measured (MtgSingles pages ~1.8 times a card, 1.5 s apart). */
-const SECONDS_PER_CARD: Record<SourceId, number> = { mtgsingles: 2.7, fetch: 1.2 };
+const SECONDS_PER_CARD: Record<SourceId, number> = { mtgsingles: 2.7, 'mtgsingles-au': 2.7, fetch: 1.2 };
 
 export class RunManager {
   private runs = new Map<string, Run>();

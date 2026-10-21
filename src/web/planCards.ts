@@ -1,5 +1,8 @@
 import type { ItemView, LeftOutView, NotFoundView, OfferView, StoreView } from '../shared/api';
 
+/** A Plan from before the server sent `waivable` can still be relaxed. */
+export const isWaivable = (n: NotFoundView): boolean => n.waivable ?? true;
+
 export interface PlanCard {
   buyKey: string;
   name: string;
@@ -10,13 +13,15 @@ export interface PlanCard {
   bought: { store: StoreView; item: ItemView }[];
   missing: number;
   notFound: boolean;
+  /** Not Found only because of the buyer's own filters, which they can waive for this card. */
+  waivable: boolean;
 }
 
 export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notFound: NotFoundView[] = []): PlanCard[] {
   const cards = new Map<string, PlanCard>();
   const entry = (buyKey: string, name: string, image: string | null) => {
     let c = cards.get(buyKey);
-    if (!c) cards.set(buyKey, (c = { buyKey, name, qty: 0, image, lineIds: [], bought: [], missing: 0, notFound: false }));
+    if (!c) cards.set(buyKey, (c = { buyKey, name, qty: 0, image, lineIds: [], bought: [], missing: 0, notFound: false, waivable: false }));
     return c;
   };
   for (const store of stores) {
@@ -31,12 +36,15 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
     const c = entry(l.buyKey, l.name, l.image);
     c.qty += l.missing;
     c.missing += l.missing;
+    c.lineIds = [...new Set([...c.lineIds, ...(l.lineIds ?? [])])];
+    c.waivable = l.waivable ?? true;
   }
   for (const n of notFound) {
     const c = entry(n.buyKey, n.name, n.image);
     c.qty += n.missing;
     c.missing += n.missing;
     c.notFound = true;
+    c.waivable = isWaivable(n);
     c.lineIds = [...new Set([...c.lineIds, ...n.lineIds])];
   }
   return [...cards.values()].sort((a, b) => a.name.localeCompare(b.name));

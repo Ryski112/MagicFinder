@@ -138,7 +138,7 @@ describe('searchAll', () => {
 
   it('does not search a Source that is switched off', async () => {
     const mts = fakeSource('mtgsingles');
-    const r = await searchAll(cards, { catalogue: cat, sources: [fakeSource('fetch'), mts], cache: freshCache(), settings: settings({ sources: { fetch: true, mtgsingles: false } }), appVersion: 't' }, () => {});
+    const r = await searchAll(cards, { catalogue: cat, sources: [fakeSource('fetch'), mts], cache: freshCache(), settings: settings({ sources: { fetch: true, mtgsingles: false, 'mtgsingles-au': false } }), appVersion: 't' }, () => {});
     expect(mts.calls).toHaveLength(0);
     expect(r.sources.find(x => x.source === 'mtgsingles')?.status).toBe('off');
   });
@@ -175,7 +175,7 @@ describe('a block seen by another run (hosted mode)', () => {
     const src = fakeSource('mtgsingles');
     let blockedAt: number | null = null;
     const result = await searchAll(cards.slice(0, 4), {
-      catalogue: cat, sources: [src], cache: freshCache(), settings: settings({ sources: { fetch: false, mtgsingles: true } }), appVersion: 't',
+      catalogue: cat, sources: [src], cache: freshCache(), settings: settings({ sources: { fetch: false, mtgsingles: true, 'mtgsingles-au': false } }), appVersion: 't',
       blockedElsewhere: () => blockedAt,
     }, p => {
       if (p.done === 2) blockedAt ??= Date.now();

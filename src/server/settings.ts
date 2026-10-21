@@ -19,10 +19,22 @@ export interface Settings {
   /** Per-Store postage overrides in NZD, by Store id. */
   postageOverrides: Record<string, number>;
   defaultPostage: { tracked: number; rural: number };
+  /** What an Australian Store is assumed to charge to post to NZ (NZD), until the buyer checks. */
+  australiaPostage: number;
+  /** Stores the buyer can collect from for free (near home): no postage, and they don't count toward a Plan's Store limit. By Store id with its name. */
+  preferredStores: Record<string, string>;
+  /** Switch the preferred Stores off to see Plans without them, keeping the list. */
+  preferredOn: boolean;
+  /** Stores the buyer can't or won't use (e.g. an Australian Store that doesn't ship to NZ), by Store id with its name. */
+  excludedStores: Record<string, string>;
   minCondition: Condition;
   allowFoils: boolean;
   useListPrintings: boolean;
   includeBasics: boolean;
+  /** Printings the buyer never wants bought (unless a line is locked to one), by Scryfall id, with a label to show in Settings. */
+  blockedPrintings: Record<string, string>;
+  /** Individual Listings the buyer never wants (by Listing id, with a label), for ones whose Printing isn't known. */
+  blockedListings: Record<string, string>;
   sources: Record<SourceId, boolean>;
   theme: 'dark' | 'light';
   /** Everyday cards used to tell a silent block from real Not Founds. Edit here to change the basket. */
@@ -32,7 +44,15 @@ export interface Settings {
   sourceHealth: Record<SourceId, SourceHealth>;
   /** The "new version available" check: when it last ran, what it found, and a version the buyer dismissed. */
   updateCheck: { lastCheckedAt: string | null; latest: { version: string; url: string } | null; dismissed: string | null };
-  cardKingdom: { enabled: boolean; shippingUsd: number; addGst: boolean };
+  cardKingdom: {
+    enabled: boolean;
+    shippingUsd: number;
+    addGst: boolean;
+    /** Drop Listings more than 30% over CardKingdom's price, unless that would leave too few copies. */
+    ignoreOver: boolean;
+  };
+  /** Short Plans: don't buy a card more than `maxExtra` (NZD) above its cheapest price anywhere. Off by default. */
+  shortPlanCap: { enabled: boolean; maxExtra: number };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,20 +62,28 @@ export const DEFAULT_SETTINGS: Settings = {
   pickupStores: [],
   postageOverrides: {},
   defaultPostage: { tracked: 7, rural: 5 },
+  australiaPostage: 20,
+  excludedStores: {},
+  preferredStores: {},
+  preferredOn: true,
   minCondition: 'LP',
   allowFoils: true,
   useListPrintings: false,
   includeBasics: false,
-  sources: { fetch: true, mtgsingles: true },
+  blockedPrintings: {},
+  blockedListings: {},
+  sources: { fetch: true, mtgsingles: true, 'mtgsingles-au': false },
   theme: 'dark',
   staples: ['Lightning Bolt', 'Counterspell', 'Swords to Plowshares', 'Llanowar Elves', 'Sol Ring'],
   rungTimeLimitS: 10,
   sourceHealth: {
     fetch: { blockedAt: null, consecutiveBlockedRuns: 0 },
     mtgsingles: { blockedAt: null, consecutiveBlockedRuns: 0 },
+    'mtgsingles-au': { blockedAt: null, consecutiveBlockedRuns: 0 },
   },
   updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
-  cardKingdom: { enabled: true, shippingUsd: 20, addGst: true },
+  cardKingdom: { enabled: true, shippingUsd: 20, addGst: true, ignoreOver: false },
+  shortPlanCap: { enabled: false, maxExtra: 25 },
 };
 
 /**
@@ -65,7 +93,8 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 export const FRIEND_KEYS = [
   'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
-  'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom',
+  'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom', 'australiaPostage', 'excludedStores',
+  'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings', 'shortPlanCap',
 ] as const satisfies readonly (keyof Settings)[];
 
 export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;
@@ -116,7 +145,7 @@ function merge<T>(base: T, patch: unknown): T {
   for (const [k, v] of Object.entries(patch as object)) {
     if (!(k in (base as object))) continue;
     const b = (base as any)[k];
-    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' ? merge(b, v) : v;
+    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' && k !== 'blockedPrintings' && k !== 'blockedListings' && k !== 'excludedStores' && k !== 'preferredStores' ? merge(b, v) : v;
   }
   return out;
 }

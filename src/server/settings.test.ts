@@ -13,7 +13,7 @@ describe('friendSettings', () => {
   it('merges nested preferences the way settings.json is merged', () => {
     const f = friendSettings({ cardKingdom: { shippingUsd: 30 }, sources: { mtgsingles: false }, postageOverrides: { 'store-a': 4 } });
     expect(f.cardKingdom).toEqual({ ...DEFAULT_SETTINGS.cardKingdom, shippingUsd: 30 });
-    expect(f.sources).toEqual({ fetch: true, mtgsingles: false });
+    expect(f.sources).toEqual({ fetch: true, mtgsingles: false, 'mtgsingles-au': false });
     expect(f.postageOverrides).toEqual({ 'store-a': 4 });
   });
 

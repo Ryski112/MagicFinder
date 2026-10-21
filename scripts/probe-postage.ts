@@ -15,7 +15,7 @@ const only = process.argv.slice(2).filter(a => !a.startsWith('-'));
 let yaml = readFileSync(STORES, 'utf8');
 const stores: StoreRecord[] = parse(yaml);
 const CITY: Record<Region, string> = { auckland: 'Auckland', north_island: 'Wellington', south_island: 'Christchurch' };
-const buyer = (region: Region, ruralAddress = false): BuyerContext => ({ postageType: 'standard', pickupCity: CITY[region], ruralAddress, pickupStores: new Set(), postageOverrides: {}, defaultPostage: { tracked: 7, rural: 5 } });
+const buyer = (region: Region, ruralAddress = false): BuyerContext => ({ postageType: 'standard', pickupCity: CITY[region], ruralAddress, pickupStores: new Set(), preferredStores: new Set(), postageOverrides: {}, defaultPostage: { tracked: 7, rural: 5 }, australiaPostage: 20 });
 const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
 
 const money = (v: RegionValue) => (typeof v === 'number' ? v.toFixed(2) : `{ ${Object.entries(v).map(([r, n]) => `${r}: ${n.toFixed(2)}`).join(', ')} }`);

@@ -12,6 +12,7 @@ import { SolverPool } from '../optimiser/pool';
 import { FetchTcgSource } from '../sources/fetchTcg';
 import { mergeInFlight } from '../sources/inFlight';
 import { MtgSinglesSource } from '../sources/mtgSingles';
+import { Throttle } from '../sources/policy';
 import { requestCount } from '../sources/requestCount';
 import { createApp } from './app';
 import { CardKingdom, CardKingdomPrices } from './cardKingdom';
@@ -50,11 +51,22 @@ const catalogue = new CatalogueStore(dir);
 const cache = new SearchCache(dir);
 const stores: StoreRecord[] = parse(readFileSync(storesFile, 'utf8'));
 let directory = new StoreDirectory(stores);
-const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), new ExchangeRate(dir));
+const exchangeRate = new ExchangeRate(dir);
+const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), exchangeRate);
 const pool = new SolverPool(hosting.solvers);
-const mtgsingles = new MtgSinglesSource({ storeName: key => stores.find(s => s.source_keys.mtgsingles === key)?.name });
+// Both MtgSingles Sources use the same API, so they share one request pace.
+const mtgsinglesThrottle = new Throttle(1500);
+const mtgsingles = new MtgSinglesSource({ storeName: key => stores.find(s => s.source_keys.mtgsingles === key)?.name, throttle: mtgsinglesThrottle });
+const mtgsinglesAu = new MtgSinglesSource({
+  country: 'AU',
+  throttle: mtgsinglesThrottle,
+  audToNzd: async () => {
+    await exchangeRate.refreshIfStale();
+    return exchangeRate.audToNzd;
+  },
+});
 // Identical searches already on their way are shared between runs.
-const sources = [new FetchTcgSource(), mtgsingles].map(mergeInFlight);
+const sources = [new FetchTcgSource(), mtgsingles, mtgsinglesAu].map(mergeInFlight);
 
 const runs = new RunManager({
   catalogue: () => catalogue.get(),
@@ -76,7 +88,7 @@ if (hosting.hosted) {
 }
 
 // No update notice in hosted mode: the owner cuts the releases and updates the image by hand.
-const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
+const app = createApp({ catalogue, settings, runs, cache, version, stores: () => stores, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));

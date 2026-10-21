@@ -94,3 +94,76 @@ describe('solveRung (HiGHS)', () => {
     if (r.kind === 'optimal' || r.kind === 'timed-out') expect(r.plan.total).toBeLessThanOrEqual(plan.total + 1e-6);
   });
 });
+
+describe('a required card in a Short Plan', () => {
+  const problem = (required: boolean): Problem => ({
+    lines: [{ key: 'a', need: 1 }, { key: 'b', need: 1 }, { key: 'c', need: 1, required }],
+    stores: [{ id: 'A', postage: 0, freeOver: null }, { id: 'B', postage: 0, freeOver: null }],
+    offers: [
+      { id: 'a@A', line: 0, store: 0, price: 5, qty: 1 },
+      { id: 'b@A', line: 1, store: 0, price: 5, qty: 1 },
+      { id: 'c@B', line: 2, store: 1, price: 30, qty: 1 },
+    ],
+  });
+
+  const bought = (p: Problem, take: Map<number, number>) => [...take.keys()].map(i => p.offers[i].id).sort();
+
+  it('is left out when other cards fill the Store limit first', async () => {
+    const p = problem(false);
+    const r = await solveRung(p, 1, { timeLimitS: 10, partial: true });
+    expect(r.kind).toBe('optimal');
+    if (r.kind === 'optimal') expect(bought(p, r.plan.take)).toEqual(['a@A', 'b@A']);
+  });
+
+  it('chooses the Stores around it when the buyer insists', async () => {
+    const p = problem(true);
+    const r = await solveRung(p, 1, { timeLimitS: 10, partial: true });
+    expect(r.kind).toBe('optimal');
+    if (r.kind === 'optimal') expect(bought(p, r.plan.take)).toEqual(['c@B']);
+  });
+});
+
+describe('a card only a preferred Store has in a Short Plan', () => {
+  it('is covered from the preferred Store', async () => {
+    const p: Problem = {
+      lines: [{ key: 'a', need: 1 }, { key: 'b', need: 1 }],
+      stores: [{ id: 'P', postage: 0, freeOver: null, free: true }, { id: 'X', postage: 0, freeOver: null }],
+      offers: [
+        { id: 'a@P', line: 0, store: 0, price: 20, qty: 1 },
+        { id: 'a@X', line: 0, store: 1, price: 2, qty: 1 },
+        { id: 'b@X', line: 1, store: 1, price: 4, qty: 1 },
+      ],
+    };
+    const r = await solveRung(p, 0, { timeLimitS: 10, partial: true });
+    expect(r.kind).toBe('optimal');
+    if (r.kind === 'optimal') expect([...r.plan.take.keys()].map(i => p.offers[i].id)).toEqual(['a@P']);
+  });
+});
+
+describe('the Short Plan extra-cost limit', () => {
+  const problem = (shortCap: number | null): Problem => ({
+    lines: [{ key: 'a', need: 1 }, { key: 'c', need: 1 }],
+    stores: [{ id: 'A', postage: 0, freeOver: null }, { id: 'B', postage: 0, freeOver: null }],
+    offers: [
+      { id: 'a@A', line: 0, store: 0, price: 5, qty: 1 },
+      { id: 'c@A', line: 1, store: 0, price: 60, qty: 1 },
+      { id: 'c@B', line: 1, store: 1, price: 4, qty: 1 },
+    ],
+    shortCap,
+  });
+  const bought = (p: Problem, take: Map<number, number>) => [...take.keys()].map(i => p.offers[i].id).sort();
+
+  it('covers the dear card when there is no limit', async () => {
+    const p = problem(null);
+    const r = await solveRung(p, 1, { timeLimitS: 10, partial: true });
+    if (r.kind !== 'optimal') throw new Error(r.kind);
+    expect(bought(p, r.plan.take)).toEqual(['a@A', 'c@A']);
+  });
+
+  it('leaves out a card that would cost more than the limit above its cheapest price', async () => {
+    const p = problem(25);
+    const r = await solveRung(p, 1, { timeLimitS: 10, partial: true });
+    if (r.kind !== 'optimal') throw new Error(r.kind);
+    expect(bought(p, r.plan.take)).not.toContain('c@A');
+  });
+});

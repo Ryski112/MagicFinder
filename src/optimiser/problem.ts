@@ -5,6 +5,8 @@ export interface ProblemLine {
   key: string;
   /** Copies to buy (already capped at what the Stores have in total). */
   need: number;
+  /** A Short Plan covers this line whatever it costs, choosing its Stores around it. */
+  required?: boolean;
 }
 
 export interface ProblemStore {
@@ -12,6 +14,8 @@ export interface ProblemStore {
   /** Postage charged unless the subtotal reaches freeOver (0 for pickup without a fee). */
   postage: number;
   freeOver: number | null;
+  /** A preferred Store: always available, never counted toward the Store limit. */
+  free?: boolean;
 }
 
 export interface Offer {
@@ -28,6 +32,8 @@ export interface Problem {
   stores: ProblemStore[];
   /** Usable offers, sorted by price within each line. */
   offers: Offer[];
+  /** Short Plans only: the most (NZD) a copy may cost above its cheapest price anywhere. Null: no limit. */
+  shortCap?: number | null;
 }
 
 export interface PlanStore {
@@ -43,6 +49,8 @@ export interface Plan {
   cards: number;
   postage: number;
   total: number;
+  /** Stores that count toward the Store limit (all but preferred Stores). */
+  paid: number;
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -95,7 +103,14 @@ export function planFrom(p: Problem, take: Map<number, number>): Plan {
     postage: postageCharged(p.stores[store], subtotal),
   }));
   const postage = stores.reduce((s, x) => s + x.postage, 0);
-  return { take, stores, cards: round2(cards), postage: round2(postage), total: round2(cards + postage) };
+  const paid = stores.filter(s => !p.stores[s.store].free).length;
+  return { take, stores, cards: round2(cards), postage: round2(postage), total: round2(cards + postage), paid };
+}
+
+/** Stores in the problem that count toward the Store limit. */
+export function paidStoreIds(p: Problem, plan?: Plan): number[] {
+  const all = plan ? plan.stores.map(s => s.store) : [...new Set(p.offers.map(o => o.store))];
+  return all.filter(s => !p.stores[s].free);
 }
 
 /** Offer indices per line, cheapest first. */
@@ -116,7 +131,7 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
     let need = p.lines[line].need;
     for (const i of byLine[line]) {
       const o = p.offers[i];
-      if (!open.has(o.store)) continue;
+      if (!open.has(o.store) && !p.stores[o.store].free) continue;
       const q = Math.min(need, o.qty);
       take.set(i, q);
       need -= q;
@@ -125,6 +140,40 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
     if (need) return null;
   }
   return planFrom(p, take);
+}
+
+/** Whether a Short Plan may buy this offer: under the buyer's extra-cost limit, or for a card they insisted on. */
+export function capAllows(p: Problem, cheapest: number[], offer: number): boolean {
+  const o = p.offers[offer];
+  return p.shortCap == null || !!p.lines[o.line].required || o.price <= cheapest[o.line] + p.shortCap + 1e-9;
+}
+
+/** The cheapest price anywhere for each line. */
+export function cheapestPrices(p: Problem): number[] {
+  const cheapest = p.lines.map(() => Infinity);
+  for (const o of p.offers) cheapest[o.line] = Math.min(cheapest[o.line], o.price);
+  return cheapest;
+}
+
+/** Whether every copy a Short Plan buys is within the buyer's extra-cost limit. */
+export function respectsCap(p: Problem, plan: Plan): boolean {
+  if (p.shortCap == null) return true;
+  const cheapest = cheapestPrices(p);
+  return [...plan.take.keys()].every(i => capAllows(p, cheapest, i));
+}
+
+/** What covering one copy of each line counts for: 1, or enough to outweigh every other copy together when the buyer insisted on it. */
+export function coverWeights(p: Problem): number[] {
+  const all = p.lines.reduce((n, l) => n + l.need, 0);
+  return p.lines.map(l => (l.required ? all + 1 : 1));
+}
+
+/** How much of the list a Short Plan covers, counting the cards the buyer insisted on for more. */
+export function coverScore(p: Problem, plan: Plan): number {
+  const w = coverWeights(p);
+  let covered = 0;
+  for (const [i, q] of plan.take) covered += q * w[p.offers[i].line];
+  return covered;
 }
 
 /** Copies a Plan buys. */
@@ -146,7 +195,7 @@ export function evaluatePartial(p: Problem, byLine: number[][], open: ReadonlySe
     for (const i of byLine[line]) {
       if (!need) break;
       const o = p.offers[i];
-      if (!open.has(o.store)) continue;
+      if (!open.has(o.store) && !p.stores[o.store].free) continue;
       const q = Math.min(need, o.qty);
       take.set(i, q);
       need -= q;

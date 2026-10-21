@@ -58,6 +58,15 @@ export function App() {
   const [progress, setProgress] = useState<SearchProgressView | null>(null);
   const [queuedAhead, setQueuedAhead] = useState<number | null>(null);
   const [ladder, setLadder] = useState<LadderView | null>(null);
+  // True from a click that changes the Plan until the re-planned one arrives, so the old Plan isn't mistaken for the new.
+  const [updating, setUpdating] = useState(false);
+  const planIdWhenAsked = useRef<number | null>(null);
+  const markUpdating = () => {
+    planIdWhenAsked.current = ladderRef.current?.planId ?? null;
+    setUpdating(true);
+    setTimeout(() => setUpdating(false), 30_000);
+  };
+  const ladderRef = useRef<LadderView | null>(null);
   const [selectedK, setSelectedK] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -123,6 +132,7 @@ export function App() {
       if (latest.current.hosted) store(SETTINGS_KEY, JSON.stringify(next));
       return next;
     });
+    if (Object.keys(patch).some(k => k !== 'theme' && k !== 'updateCheck')) markUpdating();
     if (latest.current.hosted) {
       // The theme doesn't change any Plan.
       if (Object.keys(patch).every(k => k === 'theme')) return;
@@ -144,6 +154,7 @@ export function App() {
 
   const changeChoices = (c: PlanChoices) => {
     setChoices(c);
+    if (runId && step === 'plan') markUpdating();
     if (runId && step === 'plan') api.replan(runId, c, hosted && settings ? settings : undefined).catch(e => setError((e as Error).message));
   };
 
@@ -184,7 +195,9 @@ export function App() {
           setQueuedAhead(null);
           setProgress(e.progress);
         } else if (e.type === 'ladder') {
+          ladderRef.current = e.ladder;
           setLadder(e.ladder);
+          if (e.ladder.planId !== planIdWhenAsked.current) setUpdating(false);
           setStep(s => (s === 'search' ? 'plan' : s));
         } else if (e.type === 'queued') setQueuedAhead(e.ahead);
         else if (e.type === 'replaced') lost('Replaced by a newer search in another tab.');
@@ -344,6 +357,7 @@ export function App() {
             onSettings={changeSettings}
             onEdit={() => setStep('list')}
             onSearchAgain={() => find()}
+            updating={updating}
           />
         )}
       </main>

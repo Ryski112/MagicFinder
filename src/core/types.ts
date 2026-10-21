@@ -32,7 +32,7 @@ export type Condition = 'NM' | 'LP' | 'MP' | 'HP' | 'DMG';
 
 export type MatchConfidence = 'exact' | 'card-only' | 'unmatched';
 
-export type SourceId = 'fetch' | 'mtgsingles';
+export type SourceId = 'fetch' | 'mtgsingles' | 'mtgsingles-au';
 
 /** A specific Printing offered by one Store, found via a Source. */
 export interface Listing {
@@ -55,6 +55,8 @@ export interface Listing {
   quantity: number;
   url: string;
   title: string;
+  /** The Store's picture of the card. */
+  imageUrl?: string;
   english: boolean;
   /** False for Listings that can't be bought right now (seller on holiday). */
   buyable: boolean;

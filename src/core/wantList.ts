@@ -96,6 +96,12 @@ export interface ListChoices {
   included: Readonly<Record<string, boolean>>;
   /** Locks set by the buyer, by line id; null means explicitly unlocked. */
   locks: Readonly<Record<string, Lock | null>>;
+  /** Line ids the buyer has told us not to exclude Listings for on condition, finish or Printing grounds. */
+  relaxed?: Readonly<Record<string, boolean>>;
+  /** Line ids a Short Plan must cover, choosing its Stores around them. */
+  required?: Readonly<Record<string, boolean>>;
+  /** Stores (by id) the buyer doesn't want a line's card from, by line id. */
+  avoid?: Readonly<Record<string, readonly string[]>>;
   includeBasics: boolean;
   useListPrintings: boolean;
 }
@@ -107,6 +113,12 @@ export interface BuyLine {
   name: string;
   quantity: number;
   lock: Lock | null;
+  /** The buyer's condition, foil and Printing filters don't apply to this line. */
+  relaxed?: boolean;
+  /** A Short Plan must cover this line. */
+  required?: boolean;
+  /** Stores the buyer doesn't want this card from. */
+  avoid?: string[];
   /** Want List line ids merged into this one. */
   lineIds: string[];
 }
@@ -128,11 +140,17 @@ export function buyLines(lines: WantLine[], choices: ListChoices): BuyLine[] {
     if (!isIncluded(l, choices)) continue;
     const lock = lockFor(l, choices);
     const key = `${l.oracleId}|${lock ? lockKey(lock) : ''}`;
+    const relaxed = !!choices.relaxed?.[l.id];
+    const required = !!choices.required?.[l.id];
+    const avoid = choices.avoid?.[l.id] ?? [];
     const cur = out.get(key);
     if (cur) {
       cur.quantity += l.quantity;
       cur.lineIds.push(l.id);
-    } else out.set(key, { key, oracleId: l.oracleId, name: l.name, quantity: l.quantity, lock, lineIds: [l.id] });
+      cur.relaxed = cur.relaxed || relaxed;
+      cur.required = cur.required || required;
+      cur.avoid = [...new Set([...(cur.avoid ?? []), ...avoid])];
+    } else out.set(key, { key, oracleId: l.oracleId, name: l.name, quantity: l.quantity, lock, relaxed, required, avoid: [...avoid], lineIds: [l.id] });
   }
   return [...out.values()];
 }

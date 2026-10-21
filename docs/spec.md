@@ -9,14 +9,14 @@ This spec gathers the decisions made on the [Wayfinder map](https://github.com/R
 **In scope**
 - A locally run app on each user's own computer. It's started with one command and opens in the browser. Friends with some coding knowledge can install it.
 - Two Sources: Fetch TCG and MtgSingles. The data layer takes more Sources later as plug-ins.
-- NZ-based Stores only.
+- NZ-based Stores, plus an optional "Australian Stores" mode (off by default, MtgSingles AU only): prices are converted from AUD, postage to NZ is a buyer-editable guess, and the buyer excludes any Store that turns out not to ship to NZ (excluded Stores are remembered). Plans combine NZ and AU Stores.
 - Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL, plus a card searcher that adds cards by name.
 - Live search per run with about a 1 h cache, then a Trade-off Ladder of Plans and a per-Store breakdown with clean links.
 - A per-Store button that opens the Store with the Plan's cards in the cart (where the Store supports it). The buyer checks out themselves.
 
 **Out of scope**
 - Sources beyond Fetch TCG and MtgSingles (design for them, don't build them). This includes reading Stores' own Shopify shops as a Source.
-- Australian Stores.
+- Australian Stores beyond MtgSingles AU, and knowing which ones ship to NZ (the buyer checks and excludes).
 - A public hosted site.
 - Docker/NAS and shared multi-user installs.
 - Automating checkout or placing orders.
@@ -55,7 +55,7 @@ Decided in [How do we identify a card and Printing consistently across Sources?]
   2. Otherwise strip set, collector number, finish, treatment and condition words from the title.
   3. Normalise the name and look it up in an index of full names, face names and flavour names.
   4. Narrow to a Printing using the remaining hints.
-- **Match confidence** is `exact`, `card-only` or `unmatched`. Never guess a Printing. Evidence, in order: a structured id (Fetch's Scryfall id; for MtgSingles, a Scryfall id in the Store picture's address, either Scryfall's own CDN or a Shopify file named after the id); the set, collector number and treatments in the title; a title with no treatment at all taking the set's one plain Printing (Stores label variants and leave the ordinary one bare), only when exactly one plain Printing is left; and finally the picture: Stores on one platform name the picture by a card id ("236019_370x480.jpg"), so a card-only Listing sharing it with an exactly identified one is that Printing, provided it still fits the title's set and number and the picture was not seen on two different Printings.
+- **Match confidence** is `exact`, `card-only` or `unmatched`. Never guess a Printing. Evidence, in order: a structured id (Fetch's Scryfall id; for MtgSingles, a Scryfall id in the Store picture's address, either Scryfall's own CDN or a Shopify file named after the id); the set, collector number and treatments in the title; a title with no treatment at all taking the set's one plain Printing (Stores label variants and leave the ordinary one bare), only when exactly one plain Printing is left; and finally the picture: Stores on one platform name the picture by a card id ("236019_370x480.jpg"), so a card-only Listing sharing it with an exactly identified one is that Printing, provided it still fits the title's set and number and the picture was not seen on two different Printings. The Store's own picture is kept on each Listing and shown on the Plan screen and in Browse by Store (the Printing's Scryfall image is the fallback), so an unconfirmed Printing can be judged by eye.
 - **Name collisions**: keep the small list of normalised names that collide (e.g. `Bind` / `Bind // Liberate`) and require an exact match for those.
 - **Attribution**:
   - Show full, unaltered Scryfall card images, and credit the artist if `art_crop` is used.
@@ -83,12 +83,14 @@ Notes:
 
 ### 3.3 CardKingdom comparison
 
-An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there and it never changes a Plan. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
+An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there. It only changes a Plan if the buyer switches on "Ignore Listings over 30% above CardKingdom" (off by default), which drops flagged Listings, except where the remaining Listings couldn't cover the copies wanted. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
 
 - **CardKingdom's public price list**, `GET https://api.cardkingdom.com/api/v2/pricelist` (about 22 MB), saved to the user's data directory. Matched by Scryfall id. Planning never waits for it; the Plan's view is updated when it arrives.
 - **frankfurter.dev** for the USD→NZD rate, `GET https://api.frankfurter.dev/v1/latest?base=USD&symbols=NZD`, saved to the user's data directory, with 1.7 as the fallback.
 
-Totals add a flat shipping estimate and, by default, 15% NZ GST so they compare fairly with NZ prices. When CardKingdom lacks some cards, its total isn't compared with the Plan's.
+Totals add a flat shipping estimate and, by default, 15% NZ GST so they compare fairly with NZ prices. When CardKingdom lacks some cards, its total isn't compared with the Plan's. The shipping figure is a flat US$ amount the buyer sets (their own checkout is the best source: a 59-card order to Auckland by Asendia e-PAQ Plus was US$11.50), and GST is charged on cards and shipping together.
+
+**Split** (owner's change, 2026-10-20). "Work out the best split" on the Plan screen adds CardKingdom to the optimiser as one more Store: its prices are converted to NZD with GST, its postage is the shipping figure with GST (paid once, never waived), and it doesn't count toward the Store limit. It solves for the selected rung's Store count and reports the NZ-only Plan, everything-at-CardKingdom, and the split with the cards to buy at CardKingdom. "Take them out of the Plan" unticks those cards so the Plan becomes the NZ part; "Copy the CardKingdom list" copies them as a Want List. When no card repays the shipping it says to stay with the NZ Plan.
 
 ## 4. Want List input
 
@@ -138,8 +140,9 @@ The owner decided not to ask the Sources for permission ([Ask MtgSingles for per
 
 ### 5.2 MtgSingles
 - Plain HTTP: `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1`, one request every 1.5 seconds (at 1/second Cloudflare starts answering 429 with `Retry-After: 10` after about 30 requests), with the identifying User-Agent. Cloudflare refuses (403) any request without `Referer: https://www.mtgsingles.co.nz/`; the User-Agent doesn't matter. No browser is needed.
+- `isExactMatch=true` (the website's "exact match" filter) matches the whole card name. Without it the query matches any title containing the text, so a name inside a set name ("Fracture" in "Reality Fracture") returns hundreds of unrelated Listings and, with paging capped, never reaches the card. A double-faced card is searched twice, by its front face and by its full name, because Stores title it either way. A Listing with an odd title (e.g. "Fracture |  (065)") isn't matched by it.
 - Paging: 20 results per page. Keep paging until fewer than 20 come back. A card with no Listings comes back as `204 No Content` with an empty body.
-- `isExactMatch=true` (the website's "exact match" filter) matches the whole card name. Without it the query matches any title containing the text, so a name inside a set name ("Fracture" in "Reality Fracture") returns hundreds of unrelated Listings and, with paging capped, never reaches the card. A double-faced card is searched twice, by its front face and by its full name, because Stores title it either way, and a name with accents is also searched without them. A Listing with an odd title (e.g. "Fracture |  (065)") isn't matched by it.
+- Don't use exact match. Normalise names ourselves, because double-faced card titles differ.
 - `includeMarketplaces=false`: Fetch sellers are handled by the Fetch Source.
 - There's no collector number or Store location. Location comes from the Store table. `features[]` gives treatment and `Non-English`. Prices are strings such as `"$1,345.99"`.
 - There's no stealth and no challenge-solving.
@@ -212,6 +215,8 @@ Decided in [What optimiser approach produces the Trade-off Ladder?](https://gith
 - Quantities may be split across Listings and Stores.
 - Postage is a step function of each Store's subtotal: a binary per tier or free threshold, with a lower bound on subtotal.
 - Pickup Stores have zero postage but still count toward k.
+- **Preferred Stores** (owner's change, 2026-10-20) are Stores the buyer can collect from easily. They are a Settings list (also a ☆ Prefer button on each Store of the Plan screen). Their cards cost no postage (only the Store's pickup fee, if any), and they do **not** count toward k: a "2-Store" Plan means 2 other Stores plus any preferred ones it uses. k_min and every rung are counted that way, so a list a preferred Store can cover alone has a rung with 0 other Stores, labelled "Preferred Stores only".
+- **Runner-up Plans** (owner's change, 2026-10-20): on request ("Find the runner-up Plan" on a rung; it costs one solve, so it isn't done unasked), the best Plan whose set of Stores (preferred ones aside) differs from every shown rung's of the same kind. It is solved as the same model with a no-good cut on each shown Store set. The Plan screen then offers "See the runner-up Plan" with the price difference (and, for a Short Plan, how many more or fewer cards it covers), so the buyer can compare leaving out different cards.
 - Locks are handled by filtering Listings, and dominated Listings are pruned.
 - A small cover MILP finds k_min, the fewest Stores that cover every obtainable card.
 
@@ -225,7 +230,7 @@ Decided in [What optimiser approach produces the Trade-off Ladder?](https://gith
 - Rungs are shown from k_min up to the Store count of the cheapest Plan overall, and the top rung is labelled **Cheapest overall**.
 - A rung that saves nothing over the one below it is hidden.
 - There's no cap; each rung shows "saves $X vs one fewer Store".
-- Below k_min: **Short Plans** for 1, 2 and 3 Stores (owner's change, 2026-10-17, reversing "no partial Plans"). Each leaves out the fewest copies, then is the cheapest Plan that does so. It is solved in two steps: the most copies k Stores can supply, then the cheapest way to buy that many. Short Plans come first in the Ladder, show "N of M cards", and list the cards they leave out (collapsible, with images). The status line still says "Fewest Stores that cover your list: N".
+- Below k_min: **Short Plans** for 1, 2 and 3 Stores (owner's change, 2026-10-17, reversing "no partial Plans"). Each leaves out the fewest copies, then is the cheapest way to buy the rest; the Plan never decides a card is "not worth" its price (owner's change, 2026-10-21, reversing the 2026-10-20 "worth it" rule): a dear card is covered and flagged +X% over CardKingdom, and the buyer decides. A card the buyer insisted on ("Don't exclude this card" on a left-out card) counts for more than all the others together. Short Plans come first in the Ladder, show "N of M cards", and list the cards they leave out (collapsible, with images). The status line still says "Fewest Stores that cover your list: N".
 
 **Timeouts**
 - A rung that hits its time limit shows the best Plan found, with "might be up to $X cheaper" (from the solver bound).

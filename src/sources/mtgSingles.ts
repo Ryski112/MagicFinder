@@ -61,14 +61,17 @@ export function storeNameFromKey(key: string): string {
   return key.replace(/^[A-Z]{2}\//, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
 }
 
-/** Maps one MtgSingles Listing. Throws SourceError('changed') when fields we rely on are missing. */
-export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string | undefined): SourceListing | null {
+export type MtgSinglesCountry = 'NZ' | 'AU';
+
+/** Maps one MtgSingles Listing. Australian prices are in AUD, so `audToNzd` converts them. Throws SourceError('changed') when fields we rely on are missing. */
+export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string | undefined, country: MtgSinglesCountry = 'NZ', audToNzd = 1): SourceListing | null {
   if (l == null || typeof l !== 'object' || typeof l.store !== 'string' || typeof l.title !== 'string' || typeof l.url !== 'string') {
     throw new SourceError('changed', 'MtgSingles Listing is missing store, title or url');
   }
-  const price = parsePrice(l.price);
-  if (price === null || typeof l.condition !== 'string') throw new SourceError('changed', 'MtgSingles Listing is missing price or condition');
-  if (!l.store.startsWith('NZ/') || l.availableQty === 0) return null;
+  const listed = parsePrice(l.price);
+  if (listed === null || typeof l.condition !== 'string') throw new SourceError('changed', 'MtgSingles Listing is missing price or condition');
+  if (!l.store.startsWith(`${country}/`) || l.availableQty === 0) return null;
+  const price = country === 'AU' ? Math.round(listed * audToNzd * 100) / 100 : listed;
 
   const features: string[] = Array.isArray(l.features) ? l.features : [];
   const title: string = l.title;
@@ -80,11 +83,12 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
   const condition = l.condition in CONDITIONS ? CONDITIONS[l.condition] : null;
   return {
     id: `mtgsingles:${l.store}:${url}:${l.condition}:${foilish ? 'f' : 'n'}`,
-    source: 'mtgsingles',
+    source: country === 'AU' ? 'mtgsingles-au' : 'mtgsingles',
     storeKey: `mtgsingles:${l.store}`,
     storeName: storeName?.(l.store) ?? storeNameFromKey(l.store),
     title,
     scryfallId,
+    imageUrl: typeof l.imageUrl === 'string' && l.imageUrl ? l.imageUrl : undefined,
     imageKey,
     setName: l.setName || undefined,
     collectorNumber: collector,
@@ -96,7 +100,7 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
     quantity: typeof l.availableQty === 'number' ? l.availableQty : 1,
     url,
     buyable: true,
-    extra: { features: features.join(','), rawCondition: l.condition },
+    extra: { features: features.join(','), rawCondition: l.condition, ...(country === 'AU' && { priceAud: String(listed) }) },
   };
 }
 
@@ -104,32 +108,46 @@ export interface MtgSinglesOptions {
   storeName?: (key: string) => string | undefined;
   /** Injectable for tests. */
   get?: HttpGet;
+  /** NZ (default) or Australian Stores, which are priced in AUD. */
+  country?: MtgSinglesCountry;
+  /** Today's AUD to NZD rate, for the Australian Source. */
+  audToNzd?: () => Promise<number> | number;
+  /** Share one with the other MtgSingles Source: both talk to the same Cloudflare-protected API. */
+  throttle?: Throttle;
 }
 
 export class MtgSinglesSource implements Source {
-  readonly id = 'mtgsingles' as const;
-  readonly name = 'MtgSingles';
-  private throttle = new Throttle(1500); // At 1/s Cloudflare answers 429 (Retry-After 10) every ~20s; 1.5s stays under its limit.
+  readonly id: 'mtgsingles' | 'mtgsingles-au';
+  readonly name: string;
+  private readonly country: MtgSinglesCountry;
+  private readonly throttle: Throttle;
 
-  constructor(private readonly opts: MtgSinglesOptions = {}) {}
+  constructor(private readonly opts: MtgSinglesOptions = {}) {
+    this.country = opts.country ?? 'NZ';
+    this.id = this.country === 'AU' ? 'mtgsingles-au' : 'mtgsingles';
+    this.name = this.country === 'AU' ? 'MtgSingles Australia' : 'MtgSingles';
+    // At 1/s Cloudflare answers 429 (Retry-After 10) every ~20s; 1.5s stays under its limit.
+    this.throttle = opts.throttle ?? new Throttle(1500);
+  }
 
   async search(cardName: string, signal?: AbortSignal): Promise<SourceListing[]> {
     const out: SourceListing[] = [];
     const seen = new Set<string>();
+    const audToNzd = this.country === 'AU' ? await (this.opts.audToNzd?.() ?? 1) : 1;
     // isExactMatch makes the API match the whole card name, not any title that contains it ("Fracture" would otherwise
     // match every card and product of Reality Fracture and bury the card). Double-faced cards are listed both ways.
     // Stores write accented names without the accents ("Bartolome del Presidio"), and the API matches letter for letter.
     const forms = (name: string) => [...new Set([name, name.normalize('NFD').replace(/[̀-ͯ]/g, '')])];
     const names = [...new Set((cardName.includes(' // ') ? [cardName.split(' // ')[0], cardName] : [cardName]).flatMap(forms))];
     for (const name of names) {
-      await this.searchName(name, out, seen, signal);
+      await this.searchName(name, out, seen, audToNzd, signal);
     }
     return out;
   }
 
-  private async searchName(cardName: string, out: SourceListing[], seen: Set<string>, signal?: AbortSignal): Promise<void> {
+  private async searchName(cardName: string, out: SourceListing[], seen: Set<string>, audToNzd: number, signal?: AbortSignal): Promise<void> {
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const url = `${API}?query=${encodeURIComponent(cardName)}&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
+      const url = `${API}?query=${encodeURIComponent(cardName)}&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=${this.country === 'AU' ? 2 : 1}`;
       let rows: unknown[];
       try {
         rows = await this.fetchPage(url, signal);
@@ -141,7 +159,7 @@ export class MtgSinglesSource implements Source {
         }
         throw e;
       }
-      for (const m of mapRows(rows, r => mapMtgSinglesListing(r, this.opts.storeName))) {
+      for (const m of mapRows(rows, r => mapMtgSinglesListing(r, this.opts.storeName, this.country, audToNzd))) {
         if (!seen.has(m.id)) {
           seen.add(m.id);
           out.push(m);

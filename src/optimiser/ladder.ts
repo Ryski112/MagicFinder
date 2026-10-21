@@ -4,7 +4,7 @@
 // Stores leave out the fewest cards when the whole list can't fit in that many Stores.
 import { heuristicLadder, shortPlanDraft } from './heuristic';
 import { minimumStores, type RungOutcome, type SolveOptions } from './milp';
-import { copiesIn, copiesWanted, round2, type Plan, type Problem } from './problem';
+import { copiesIn, copiesWanted, paidStoreIds, round2, coverScore, respectsCap, type Plan, type Problem } from './problem';
 
 /** Short Plans are offered for Store counts up to this. */
 export const SHORT_PLAN_MAX_STORES = 3;
@@ -22,6 +22,10 @@ export interface Rung {
   cheapestOverall: boolean;
   /** Set on Short Plans: copies bought out of copies wanted. */
   short?: { covered: number; wanted: number };
+  /** The best Plan that uses a different set of Stores: the runner-up for this rung. */
+  next?: Rung;
+  /** The runner-up was looked for and there is none. */
+  noRunnerUp?: boolean;
 }
 
 export interface LadderState {
@@ -38,13 +42,44 @@ export class LadderKnowledge {
   readonly byCount = new Map<number, Plan>();
   readonly solved = new Map<number, RungOutcome>();
   readonly short = new Map<number, { plan: Plan; outcome?: RungOutcome }>();
+  /** Runner-up Plans by rung (see altKey); a null Plan means none exists. */
+  readonly alts = new Map<string, { plan: Plan | null; outcome?: RungOutcome }>();
   kmin: number | null = null;
   wanted = 0;
+  problem: Problem | null = null;
 
-  /** Keeps the better Short Plan for k Stores: more copies, then cheaper. */
+  static altKey(k: number, short: boolean) {
+    return `${short ? 's' : 'f'}${k}`;
+  }
+
+  recordAlt(k: number, short: boolean, outcome: RungOutcome) {
+    const plan = outcome.kind === 'optimal' || outcome.kind === 'timed-out' ? outcome.plan : null;
+    this.alts.set(LadderKnowledge.altKey(k, short), { plan, outcome });
+  }
+
+  private withNext(rung: Rung): Rung {
+    const alt = this.alts.get(LadderKnowledge.altKey(rung.k, !!rung.short));
+    if (alt && !alt.plan) return { ...rung, noRunnerUp: true };
+    if (!alt?.plan || !rung.plan) return rung;
+    const o = alt.outcome;
+    const next: Rung = {
+      k: alt.plan.paid,
+      plan: alt.plan,
+      status: o?.kind === 'optimal' ? 'optimal' : 'timed-out',
+      saves: round2(rung.plan.total - alt.plan.total),
+      cheapestOverall: false,
+      short: rung.short ? { covered: copiesIn(alt.plan), wanted: this.wanted } : undefined,
+    };
+    if (o?.kind === 'timed-out') next.mightSave = round2(Math.max(0, alt.plan.total - o.bound));
+    return { ...rung, next };
+  }
+
+  /** Keeps the better Short Plan for k Stores: more of the list covered, then cheaper. */
   offerShort(k: number, plan: Plan | null, outcome?: RungOutcome) {
     const cur = this.short.get(k);
-    const better = plan && (!cur || copiesIn(plan) > copiesIn(cur.plan) || (copiesIn(plan) === copiesIn(cur.plan) && plan.total < cur.plan.total - 1e-9));
+    if (plan && this.problem && !respectsCap(this.problem, plan)) return;
+    const score = (x: Plan) => (this.problem ? coverScore(this.problem, x) : copiesIn(x));
+    const better = plan && (!cur || score(plan) > score(cur.plan) || (score(plan) === score(cur.plan) && plan.total < cur.plan.total - 1e-9));
     if (better) this.short.set(k, { plan, outcome });
     else if (cur && outcome) cur.outcome = outcome;
   }
@@ -63,17 +98,22 @@ export class LadderKnowledge {
     for (let k = 1; k < Math.min(this.kmin, SHORT_PLAN_MAX_STORES + 1); k++) {
       const s = this.short.get(k);
       if (!s) continue;
+      // A Short Plan dearer than the fewest-Stores Plan that covers everything only costs more and covers less.
+      // (Cheaper Plans with more Stores don't count: fewer Stores is why a Short Plan exists. At a tie, fewer Stores wins.)
+      // Only when the buyer has switched the Short Plan limit on; otherwise every Short Plan is shown.
+      const full = this.problem?.shortCap != null ? this.bestAtMost(this.kmin) : null;
+      if (full && full.total < s.plan.total - 1e-9) continue;
       const o = s.outcome;
       const status: RungStatus = o?.kind === 'optimal' ? 'optimal' : o?.kind === 'timed-out' || final ? 'timed-out' : 'refining';
       const rung: Rung = { k, plan: s.plan, status, saves: null, cheapestOverall: false, short: { covered: copiesIn(s.plan), wanted: this.wanted } };
       if (o?.kind === 'timed-out') rung.mightSave = round2(Math.max(0, s.plan.total - o.bound));
-      out.push(rung);
+      out.push(this.withNext(rung));
     }
     return out;
   }
 
   offer(plan: Plan) {
-    const k = plan.stores.length;
+    const k = plan.paid;
     const cur = this.byCount.get(k);
     if (!cur || plan.total < cur.total - 1e-9) this.byCount.set(k, plan);
   }
@@ -95,12 +135,12 @@ export class LadderKnowledge {
     if (!counts.length && this.kmin === null) return { rungs: [], kmin: null, final };
     const cheapest = [...this.byCount.values()].reduce<Plan | null>((b, p) => (!b || p.total < b.total ? p : b), null);
     const lo = this.kmin ?? Math.min(...counts);
-    const hi = cheapest ? cheapest.stores.length : lo;
+    const hi = cheapest ? cheapest.paid : lo;
     // A solve for "at most K Stores" that returns a Plan with u Stores settles rung u as well as rung K.
     const settles = new Map<number, RungOutcome>();
     for (const o of this.solved.values()) {
       if (o.kind !== 'optimal' && o.kind !== 'timed-out') continue;
-      const u = o.plan.stores.length;
+      const u = o.plan.paid;
       const cur = settles.get(u);
       if (!cur || o.kind === 'optimal' || (cur.kind === 'timed-out' && o.plan.total < cur.plan.total)) settles.set(u, o);
     }
@@ -109,9 +149,9 @@ export class LadderKnowledge {
     for (let k = lo; k <= hi; k++) {
       const plan = this.byCount.get(k) ?? null;
       const own = this.solved.get(k);
-      const outcome = own?.kind === 'optimal' && own.plan.stores.length < k ? own : settles.get(k) ?? own;
+      const outcome = own?.kind === 'optimal' && own.plan.paid < k ? own : settles.get(k) ?? own;
       // An optimal "at most k" Plan with fewer Stores proves no k-Store Plan is cheaper: skip the rung.
-      if (outcome?.kind === 'optimal' && outcome.plan.stores.length < k) continue;
+      if (outcome?.kind === 'optimal' && outcome.plan.paid < k) continue;
       if (!plan) {
         if (outcome?.kind === 'no-plan-in-time' || (final && k === lo)) {
           rungs.push({ k, plan: null, status: 'no-plan-in-time', saves: null, cheapestOverall: false });
@@ -134,7 +174,7 @@ export class LadderKnowledge {
     }
     const top = [...rungs].reverse().find(r => r.plan);
     if (top) top.cheapestOverall = true;
-    return { rungs: [...this.shortRungs(final), ...rungs], kmin: this.kmin, final };
+    return { rungs: [...this.shortRungs(final), ...rungs.map(r => this.withNext(r))], kmin: this.kmin, final };
   }
 }
 
@@ -153,6 +193,7 @@ export interface LadderOptions {
 export async function buildLadder(p: Problem, opts: LadderOptions): Promise<LadderState> {
   const know = opts.knowledge ?? new LadderKnowledge();
   know.wanted = copiesWanted(p);
+  know.problem = p;
   const emit = (final = false) => {
     const s = know.state(final);
     opts.onUpdate(s);
@@ -174,7 +215,7 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
   opts.signal?.throwIfAborted();
 
   const timeLimitS = opts.timeLimitS ?? 10;
-  const allStores = new Set(p.offers.map(o => o.store)).size;
+  const allStores = paidStoreIds(p).length;
   // Cheapest overall settles first.
   know.record(allStores, await opts.solve(p, allStores, { timeLimitS, start: know.bestAtMost(allStores) ?? undefined }));
   emit();
@@ -198,4 +239,16 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
     }),
   );
   return emit(true);
+}
+
+/**
+ * The runner-up for one shown rung: the best Plan whose Stores differ from every shown rung's. Asked for on demand,
+ * since it costs a solve per rung and most buyers never look.
+ */
+export async function findRunnerUp(p: Problem, know: LadderKnowledge, k: number, short: boolean, solve: RungSolver, timeLimitS = 10): Promise<void> {
+  const rungs = know.state(true).rungs.filter(r => r.plan && !!r.short === short);
+  const rung = rungs.find(r => r.k === k);
+  if (!rung) return;
+  const outcome = await solve(p, k, { timeLimitS, partial: short, exclude: rungs.map(r => paidStoreIds(p, r.plan!)) });
+  know.recordAlt(k, short, outcome);
 }

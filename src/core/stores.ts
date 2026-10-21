@@ -22,6 +22,8 @@ export interface StoreRecord {
   postage?: PostageOption[];
   free_postage?: { threshold: RegionValue; applies_to: 'all' | 'singles_only' };
   cart: CartKind;
+  /** Where the Store is; Australian Stores ship internationally, so their postage is a guess unless the buyer sets it. */
+  country?: 'NZ' | 'AU';
   provenance?: { url: string | null; checked_on: string; confidence: 'checkout' | 'published' | 'inferred' | 'default' };
 }
 
@@ -32,9 +34,13 @@ export interface BuyerContext {
   ruralAddress: boolean;
   /** Store ids the buyer has chosen to pick up from. */
   pickupStores: ReadonlySet<string>;
+  /** Store ids the buyer can collect from for free: they cost no postage and don't count toward a Plan's Store limit. */
+  preferredStores: ReadonlySet<string>;
   /** Per-Store postage overrides (NZD), keyed by Store id. */
   postageOverrides: Readonly<Record<string, number>>;
   defaultPostage: { tracked: number; rural: number };
+  /** What an Australian Store is assumed to charge to post to NZ (NZD). */
+  australiaPostage: number;
 }
 
 /** What a Store costs on top of its cards: `postage` unless the subtotal reaches `freeOver`. */
@@ -83,13 +89,17 @@ export function pickupEligible(store: StoreRecord, buyer: Pick<BuyerContext, 'pi
 }
 
 export function storeCost(store: StoreRecord, buyer: BuyerContext): StoreCost {
+  // What the buyer says a Store costs them wins, whether they post it or collect it.
+  const override = buyer.postageOverrides[store.id];
+  if (buyer.preferredStores.has(store.id)) return { postage: override ?? store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   if (buyer.pickupStores.has(store.id) && pickupEligible(store, buyer)) {
-    return { postage: store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
+    return { postage: override ?? store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   }
   const region = regionOf(buyer.pickupCity) ?? 'north_island';
   const threshold = store.free_postage ? valueFor(store.free_postage.threshold, region) ?? null : null;
-  const override = buyer.postageOverrides[store.id];
   if (override !== undefined) return { postage: override, freeOver: threshold, kind: 'postage', estimated: false };
+
+  if (store.country === 'AU') return { postage: buyer.australiaPostage, freeOver: threshold, kind: 'postage', estimated: true };
 
   const options = (store.postage ?? []).filter(o => buyer.postageType === 'standard' || o.tracked !== false);
   if (!options.length) {
@@ -128,7 +138,7 @@ export class StoreDirectory {
     if (known) return known;
     let r = this.dynamic.get(l.storeKey);
     if (!r) {
-      if (l.source === 'mtgsingles') this.unknownKeys.add(l.storeKey);
+      if (l.source.startsWith('mtgsingles')) this.unknownKeys.add(l.storeKey);
       r = {
         id: l.storeKey,
         name: l.storeName,
@@ -137,6 +147,7 @@ export class StoreDirectory {
         location: { city: l.city ?? null, region: regionOf(l.city) },
         pickup: { available: l.pickupOffered ?? null, fee: 0 },
         cart: l.source === 'fetch' ? 'fetch' : 'open-listings',
+        country: l.source === 'mtgsingles-au' ? 'AU' : undefined,
       };
       this.dynamic.set(l.storeKey, r);
     }

@@ -4,9 +4,10 @@ import { stream, streamSSE } from 'hono/streaming';
 import type { Catalogue } from '../catalogue/catalogue';
 import { CardSearchIndex } from '../catalogue/cardSearch';
 import type { CatalogueStore } from '../catalogue/updater';
+import type { StoreRecord } from '../core/stores';
 import { resolveWantList } from '../core/wantList';
 import type {
-  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, StartRunRequest, StatusResponse,
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, StartRunRequest, SplitView, StatusResponse, SweepView, StoreChoice,
 } from '../shared/api';
 import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
@@ -23,6 +24,8 @@ export interface AppDeps {
   runs: RunManager;
   cache: SearchCache;
   version: string;
+  /** The Stores MagicFinder knows about, for picking preferred ones. */
+  stores?: () => StoreRecord[];
   /** A newer release to offer, if any. */
   update?: () => UpdateInfo | null;
   /** Hosted mode (MAGICFINDER_HOSTED). */
@@ -43,6 +46,8 @@ export function createApp(d: AppDeps) {
       ...(d.hosted ? { hosted: true as const } : {}),
     }),
   );
+
+  app.get('/api/stores', c => c.json<StoreChoice[]>((d.stores?.() ?? []).map(s => ({ id: s.id, name: s.name, city: s.location.city, country: s.country ?? 'NZ' }))));
 
   app.get('/api/settings', c => c.json<Settings>(d.settings.get()));
 
@@ -184,18 +189,44 @@ export function createApp(d: AppDeps) {
     return c.json({ ok: true });
   });
 
+  app.post('/api/runs/:id/runner-up', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    void run.runnerUp(k).catch(e => console.error(e));
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/runs/:id/split', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    const result = await run.split(k);
+    return 'error' in result ? c.json(result, 409) : c.json<SplitView>(result);
+  });
+
+  app.post('/api/runs/:id/sweep', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    const result = await run.sweep(k);
+    return 'error' in result ? c.json(result, 409) : c.json<SweepView>(result);
+  });
+
   app.get('/api/runs/:id/printings/:lineId', c => {
     const run = d.runs.get(c.req.param('id'));
     const lineId = c.req.param('lineId');
     const line = run?.want.lines.find(l => l.id === lineId);
     if (!run || !line) return c.json({ error: 'Not found' }, 404);
-    return c.json<PrintingsResponse>({ lineId, name: line.name, hint: line.hint, options: run.printings(lineId) });
+    return c.json<PrintingsResponse>({ lineId, name: line.name, hint: line.hint, options: run.printings(lineId), unconfirmed: run.unconfirmed(lineId) });
   });
 
   app.post('/api/runs/:id/cart', async c => {
     const run = d.runs.get(c.req.param('id'));
     const { storeId, k } = await c.req.json<{ storeId: string; k: number }>();
-    const store = run?.ladder?.rungs.find(r => r.k === k)?.stores.find(s => s.id === storeId);
+    // A negative k names the runner-up Plan of that rung.
+    const rung = run?.ladder?.rungs.find(r => r.k === Math.abs(k));
+    const store = (k < 0 ? rung?.next : rung)?.stores.find(s => s.id === storeId);
     if (!run) return c.json({ error: gone ?? 'That Plan has changed. Pick it again.' }, 404);
     if (!run.search || !store) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
     const byId = new Map(run.search.listings.map(l => [l.id, l]));

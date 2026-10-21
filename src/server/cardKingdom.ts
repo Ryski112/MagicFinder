@@ -132,21 +132,31 @@ export interface CardKingdomOptions {
   shippingUsd: number;
 }
 
+/** What CardKingdom sells of one line (a locked Printing, or any Printing), cheapest first. */
+export function cardKingdomOffers(line: BuyLine, catalogue: Catalogue, ck: CardKingdomContext, allowFoils: boolean) {
+  const candidates = line.lock
+    ? [{ printingId: line.lock.printingId, finish: line.lock.finish }]
+    : catalogue.printingsOf(line.oracleId)
+        .filter(p => !p.nonTournament)
+        .flatMap(p => (['nonfoil', ...(allowFoils ? ['foil'] : [])] as Finish[]).filter(f => p.finishes.includes(f)).map(finish => ({ printingId: p.id, finish })));
+  return candidates
+    .flatMap(c => {
+      const entry = ck.prices.get(c.printingId, c.finish);
+      return entry ? [{ ...c, entry }] : [];
+    })
+    .sort((a, b) => a.entry.usd - b.entry.usd);
+}
+
+/** A price in NZD as the buyer pays it: converted from USD, with NZ GST when that is on. */
+export function cardKingdomPaidNzd(ck: CardKingdomContext, usd: number): number {
+  return cents(withGst(ck, usd * ck.usdToNzd));
+}
+
 export function compareAtCardKingdom(buy: BuyLine[], catalogue: Catalogue, ck: CardKingdomContext, opts: CardKingdomOptions): CardKingdomView {
   const items: CardKingdomView['items'] = [];
   const missing: CardKingdomView['missing'] = [];
   for (const line of buy) {
-    const candidates = line.lock
-      ? [{ printingId: line.lock.printingId, finish: line.lock.finish }]
-      : catalogue.printingsOf(line.oracleId)
-          .filter(p => !p.nonTournament)
-          .flatMap(p => (['nonfoil', ...(opts.allowFoils ? ['foil'] : [])] as Finish[]).filter(f => p.finishes.includes(f)).map(finish => ({ printingId: p.id, finish })));
-    const offers = candidates
-      .flatMap(c => {
-        const entry = ck.prices.get(c.printingId, c.finish);
-        return entry ? [{ ...c, entry }] : [];
-      })
-      .sort((a, b) => a.entry.usd - b.entry.usd);
+    const offers = cardKingdomOffers(line, catalogue, ck, opts.allowFoils);
     let need = line.quantity;
     for (const o of offers) {
       if (need <= 0) break;

@@ -11,8 +11,10 @@ const buyer = (over: Partial<BuyerContext> = {}): BuyerContext => ({
   pickupCity: 'Auckland',
   ruralAddress: false,
   pickupStores: new Set(),
+  preferredStores: new Set(),
   postageOverrides: {},
   defaultPostage: { tracked: 7, rural: 5 },
+  australiaPostage: 20,
   ...over,
 });
 
@@ -38,6 +40,12 @@ describe('regionOf', () => {
 });
 
 describe('storeCost', () => {
+  it("charges an Australian Store the buyer's Australia postage guess, marked as estimated", () => {
+    const au = { ...stores[0], id: 'mtgsingles:AU/X', country: 'AU' as const };
+    expect(storeCost(au, buyer({ australiaPostage: 18 }))).toMatchObject({ postage: 18, estimated: true, kind: 'postage' });
+    expect(storeCost(au, buyer({ australiaPostage: 18, postageOverrides: { [au.id]: 12 } }))).toMatchObject({ postage: 12, estimated: false });
+  });
+
   it('uses the published tracked price and free-postage threshold', () => {
     const c = storeCost(byId('hobby-master'), buyer());
     expect(c).toMatchObject({ postage: 6, freeOver: 100, kind: 'postage', estimated: false });
@@ -47,6 +55,11 @@ describe('storeCost', () => {
 
   it('adds the rural surcharge for rural addresses', () => {
     expect(storeCost(byId('hobby-master'), buyer({ ruralAddress: true })).postage).toBe(15);
+  });
+
+  it('charges a preferred Store no postage, only its pickup fee', () => {
+    const s = byId('meta-life');
+    expect(storeCost(s, buyer({ preferredStores: new Set([s.id]) }))).toMatchObject({ postage: s.pickup.fee, freeOver: null, kind: 'pickup' });
   });
 
   it('prices by the region of the buyer pickup city', () => {
@@ -61,7 +74,12 @@ describe('storeCost', () => {
     expect(storeCost(byId('card-bard'), buyer({ ruralAddress: true })).postage).toBe(12);
   });
 
-  it('uses a buyer override over everything but pickup', () => {
+  it('uses a buyer override for a preferred Store too', () => {
+    const s = byId('shuffle-and-cut');
+    expect(storeCost(s, buyer({ preferredStores: new Set([s.id]), postageOverrides: { [s.id]: 3 } }))).toMatchObject({ postage: 3, kind: 'pickup' });
+  });
+
+  it('uses a buyer override over the published postage', () => {
     expect(storeCost(byId('shuffle-and-cut'), buyer({ postageOverrides: { 'shuffle-and-cut': 5.5 } }))).toMatchObject({ postage: 5.5, estimated: false });
   });
 

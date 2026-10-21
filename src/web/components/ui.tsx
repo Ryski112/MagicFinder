@@ -89,8 +89,9 @@ function useEscape(active: boolean, onClose: () => void) {
 const SOURCE_STYLE: Record<SourceId, string> = {
   fetch: 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200',
   mtgsingles: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/60 dark:text-fuchsia-200',
+  'mtgsingles-au': 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
 };
-export const SOURCE_NAME: Record<SourceId, string> = { fetch: 'Fetch TCG', mtgsingles: 'MtgSingles' };
+export const SOURCE_NAME: Record<SourceId, string> = { fetch: 'Fetch TCG', mtgsingles: 'MtgSingles', 'mtgsingles-au': 'MtgSingles AU' };
 
 export function SourceBadge({ source }: { source: SourceId }) {
   return <span className={cx('text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded', SOURCE_STYLE[source])}>{SOURCE_NAME[source]}</span>;

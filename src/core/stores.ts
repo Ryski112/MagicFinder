@@ -89,13 +89,14 @@ export function pickupEligible(store: StoreRecord, buyer: Pick<BuyerContext, 'pi
 }
 
 export function storeCost(store: StoreRecord, buyer: BuyerContext): StoreCost {
-  if (buyer.preferredStores.has(store.id)) return { postage: store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
+  // What the buyer says a Store costs them wins, whether they post it or collect it.
+  const override = buyer.postageOverrides[store.id];
+  if (buyer.preferredStores.has(store.id)) return { postage: override ?? store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   if (buyer.pickupStores.has(store.id) && pickupEligible(store, buyer)) {
-    return { postage: store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
+    return { postage: override ?? store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   }
   const region = regionOf(buyer.pickupCity) ?? 'north_island';
   const threshold = store.free_postage ? valueFor(store.free_postage.threshold, region) ?? null : null;
-  const override = buyer.postageOverrides[store.id];
   if (override !== undefined) return { postage: override, freeOver: threshold, kind: 'postage', estimated: false };
 
   if (store.country === 'AU') return { postage: buyer.australiaPostage, freeOver: threshold, kind: 'postage', estimated: true };

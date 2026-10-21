@@ -1,5 +1,8 @@
 import type { ItemView, LeftOutView, NotFoundView, OfferView, StoreView } from '../shared/api';
 
+/** A Plan from before the server sent `waivable` can still be relaxed. */
+export const isWaivable = (n: NotFoundView): boolean => n.waivable ?? true;
+
 export interface PlanCard {
   buyKey: string;
   name: string;
@@ -33,13 +36,15 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
     const c = entry(l.buyKey, l.name, l.image);
     c.qty += l.missing;
     c.missing += l.missing;
+    c.lineIds = [...new Set([...c.lineIds, ...(l.lineIds ?? [])])];
+    c.waivable = l.waivable ?? true;
   }
   for (const n of notFound) {
     const c = entry(n.buyKey, n.name, n.image);
     c.qty += n.missing;
     c.missing += n.missing;
     c.notFound = true;
-    c.waivable = n.waivable;
+    c.waivable = isWaivable(n);
     c.lineIds = [...new Set([...c.lineIds, ...n.lineIds])];
   }
   return [...cards.values()].sort((a, b) => a.name.localeCompare(b.name));

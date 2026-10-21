@@ -33,6 +33,8 @@ export interface Settings {
   includeBasics: boolean;
   /** Printings the buyer never wants bought (unless a line is locked to one), by Scryfall id, with a label to show in Settings. */
   blockedPrintings: Record<string, string>;
+  /** Individual Listings the buyer never wants (by Listing id, with a label), for ones whose Printing isn't known. */
+  blockedListings: Record<string, string>;
   sources: Record<SourceId, boolean>;
   theme: 'dark' | 'light';
   /** Everyday cards used to tell a silent block from real Not Founds. Edit here to change the basket. */
@@ -67,6 +69,7 @@ export const DEFAULT_SETTINGS: Settings = {
   useListPrintings: false,
   includeBasics: false,
   blockedPrintings: {},
+  blockedListings: {},
   sources: { fetch: true, mtgsingles: true, 'mtgsingles-au': false },
   theme: 'dark',
   staples: ['Lightning Bolt', 'Counterspell', 'Swords to Plowshares', 'Llanowar Elves', 'Sol Ring'],
@@ -88,7 +91,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const FRIEND_KEYS = [
   'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
   'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom', 'australiaPostage', 'excludedStores',
-  'preferredStores', 'preferredOn', 'blockedPrintings',
+  'preferredStores', 'preferredOn', 'blockedPrintings', 'blockedListings',
 ] as const satisfies readonly (keyof Settings)[];
 
 export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;
@@ -139,7 +142,7 @@ function merge<T>(base: T, patch: unknown): T {
   for (const [k, v] of Object.entries(patch as object)) {
     if (!(k in (base as object))) continue;
     const b = (base as any)[k];
-    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' && k !== 'blockedPrintings' && k !== 'excludedStores' && k !== 'preferredStores' ? merge(b, v) : v;
+    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' && k !== 'blockedPrintings' && k !== 'blockedListings' && k !== 'excludedStores' && k !== 'preferredStores' ? merge(b, v) : v;
   }
   return out;
 }

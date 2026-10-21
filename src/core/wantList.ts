@@ -98,6 +98,8 @@ export interface ListChoices {
   locks: Readonly<Record<string, Lock | null>>;
   /** Line ids the buyer has told us not to exclude Listings for on condition, finish or Printing grounds. */
   relaxed?: Readonly<Record<string, boolean>>;
+  /** Line ids a Short Plan must cover, choosing its Stores around them. */
+  required?: Readonly<Record<string, boolean>>;
   includeBasics: boolean;
   useListPrintings: boolean;
 }
@@ -111,6 +113,8 @@ export interface BuyLine {
   lock: Lock | null;
   /** The buyer's condition, foil and Printing filters don't apply to this line. */
   relaxed?: boolean;
+  /** A Short Plan must cover this line. */
+  required?: boolean;
   /** Want List line ids merged into this one. */
   lineIds: string[];
 }
@@ -133,12 +137,14 @@ export function buyLines(lines: WantLine[], choices: ListChoices): BuyLine[] {
     const lock = lockFor(l, choices);
     const key = `${l.oracleId}|${lock ? lockKey(lock) : ''}`;
     const relaxed = !!choices.relaxed?.[l.id];
+    const required = !!choices.required?.[l.id];
     const cur = out.get(key);
     if (cur) {
       cur.quantity += l.quantity;
       cur.lineIds.push(l.id);
       cur.relaxed = cur.relaxed || relaxed;
-    } else out.set(key, { key, oracleId: l.oracleId, name: l.name, quantity: l.quantity, lock, relaxed, lineIds: [l.id] });
+      cur.required = cur.required || required;
+    } else out.set(key, { key, oracleId: l.oracleId, name: l.name, quantity: l.quantity, lock, relaxed, required, lineIds: [l.id] });
   }
   return [...out.values()];
 }

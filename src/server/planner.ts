@@ -31,7 +31,7 @@ export interface Prepared {
 }
 
 export function listChoices(choices: PlanChoices, s: Settings): ListChoices {
-  return { included: choices.included, locks: choices.locks, relaxed: choices.relaxed, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
+  return { included: choices.included, locks: choices.locks, relaxed: choices.relaxed, required: choices.required, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
 }
 
 export function buyerContext(s: Settings): BuyerContext {
@@ -53,7 +53,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
   const ck = ctx.cardKingdom && ctx.settings.cardKingdom.enabled && ctx.settings.cardKingdom.ignoreOver
     ? { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst }
     : null;
-  const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils, blockedPrintings: ctx.settings.blockedPrintings };
+  const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils, blockedPrintings: ctx.settings.blockedPrintings, blockedListings: ctx.settings.blockedListings };
   const byOracle = new Map<string, Listing[]>();
   for (const l of search.listings) {
     if (!l.oracleId || ctx.settings.excludedStores[ctx.directory.forListing(l).id]) continue;
@@ -91,13 +91,13 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
       notFound.push({
         buyKey: line.key, lineIds: line.lineIds, name: line.name, missing: line.quantity - need, wanted: line.quantity,
         locked: !!line.lock, notSearchedOn: notSearched(line.oracleId), searchedOn: searched(line.oracleId), excluded,
-        waivable: !line.relaxed && (Object.keys(excluded) as Exclusion[]).some(e => WAIVABLE.has(e)),
+        waivable: !line.relaxed,
         image: cardImage(ctx.catalogue, line.oracleId),
       });
     }
     if (!need) continue;
     const lineIdx = problem.lines.length;
-    problem.lines.push({ key: line.key, need });
+    problem.lines.push({ key: line.key, need, required: line.required });
     const lineOffers: { listing: Listing; store: StoreRecord }[] = [];
     offers.set(line.key, lineOffers);
     // The Store a card is pinned to is the only one the Plan may use, but every Store's Listings stay visible.
@@ -238,7 +238,16 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
       const leftOut = prep.problem.lines.flatMap((l, line) => {
         const missing = l.need - (bought.get(line) ?? 0);
         const b = buyByKey.get(l.key)!;
-        return missing > 0 ? [{ buyKey: l.key, name: b.name, missing, image: cardImage(catalogue, b.oracleId) }] : [];
+        if (missing <= 0) return [];
+        // Why it's out: what the Stores of this Plan (and preferred Stores) have, against the cheapest anywhere.
+        const mine = new Set([...(r.plan?.stores ?? []).map(ps => ps.store), ...prep.stores.flatMap((rec, i) => (prep.buyer.preferredStores.has(rec.id) ? [i] : []))]);
+        const offers = prep.problem.offers.filter(o => o.line === line).sort((x, y) => x.price - y.price);
+        const here = offers.find(o => mine.has(o.store));
+        const best = offers[0];
+        const note = !best ? undefined
+          : !here ? `Not in stock at these Stores. Cheapest: ${prep.stores[best.store].name}, $${best.price.toFixed(2)}`
+          : `In stock at ${prep.stores[here.store].name} for $${here.price.toFixed(2)}, but including it would leave out other cards`;
+        return [{ buyKey: l.key, name: b.name, missing, lineIds: b.lineIds, waivable: !b.required, note, image: cardImage(catalogue, b.oracleId) }];
       });
       const leftOutBuy = leftOut.map(l => ({ ...buyByKey.get(l.buyKey)!, quantity: l.missing }));
       const leftOutCk = ck && leftOutBuy.length
@@ -296,7 +305,7 @@ export function unconfirmedListings(want: ResolvedWantList, search: SearchResult
     .filter(l => l.oracleId === line.oracleId && l.confidence === 'card-only' && passesListingFilters(l, settings) && !ctx.settings.excludedStores[ctx.directory.forListing(l).id])
     .map(l => {
       const rec = ctx.directory.forListing(l);
-      return { storeId: rec.id, storeName: rec.name, title: l.title, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish, image: l.imageUrl ?? null, url: l.url };
+      return { listingId: l.id, blocked: !!ctx.settings.blockedListings[l.id], storeId: rec.id, storeName: rec.name, title: l.title, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish, image: l.imageUrl ?? null, url: l.url };
     })
     .sort((a, b) => a.price - b.price);
 }

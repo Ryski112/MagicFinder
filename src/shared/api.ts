@@ -87,6 +87,8 @@ export interface PlanChoices {
   locks: Record<string, Lock | null>;
   /** Line ids whose condition, foil and Printing filters are waived. */
   relaxed?: Record<string, boolean>;
+  /** Line ids a Short Plan must cover. */
+  required?: Record<string, boolean>;
   pins?: Record<string, string>;
 }
 
@@ -204,6 +206,12 @@ export interface LeftOutView {
   buyKey: string;
   name: string;
   missing: number;
+  /** Want List line ids for this card. */
+  lineIds: string[];
+  /** The buyer's own filters haven't been waived for this card yet. */
+  waivable: boolean;
+  /** Why the card isn't in the Plan, when its Stores can be compared. */
+  note?: string;
   image: string | null;
 }
 
@@ -221,7 +229,7 @@ export interface NotFoundView {
   searchedOn: string[];
   /** Listings of this card that were found but left out, counted by reason. */
   excluded: Partial<Record<Exclusion, number>>;
-  /** Some of the left-out Listings were excluded by the buyer's own filters, which can be waived for this card. */
+  /** The buyer's own filters haven't been waived for this card yet. */
   waivable: boolean;
   image: string | null;
 }
@@ -372,6 +380,9 @@ export interface PrintingOption {
 
 /** A Listing of the card that the title and picture couldn't tie to one Printing. */
 export interface UnconfirmedListingView {
+  listingId: string;
+  /** On the buyer's never-buy list of Listings. */
+  blocked: boolean;
   storeId: string;
   storeName: string;
   title: string;

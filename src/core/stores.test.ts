@@ -74,7 +74,12 @@ describe('storeCost', () => {
     expect(storeCost(byId('card-bard'), buyer({ ruralAddress: true })).postage).toBe(12);
   });
 
-  it('uses a buyer override over everything but pickup', () => {
+  it('uses a buyer override for a preferred Store too', () => {
+    const s = byId('shuffle-and-cut');
+    expect(storeCost(s, buyer({ preferredStores: new Set([s.id]), postageOverrides: { [s.id]: 3 } }))).toMatchObject({ postage: 3, kind: 'pickup' });
+  });
+
+  it('uses a buyer override over the published postage', () => {
     expect(storeCost(byId('shuffle-and-cut'), buyer({ postageOverrides: { 'shuffle-and-cut': 5.5 } }))).toMatchObject({ postage: 5.5, estimated: false });
   });
 

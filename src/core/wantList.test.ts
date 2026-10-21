@@ -144,4 +144,18 @@ describe('isEligible', () => {
     expect(isEligible(listing({ english: false }), relaxed, cat, settings)).toBe(false);
     expect(isEligible(listing({ quantity: 0 }), relaxed, cat, settings)).toBe(false);
   });
+
+  it('keeps a never-buy Listing out, even of a relaxed line', () => {
+    const l = listing({});
+    const relaxed = { ...counter(), relaxed: true };
+    expect(isEligible(l, relaxed, cat, { ...settings, blockedListings: { [l.id]: 'x' } })).toBe(false);
+    expect(isEligible(l, relaxed, cat, settings)).toBe(true);
+  });
+
+  it('keeps a never-buy Printing out of a relaxed line', () => {
+    const p = printings()[0];
+    const relaxed = { ...counter(), relaxed: true };
+    const blocked = { ...settings, blockedPrintings: { [p.id]: 'x' } };
+    expect(isEligible(listing({ confidence: 'exact', printingId: p.id }), relaxed, cat, blocked)).toBe(false);
+  });
 });

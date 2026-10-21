@@ -10,13 +10,15 @@ export interface EligibilitySettings {
   allowFoils: boolean;
   /** Printings the buyer never wants (by Scryfall id); a line locked to one still gets it. */
   blockedPrintings?: Readonly<Record<string, unknown>>;
+  /** Listings the buyer never wants (by Listing id), whatever their Printing; a lock doesn't override this. */
+  blockedListings?: Readonly<Record<string, unknown>>;
 }
 
 /** Why a Listing of the right card can't fill a line, so Not Found can say what was left out. */
-export type Exclusion = 'non-english' | 'not-buyable' | 'unmatched' | 'sold-out' | 'condition' | 'other-printing' | 'foil' | 'non-tournament' | 'blocked-printing';
+export type Exclusion = 'non-english' | 'not-buyable' | 'unmatched' | 'sold-out' | 'condition' | 'other-printing' | 'foil' | 'non-tournament' | 'blocked-printing' | 'blocked-listing';
 
 /** The reasons that come from the buyer's own settings, which they can waive for one card. */
-export const WAIVABLE: ReadonlySet<Exclusion> = new Set<Exclusion>(['condition', 'foil', 'non-tournament', 'blocked-printing']);
+export const WAIVABLE: ReadonlySet<Exclusion> = new Set<Exclusion>(['condition', 'foil', 'non-tournament']);
 
 function listingExclusion(l: Listing, s: EligibilitySettings, relaxed = false): Exclusion | null {
   if (!l.english) return 'non-english';
@@ -36,10 +38,12 @@ export function passesListingFilters(l: Listing, s: EligibilitySettings): boolea
 export function exclusion(l: Listing, line: BuyLine, catalogue: Catalogue, s: EligibilitySettings): Exclusion | null {
   const general = listingExclusion(l, s, line.relaxed);
   if (general) return general;
+  if (s.blockedListings?.[l.id]) return 'blocked-listing';
   if (line.lock) return l.confidence === 'exact' && l.printingId === line.lock.printingId && l.finish === line.lock.finish ? null : 'other-printing';
+  // A Printing on the never-buy list stays out even when the buyer waives the other filters for this card.
+  if (l.printingId && s.blockedPrintings?.[l.printingId]) return 'blocked-printing';
   if (line.relaxed) return null;
   if (!s.allowFoils && l.finish !== 'nonfoil') return 'foil';
-  if (l.printingId && s.blockedPrintings?.[l.printingId]) return 'blocked-printing';
   if (l.printingId && catalogue.getPrinting(l.printingId)?.nonTournament) return 'non-tournament';
   return null;
 }

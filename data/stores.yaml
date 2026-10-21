@@ -561,3 +561,252 @@
   pickup: { available: null, fee: 0 }
   cart: shopify # storefront was password-protected on 2026-10-17; the pre-check falls back to Open Listings
   provenance: { url: null, checked_on: 2026-10-17, confidence: default }
+
+# ---- Australian Stores ----
+# Written by `npm run probe-au` (weekly, by the "Australian Store check" Action). Edit by hand only to fix the script.
+# Ids are the ones MagicFinder gave these Stores before they were listed, so buyers' exclusions still apply.
+# ships_to_nz: true | false | null (checkout couldn't tell). postage is checkout's cheapest rate to Auckland, in NZD
+# at that day's rate (the AUD price is in its name); without it the buyer's Australian postage guess applies.
+
+- id: "mtgsingles:AU/Area52"
+  name: "Area52"
+  source_keys: { mtgsingles: "AU/Area52" }
+  site: https://shop.area52.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://shop.area52.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/CardHouse"
+  name: "Card House"
+  source_keys: { mtgsingles: "AU/CardHouse" }
+  site: https://www.cardhouse.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "International Standard - Zone 1 (AU$21.00)", tracked: null, price: 25.95, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://www.cardhouse.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/CriticalHit"
+  name: "Critical Hit"
+  source_keys: { mtgsingles: "AU/CriticalHit" }
+  site: https://www.crithit.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: null
+  provenance: { url: https://www.crithit.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: default }
+
+- id: "mtgsingles:AU/ElementalArcade"
+  name: "Elemental Arcade"
+  source_keys: { mtgsingles: "AU/ElementalArcade" }
+  site: https://elementalarcade.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://elementalarcade.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/FromTheDeepGames"
+  name: "From The Deep Games"
+  source_keys: { mtgsingles: "AU/FromTheDeepGames" }
+  site: https://fromthedeepgames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://fromthedeepgames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/GeneralGames"
+  name: "General Games"
+  source_keys: { mtgsingles: "AU/GeneralGames" }
+  site: https://www.generalgames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://www.generalgames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/InnGames"
+  name: "Inn Games"
+  source_keys: { mtgsingles: "AU/InnGames" }
+  site: https://inngames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://inngames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/IrresistibleForce"
+  name: "Irresistible Force"
+  source_keys: { mtgsingles: "AU/IrresistibleForce" }
+  site: https://tcg.irresistibleforce.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "Standard International (AU$45.00)", tracked: null, price: 55.61, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://tcg.irresistibleforce.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/MagicHotHub"
+  name: "Magic Hot Hub"
+  source_keys: { mtgsingles: "AU/MagicHotHub" }
+  site: https://magiccards.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: open-listings
+  country: AU
+  ships_to_nz: null
+  provenance: { url: https://magiccards.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: default }
+
+- id: "mtgsingles:AU/ManaMarket"
+  name: "Mana Market"
+  source_keys: { mtgsingles: "AU/ManaMarket" }
+  site: https://manamarket.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://manamarket.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/MightyCoolGames"
+  name: "Mighty Cool Games"
+  source_keys: { mtgsingles: "AU/MightyCoolGames" }
+  site: https://mightycoolgames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://mightycoolgames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/MtgSinglesAustralia"
+  name: "Mtg Singles Australia"
+  source_keys: { mtgsingles: "AU/MtgSinglesAustralia" }
+  site: https://www.mtgsinglesaustralia.com
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "New Zealand (Standard) (AU$25.00)", tracked: null, price: 30.89, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://www.mtgsinglesaustralia.com/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/PlentyOfGames"
+  name: "Plenty Of Games"
+  source_keys: { mtgsingles: "AU/PlentyOfGames" }
+  site: https://www.plentyofgames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://www.plentyofgames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/ProGamers"
+  name: "Pro Gamers"
+  source_keys: { mtgsingles: "AU/ProGamers" }
+  site: https://progamers.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://progamers.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/RhysticNostalgiaGaming"
+  name: "Rhystic Nostalgia Gaming"
+  source_keys: { mtgsingles: "AU/RhysticNostalgiaGaming" }
+  site: https://rhysticnostalgiagaming.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "Standard International (AU$38.00)", tracked: null, price: 46.96, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://rhysticnostalgiagaming.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/RoninGames"
+  name: "Ronin Games"
+  source_keys: { mtgsingles: "AU/RoninGames" }
+  site: https://roningames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://roningames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/ShuffleAndCutMelbourne"
+  name: "Shuffle And Cut Melbourne"
+  source_keys: { mtgsingles: "AU/ShuffleAndCutMelbourne" }
+  site: https://shuffleandcutgames.com
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://shuffleandcutgames.com/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/TabernacleGames"
+  name: "Tabernacle Games"
+  source_keys: { mtgsingles: "AU/TabernacleGames" }
+  site: https://tcg.tabernaclegames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://tcg.tabernaclegames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/TheGamesDistrict"
+  name: "The Games District"
+  source_keys: { mtgsingles: "AU/TheGamesDistrict" }
+  site: https://thegamesdistrict.com
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: false
+  provenance: { url: https://thegamesdistrict.com/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/TheGoodGames"
+  name: "The Good Games"
+  source_keys: { mtgsingles: "AU/TheGoodGames" }
+  site: https://tcg.goodgames.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "NZ Standard Shipping (AU$15.00)", tracked: null, price: 18.54, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://tcg.goodgames.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }
+
+- id: "mtgsingles:AU/UnpluggedGames"
+  name: "Unplugged Games"
+  source_keys: { mtgsingles: "AU/UnpluggedGames" }
+  site: https://tcgsingles.com.au
+  location: { city: null, region: null }
+  pickup: { available: false, fee: 0 }
+  postage:
+    - { name: "Standard International (AU$12.95)", tracked: null, price: 16.00, rural_surcharge: 0 }
+  cart: shopify
+  country: AU
+  ships_to_nz: true
+  provenance: { url: https://tcgsingles.com.au/cart/shipping_rates.json, checked_on: 2026-10-22, confidence: checkout }

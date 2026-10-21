@@ -8,6 +8,14 @@ import type { Exclusion } from '../core/eligibility';
 
 export type { Lock, Settings, SourceRunStatus, UnidentifiedListing, Condition, Finish, Section, SourceId, CartKind, Exclusion };
 
+/** A Store from the built-in table, for choosing preferred Stores. */
+export interface StoreChoice {
+  id: string;
+  name: string;
+  city: string | null;
+  country: 'NZ' | 'AU';
+}
+
 export interface StatusResponse {
   /** Lets a second launch recognise a running MagicFinder on a port. */
   app: 'MagicFinder';
@@ -146,6 +154,8 @@ export interface StoreView {
   pickupEligible: boolean;
   /** False when the Store hasn't confirmed it offers pickup (shown as "pickup not confirmed"). */
   pickupConfirmed: boolean;
+  /** On the buyer's preferred list: collected for free, and not counted toward the Store limit. */
+  preferred: boolean;
   pickupOn: boolean;
   pickupFee: number;
   subtotal: number;

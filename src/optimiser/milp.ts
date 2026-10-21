@@ -1,7 +1,7 @@
 // Exact Plans with HiGHS (WebAssembly, MIT): one MILP per rung, "at most k Stores". The model follows the optimiser
 // research: split quantities, one link row per offer, free-postage thresholds as a lower bound on the subtotal.
 import highsLoader from 'highs';
-import { planFrom, round2, type Plan, type Problem } from './problem';
+import { copyValues, paidStoreIds, planFrom, round2, type Plan, type Problem } from './problem';
 
 type Highs = Awaited<ReturnType<typeof highsLoader>>;
 let highsPromise: Promise<Highs> | null = null;
@@ -152,15 +152,25 @@ async function solveShort(p: Problem, k: number, opts: SolveOptions): Promise<Ru
   return { kind: 'timed-out', plan, bound: cost.status === 'timed-out' ? round2(cost.bound) : plan.total };
 }
 
-/** The fewest Stores that can supply every line (cover MILP over Store binaries only), or null if none can. */
+/** The fewest Stores (not counting preferred ones) that can supply every line, or null if none can. */
 export async function minimumStores(p: Problem, timeLimitS = 5): Promise<number | null> {
-  const stores = [...new Set(p.offers.map(o => o.store))];
-  const rows = p.lines.map((l, line) => {
+  const stores = paidStoreIds(p);
+  const rows: string[] = [];
+  for (let line = 0; line < p.lines.length; line++) {
+    const need = p.lines[line].need;
     const have = new Map<number, number>();
     for (const o of p.offers) if (o.line === line) have.set(o.store, (have.get(o.store) ?? 0) + o.qty);
-    const terms = [...have].map(([s, q]) => `${Math.min(q, l.need)} y${s}`);
-    return ` c${line}: ${terms.join(' + ') || '0 y0'} >= ${l.need}`;
-  });
+    let free = 0;
+    const terms: string[] = [];
+    for (const [s, q] of have) {
+      if (p.stores[s].free) free += q;
+      else terms.push(`${Math.min(q, need)} y${s}`);
+    }
+    if (free >= need) continue;
+    if (!terms.length) return null;
+    rows.push(` c${line}: ${terms.join(' + ')} >= ${need - Math.min(free, need)}`);
+  }
+  if (!rows.length) return 0;
   const lp = ['Minimize', ` obj: ${stores.map(s => `y${s}`).join(' + ')}`, 'Subject To', ...rows, 'Binary', ` ${stores.map(s => `y${s}`).join(' ')}`, 'End', ''].join('\n');
   const highs = await getHighs();
   const res = highs.solve(lp, { time_limit: timeLimitS, output_flag: false } as any);

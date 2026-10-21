@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { Settings, SourceId } from '../../shared/api';
+import { useEffect, useState } from 'react';
+import type { Settings, SourceId, StoreChoice } from '../../shared/api';
 import { api } from '../api';
 import { Button, Notice, Sheet, SOURCE_NAME, Switch } from './ui';
 
@@ -23,6 +23,80 @@ function ClearCache() {
       <Button variant="link" disabled={state.busy} onClick={clear}>Clear saved searches</Button>
       <span className="block text-xs text-slate-500">{state.message ?? 'Searches are reused for an hour. Clear them to see stock that changed since.'}</span>
     </div>
+  );
+}
+
+/** Stores the buyer can collect from for free: no postage, and they don't use up the 1/2/3-Store limit. */
+function PreferredStores({ preferred, city, on, onToggle, onChange }: { preferred: Settings['preferredStores']; city: string; on: boolean; onToggle: (v: boolean) => void; onChange: (b: Settings['preferredStores']) => void }) {
+  const [choices, setChoices] = useState<StoreChoice[]>([]);
+  useEffect(() => {
+    api.stores().then(setChoices).catch(() => setChoices([]));
+  }, []);
+  const ids = Object.keys(preferred);
+  const near = (s: StoreChoice) => s.city?.toLowerCase() === city.toLowerCase();
+  const options = choices.filter(s => !preferred[s.id] && s.country === 'NZ').sort((a, b) => Number(near(b)) - Number(near(a)) || a.name.localeCompare(b.name));
+  return (
+    <div className="space-y-1">
+      <div className="font-medium">Preferred Stores</div>
+      {ids.length > 0 && <Switch checked={on} onChange={onToggle} label="Use my preferred Stores" />}
+      <span className="block text-xs text-slate-500">Stores you can collect from easily. Their cards cost no postage and they don't count toward your 1, 2 or 3 Store limit. You can also use ☆ Prefer on the Plan screen.</span>
+      {ids.length > 0 && (
+        <ul className="space-y-1">
+          {ids.map(id => (
+            <li key={id} className="flex items-center gap-2 text-xs">
+              <span className="flex-1 min-w-0 truncate">★ {preferred[id]}</span>
+              <Button variant="link" className="text-xs" onClick={() => onChange(Object.fromEntries(ids.filter(x => x !== id).map(x => [x, preferred[x]])))}>remove</Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {options.length > 0 && (
+        <select className={field} value="" aria-label="Add a preferred Store"
+          onChange={e => {
+            const s = choices.find(c => c.id === e.target.value);
+            if (s) onChange({ ...preferred, [s.id]: s.name });
+          }}>
+          <option value="">Add a Store…</option>
+          {options.map(s => <option key={s.id} value={s.id}>{s.name}{s.city ? ` (${s.city})` : ''}{near(s) ? ' · near you' : ''}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+function ExcludedStores({ excluded, onChange }: { excluded: Settings['excludedStores']; onChange: (b: Settings['excludedStores']) => void }) {
+  const ids = Object.keys(excluded);
+  if (!ids.length) return null;
+  return (
+    <details>
+      <summary className="cursor-pointer">Excluded Stores ({ids.length})</summary>
+      <ul className="mt-1 space-y-1">
+        {ids.map(id => (
+          <li key={id} className="flex items-center gap-2 text-xs">
+            <span className="flex-1 min-w-0 truncate">{excluded[id]}</span>
+            <Button variant="link" className="text-xs" onClick={() => onChange(Object.fromEntries(ids.filter(x => x !== id).map(x => [x, excluded[x]])))}>use again</Button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function BlockedPrintings({ blocked, onChange }: { blocked: Settings['blockedPrintings']; onChange: (b: Settings['blockedPrintings']) => void }) {
+  const ids = Object.keys(blocked);
+  if (!ids.length) return <span className="block text-xs text-slate-500">Printings you mark "Never buy" on the Plan screen are listed here.</span>;
+  return (
+    <details>
+      <summary className="cursor-pointer">Never-buy Printings ({ids.length})</summary>
+      <ul className="mt-1 space-y-1">
+        {ids.map(id => (
+          <li key={id} className="flex items-center gap-2 text-xs">
+            <span className="flex-1 min-w-0 truncate">{blocked[id]}</span>
+            <Button variant="link" className="text-xs" onClick={() => onChange(Object.fromEntries(ids.filter(x => x !== id).map(x => [x, blocked[x]])))}>allow again</Button>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -52,6 +126,8 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
           </select>
           <span className="text-xs text-slate-500">Stores here get an "I'll pick up" switch. Also sets your region for postage prices.</span>
         </label>
+
+        <PreferredStores preferred={s.preferredStores} city={s.pickupCity} on={s.preferredOn} onToggle={preferredOn => onChange({ preferredOn })} onChange={preferredStores => onChange({ preferredStores })} />
 
         <Switch checked={s.ruralAddress} onChange={v => onChange({ ruralAddress: v })} label="Rural delivery address" />
 

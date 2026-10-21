@@ -78,7 +78,7 @@ export function PlanStep(p: Props) {
           <h2 className="font-semibold mb-2">How many Stores do you want to order from?</h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {p.ladder.rungs.map(r => (
-              <RungCard key={r.k} r={r} selected={rung?.k === r.k} onSelect={() => p.onSelect(r.k)} onTryLonger={() => void api.tryLonger(p.runId, r.k)} />
+              <RungCard key={r.k} r={r} preferred={hasPreferred} selected={rung?.k === r.k} onSelect={() => p.onSelect(r.k)} onTryLonger={() => void api.tryLonger(p.runId, r.k)} />
             ))}
           </div>
         </section>
@@ -310,7 +310,7 @@ function RungCard({ r, selected, onSelect, onTryLonger }: { r: RungView; selecte
     <button type="button" onClick={onSelect}
       className={cx('min-w-[180px] text-left rounded-xl border-2 p-3 bg-white dark:bg-slate-900 transition', selected ? 'border-indigo-500 shadow-md' : 'border-transparent ring-1 ring-slate-200 dark:ring-slate-800 hover:ring-slate-400')}>
       <div className="text-sm text-slate-500">
-        {r.k} Store{r.k > 1 ? 's' : ''}
+        {r.k === 0 ? 'Preferred Stores only' : <>{r.k} Store{r.k > 1 ? 's' : ''}{preferred && ' + preferred'}</>}
         {r.cheapestOverall && <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">· Cheapest overall</span>}
       </div>
       <div className="text-2xl font-bold tabnum">{money(r.total)}</div>
@@ -445,10 +445,24 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
         {s.storeUrl ? <a href={s.storeUrl} target="_blank" rel="noreferrer" className="font-semibold hover:underline">{s.name} ↗</a> : <span className="font-semibold">{s.name}</span>}
         {s.city && <span className="text-sm text-slate-500">{s.city}</span>}
+        {s.country === 'AU' && (
+          <Tag tone="warn" title="An Australian Store. Not all of them ship to NZ, so check its site before ordering; postage here is a guess.">Australia · check it ships to NZ</Tag>
+        )}
         {s.sources.map(src => <SourceBadge key={src} source={src} />)}
         {s.staleSince && <Tag tone="warn" title="Its Source couldn't be searched just now">prices from {timeAgo(s.staleSince)}</Tag>}
         <div className="ml-auto flex items-center gap-3">
-          {s.pickupEligible && (
+          <Button variant="link" className="text-xs" onClick={onExclude}
+            title={`Leave ${s.name} out of every Plan from now on, e.g. because it doesn't ship to you. You can add it back in Settings.`}>
+            🚫 {s.country === 'AU' ? "Doesn't ship to NZ" : 'Exclude Store'}
+          </Button>
+          <Button variant="link" className="text-xs" onClick={() => {
+            const { [s.id]: _gone, ...rest } = settings.preferredStores;
+            onSettings({ preferredStores: s.preferred ? rest : { ...settings.preferredStores, [s.id]: s.name } });
+          }}
+            title={s.preferred ? `${s.name} is a preferred Store: no postage, and it doesn't count toward your Store limit. Click to stop.` : `Make ${s.name} a preferred Store: somewhere you collect from for free, so it doesn't count toward your Store limit.`}>
+            {s.preferred ? '★ Preferred' : '☆ Prefer'}
+          </Button>
+          {s.pickupEligible && !s.preferred && (
             <Switch checked={s.pickupOn} onChange={setPickup} ariaLabel={`I'll pick up from ${s.name}`} label={<>I'll pick up{!s.pickupConfirmed && <span className="text-xs text-slate-500"> (not confirmed)</span>}</>}
               title={s.pickupConfirmed ? (s.pickupFee ? `Pickup fee ${money(s.pickupFee)}` : 'Free pickup') : "This Store hasn't said whether it offers pickup; check before you rely on it"} />
           )}
@@ -596,7 +610,7 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(s.postage || settings.defaultPostage.tracked));
   const override = settings.postageOverrides[s.id];
-  const postageLabel = s.postageKind === 'pickup' ? 'Pickup' : `Postage (${settings.postageType})`;
+  const postageLabel = s.preferred ? 'Collect' : s.postageKind === 'pickup' ? 'Pickup' : `Postage (${settings.postageType})`;
   return (
     <div className="text-sm tabnum space-y-0.5">
       <div className="flex justify-between"><span>Cards</span><span>{money(s.subtotal)}</span></div>

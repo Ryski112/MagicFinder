@@ -12,6 +12,8 @@ export interface ProblemStore {
   /** Postage charged unless the subtotal reaches freeOver (0 for pickup without a fee). */
   postage: number;
   freeOver: number | null;
+  /** A preferred Store: always available, never counted toward the Store limit. */
+  free?: boolean;
 }
 
 export interface Offer {
@@ -43,6 +45,8 @@ export interface Plan {
   cards: number;
   postage: number;
   total: number;
+  /** Stores that count toward the Store limit (all but preferred Stores). */
+  paid: number;
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -95,7 +99,14 @@ export function planFrom(p: Problem, take: Map<number, number>): Plan {
     postage: postageCharged(p.stores[store], subtotal),
   }));
   const postage = stores.reduce((s, x) => s + x.postage, 0);
-  return { take, stores, cards: round2(cards), postage: round2(postage), total: round2(cards + postage) };
+  const paid = stores.filter(s => !p.stores[s.store].free).length;
+  return { take, stores, cards: round2(cards), postage: round2(postage), total: round2(cards + postage), paid };
+}
+
+/** Stores in the problem that count toward the Store limit. */
+export function paidStoreIds(p: Problem, plan?: Plan): number[] {
+  const all = plan ? plan.stores.map(s => s.store) : [...new Set(p.offers.map(o => o.store))];
+  return all.filter(s => !p.stores[s].free);
 }
 
 /** Offer indices per line, cheapest first. */
@@ -116,7 +127,7 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
     let need = p.lines[line].need;
     for (const i of byLine[line]) {
       const o = p.offers[i];
-      if (!open.has(o.store)) continue;
+      if (!open.has(o.store) && !p.stores[o.store].free) continue;
       const q = Math.min(need, o.qty);
       take.set(i, q);
       need -= q;
@@ -146,7 +157,7 @@ export function evaluatePartial(p: Problem, byLine: number[][], open: ReadonlySe
     for (const i of byLine[line]) {
       if (!need) break;
       const o = p.offers[i];
-      if (!open.has(o.store)) continue;
+      if (!open.has(o.store) && !p.stores[o.store].free) continue;
       const q = Math.min(need, o.qty);
       take.set(i, q);
       need -= q;

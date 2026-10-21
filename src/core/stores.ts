@@ -34,9 +34,13 @@ export interface BuyerContext {
   ruralAddress: boolean;
   /** Store ids the buyer has chosen to pick up from. */
   pickupStores: ReadonlySet<string>;
+  /** Store ids the buyer can collect from for free: they cost no postage and don't count toward a Plan's Store limit. */
+  preferredStores: ReadonlySet<string>;
   /** Per-Store postage overrides (NZD), keyed by Store id. */
   postageOverrides: Readonly<Record<string, number>>;
   defaultPostage: { tracked: number; rural: number };
+  /** What an Australian Store is assumed to charge to post to NZ (NZD). */
+  australiaPostage: number;
 }
 
 /** What a Store costs on top of its cards: `postage` unless the subtotal reaches `freeOver`. */
@@ -85,6 +89,7 @@ export function pickupEligible(store: StoreRecord, buyer: Pick<BuyerContext, 'pi
 }
 
 export function storeCost(store: StoreRecord, buyer: BuyerContext): StoreCost {
+  if (buyer.preferredStores.has(store.id)) return { postage: store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   if (buyer.pickupStores.has(store.id) && pickupEligible(store, buyer)) {
     return { postage: store.pickup.fee, freeOver: null, kind: 'pickup', estimated: false };
   }

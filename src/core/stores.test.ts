@@ -11,8 +11,10 @@ const buyer = (over: Partial<BuyerContext> = {}): BuyerContext => ({
   pickupCity: 'Auckland',
   ruralAddress: false,
   pickupStores: new Set(),
+  preferredStores: new Set(),
   postageOverrides: {},
   defaultPostage: { tracked: 7, rural: 5 },
+  australiaPostage: 20,
   ...over,
 });
 
@@ -53,6 +55,11 @@ describe('storeCost', () => {
 
   it('adds the rural surcharge for rural addresses', () => {
     expect(storeCost(byId('hobby-master'), buyer({ ruralAddress: true })).postage).toBe(15);
+  });
+
+  it('charges a preferred Store no postage, only its pickup fee', () => {
+    const s = byId('meta-life');
+    expect(storeCost(s, buyer({ preferredStores: new Set([s.id]) }))).toMatchObject({ postage: s.pickup.fee, freeOver: null, kind: 'pickup' });
   });
 
   it('prices by the region of the buyer pickup city', () => {

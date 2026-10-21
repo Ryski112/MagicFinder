@@ -19,6 +19,14 @@ export interface Settings {
   /** Per-Store postage overrides in NZD, by Store id. */
   postageOverrides: Record<string, number>;
   defaultPostage: { tracked: number; rural: number };
+  /** What an Australian Store is assumed to charge to post to NZ (NZD), until the buyer checks. */
+  australiaPostage: number;
+  /** Stores the buyer can collect from for free (near home): no postage, and they don't count toward a Plan's Store limit. By Store id with its name. */
+  preferredStores: Record<string, string>;
+  /** Switch the preferred Stores off to see Plans without them, keeping the list. */
+  preferredOn: boolean;
+  /** Stores the buyer can't or won't use (e.g. an Australian Store that doesn't ship to NZ), by Store id with its name. */
+  excludedStores: Record<string, string>;
   minCondition: Condition;
   allowFoils: boolean;
   useListPrintings: boolean;
@@ -44,6 +52,10 @@ export const DEFAULT_SETTINGS: Settings = {
   pickupStores: [],
   postageOverrides: {},
   defaultPostage: { tracked: 7, rural: 5 },
+  australiaPostage: 20,
+  excludedStores: {},
+  preferredStores: {},
+  preferredOn: true,
   minCondition: 'LP',
   allowFoils: true,
   useListPrintings: false,
@@ -68,7 +80,8 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 export const FRIEND_KEYS = [
   'postageType', 'pickupCity', 'ruralAddress', 'pickupStores', 'postageOverrides', 'defaultPostage', 'minCondition',
-  'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom',
+  'allowFoils', 'useListPrintings', 'includeBasics', 'sources', 'theme', 'cardKingdom', 'australiaPostage', 'excludedStores',
+  'preferredStores', 'preferredOn', 'blockedPrintings',
 ] as const satisfies readonly (keyof Settings)[];
 
 export type FriendSettings = Pick<Settings, (typeof FRIEND_KEYS)[number]>;
@@ -119,7 +132,7 @@ function merge<T>(base: T, patch: unknown): T {
   for (const [k, v] of Object.entries(patch as object)) {
     if (!(k in (base as object))) continue;
     const b = (base as any)[k];
-    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' ? merge(b, v) : v;
+    out[k] = b !== null && typeof b === 'object' && !Array.isArray(b) && k !== 'postageOverrides' && k !== 'blockedPrintings' && k !== 'excludedStores' && k !== 'preferredStores' ? merge(b, v) : v;
   }
   return out;
 }

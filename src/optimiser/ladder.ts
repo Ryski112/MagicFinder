@@ -4,7 +4,7 @@
 // Stores leave out the fewest cards when the whole list can't fit in that many Stores.
 import { heuristicLadder, shortPlanDraft } from './heuristic';
 import { minimumStores, type RungOutcome, type SolveOptions } from './milp';
-import { copiesIn, copiesWanted, round2, type Plan, type Problem } from './problem';
+import { copiesIn, copiesWanted, paidStoreIds, round2, shortScore, type Plan, type Problem } from './problem';
 
 /** Short Plans are offered for Store counts up to this. */
 export const SHORT_PLAN_MAX_STORES = 3;
@@ -73,7 +73,7 @@ export class LadderKnowledge {
   }
 
   offer(plan: Plan) {
-    const k = plan.stores.length;
+    const k = plan.paid;
     const cur = this.byCount.get(k);
     if (!cur || plan.total < cur.total - 1e-9) this.byCount.set(k, plan);
   }
@@ -95,12 +95,12 @@ export class LadderKnowledge {
     if (!counts.length && this.kmin === null) return { rungs: [], kmin: null, final };
     const cheapest = [...this.byCount.values()].reduce<Plan | null>((b, p) => (!b || p.total < b.total ? p : b), null);
     const lo = this.kmin ?? Math.min(...counts);
-    const hi = cheapest ? cheapest.stores.length : lo;
+    const hi = cheapest ? cheapest.paid : lo;
     // A solve for "at most K Stores" that returns a Plan with u Stores settles rung u as well as rung K.
     const settles = new Map<number, RungOutcome>();
     for (const o of this.solved.values()) {
       if (o.kind !== 'optimal' && o.kind !== 'timed-out') continue;
-      const u = o.plan.stores.length;
+      const u = o.plan.paid;
       const cur = settles.get(u);
       if (!cur || o.kind === 'optimal' || (cur.kind === 'timed-out' && o.plan.total < cur.plan.total)) settles.set(u, o);
     }
@@ -109,9 +109,9 @@ export class LadderKnowledge {
     for (let k = lo; k <= hi; k++) {
       const plan = this.byCount.get(k) ?? null;
       const own = this.solved.get(k);
-      const outcome = own?.kind === 'optimal' && own.plan.stores.length < k ? own : settles.get(k) ?? own;
+      const outcome = own?.kind === 'optimal' && own.plan.paid < k ? own : settles.get(k) ?? own;
       // An optimal "at most k" Plan with fewer Stores proves no k-Store Plan is cheaper: skip the rung.
-      if (outcome?.kind === 'optimal' && outcome.plan.stores.length < k) continue;
+      if (outcome?.kind === 'optimal' && outcome.plan.paid < k) continue;
       if (!plan) {
         if (outcome?.kind === 'no-plan-in-time' || (final && k === lo)) {
           rungs.push({ k, plan: null, status: 'no-plan-in-time', saves: null, cheapestOverall: false });
@@ -174,7 +174,7 @@ export async function buildLadder(p: Problem, opts: LadderOptions): Promise<Ladd
   opts.signal?.throwIfAborted();
 
   const timeLimitS = opts.timeLimitS ?? 10;
-  const allStores = new Set(p.offers.map(o => o.store)).size;
+  const allStores = paidStoreIds(p).length;
   // Cheapest overall settles first.
   know.record(allStores, await opts.solve(p, allStores, { timeLimitS, start: know.bestAtMost(allStores) ?? undefined }));
   emit();

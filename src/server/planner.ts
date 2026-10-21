@@ -40,8 +40,10 @@ export function buyerContext(s: Settings): BuyerContext {
     pickupCity: s.pickupCity,
     ruralAddress: s.ruralAddress,
     pickupStores: new Set(s.pickupStores),
+    preferredStores: new Set(s.preferredOn ? Object.keys(s.preferredStores) : []),
     postageOverrides: s.postageOverrides,
     defaultPostage: s.defaultPostage,
+    australiaPostage: s.australiaPostage,
   };
 }
 
@@ -100,10 +102,8 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
         storeIndex.set(rec.id, si);
         stores.push(rec);
         const cost = storeCost(rec, buyer);
-        problem.stores.push({ id: rec.id, postage: cost.postage, freeOver: cost.freeOver });
+        problem.stores.push({ id: rec.id, postage: cost.postage, freeOver: cost.freeOver, free: buyer.preferredStores.has(rec.id) });
       }
-      listings.set(l.id, l);
-      lineOffers.push({ listing: l, store: rec });
       problem.offers.push({ id: l.id, line: lineIdx, store: si, price: l.price, qty: l.quantity });
     }
   }
@@ -201,9 +201,9 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
       return {
-        id: rec.id, name: rec.name, city: rec.location.city, sources, site: rec.site ?? null, storeUrl: storeUrl(rec, entries.map(e => e.listing)),
+        id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', sources, site: rec.site ?? null, storeUrl: storeUrl(rec, entries.map(e => e.listing)),
         cart: rec.cart, pickupEligible: pickupEligible(rec, prep.buyer), pickupConfirmed: rec.pickup.available === true,
-        pickupOn: cost.kind === 'pickup', pickupFee: rec.pickup.fee, subtotal: ps.subtotal, postage: ps.postage,
+        preferred: prep.buyer.preferredStores.has(rec.id), pickupOn: cost.kind === 'pickup' && !prep.buyer.preferredStores.has(rec.id), pickupFee: rec.pickup.fee, subtotal: ps.subtotal, postage: ps.postage,
         postageKind: cost.kind === 'pickup' ? 'pickup' : ps.postage === 0 ? 'free' : 'postage', postageEstimated: cost.estimated && cost.kind !== 'pickup',
         freeOver: cost.kind === 'pickup' ? null : cost.freeOver, staleSince, total: Math.round((ps.subtotal + ps.postage) * 100) / 100, items,
       };

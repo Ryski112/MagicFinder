@@ -10,6 +10,7 @@ const fakePlan = (stores: number, total: number): Plan => ({
   cards: total,
   postage: 0,
   total,
+  paid: stores,
 });
 
 describe('LadderKnowledge.state', () => {

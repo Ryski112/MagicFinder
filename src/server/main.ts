@@ -88,7 +88,7 @@ if (hosting.hosted) {
 }
 
 // No update notice in hosted mode: the owner cuts the releases and updates the image by hand.
-const app = createApp({ catalogue, settings, runs, cache, version, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
+const app = createApp({ catalogue, settings, runs, cache, version, stores: () => stores, update: () => (dev || hosting.hosted ? null : availableUpdate(settings, version)), hosted: hosting.hosted });
 if (!dev) {
   if (!existsSync(webDir)) console.warn('The web app has not been built. Run `npm start` (it builds first).');
   app.use('/*', serveStatic({ root: webDir }));

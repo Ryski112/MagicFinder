@@ -23,6 +23,8 @@ export interface AppDeps {
   runs: RunManager;
   cache: SearchCache;
   version: string;
+  /** The Stores MagicFinder knows about, for picking preferred ones. */
+  stores?: () => StoreRecord[];
   /** A newer release to offer, if any. */
   update?: () => UpdateInfo | null;
   /** Hosted mode (MAGICFINDER_HOSTED). */

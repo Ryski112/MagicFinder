@@ -66,6 +66,39 @@ describe('MtgSinglesSource.search', () => {
     expect(n).toBe(3);
   });
 
+  it('asks for an exact name match, so a name inside a set name cannot bury the card', async () => {
+    const urls: string[] = [];
+    const get = async (url: string) => {
+      urls.push(url);
+      return { status: 200, body: '[]', contentType: 'application/json' };
+    };
+    await new MtgSinglesSource({ get }).search('Fracture');
+    expect(urls).toHaveLength(1);
+    expect(new URL(urls[0]).searchParams.get('isExactMatch')).toBe('true');
+    expect(new URL(urls[0]).searchParams.get('query')).toBe('Fracture');
+  });
+
+  it('also searches an accented name without its accents, as Stores write it', async () => {
+    const queries: string[] = [];
+    const get = async (url: string) => {
+      queries.push(new URL(url).searchParams.get('query')!);
+      return { status: 204, body: '', contentType: null };
+    };
+    await new MtgSinglesSource({ get }).search('Bartolomé del Presidio');
+    expect(queries).toEqual(['Bartolomé del Presidio', 'Bartolome del Presidio']);
+  });
+
+  it('searches a double-faced card by its front face and by its full name, without repeating Listings', async () => {
+    const queries: string[] = [];
+    const get = async (url: string) => {
+      queries.push(new URL(url).searchParams.get('query')!);
+      return { status: 200, body: JSON.stringify(rows.slice(0, 3)), contentType: 'application/json' };
+    };
+    const found = await new MtgSinglesSource({ get }).search('Fire // Ice');
+    expect(queries).toEqual(['Fire', 'Fire // Ice']);
+    expect(found).toHaveLength(3);
+  });
+
   it('keeps the cheapest pages when a later page has a server error', async () => {
     let n = 0;
     const src = new MtgSinglesSource({ get: async () => (n++ === 0

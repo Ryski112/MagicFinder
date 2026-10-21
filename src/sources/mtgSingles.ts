@@ -99,8 +99,20 @@ export class MtgSinglesSource implements Source {
   async search(cardName: string, signal?: AbortSignal): Promise<SourceListing[]> {
     const out: SourceListing[] = [];
     const seen = new Set<string>();
+    // isExactMatch makes the API match the whole card name, not any title that contains it ("Fracture" would otherwise
+    // match every card and product of Reality Fracture and bury the card). Double-faced cards are listed both ways.
+    // Stores write accented names without the accents ("Bartolome del Presidio"), and the API matches letter for letter.
+    const forms = (name: string) => [...new Set([name, name.normalize('NFD').replace(/[̀-ͯ]/g, '')])];
+    const names = [...new Set((cardName.includes(' // ') ? [cardName.split(' // ')[0], cardName] : [cardName]).flatMap(forms))];
+    for (const name of names) {
+      await this.searchName(name, out, seen, signal);
+    }
+    return out;
+  }
+
+  private async searchName(cardName: string, out: SourceListing[], seen: Set<string>, signal?: AbortSignal): Promise<void> {
     for (let page = 1; page <= MAX_PAGES; page++) {
-      const url = `${API}?query=${encodeURIComponent(cardName)}&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
+      const url = `${API}?query=${encodeURIComponent(cardName)}&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=${page}&pageSize=${PAGE_SIZE}&Country=1`;
       let rows: unknown[];
       try {
         rows = await this.fetchPage(url, signal);
@@ -120,7 +132,6 @@ export class MtgSinglesSource implements Source {
       }
       if (rows.length < PAGE_SIZE) break;
     }
-    return out;
   }
 
   private fetchPage(url: string, signal?: AbortSignal): Promise<unknown[]> {

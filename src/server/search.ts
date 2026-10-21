@@ -84,15 +84,6 @@ export interface SearchDeps {
   retryPause?: () => Promise<void>;
 }
 
-/** The name sent to a Source. MtgSingles titles often carry only the front face of double-faced cards. */
-export function queryFor(source: SourceId, cardName: string): string {
-  if (source === 'mtgsingles' && cardName.includes(' // ')) {
-    const front = cardName.split(' // ')[0];
-    if (front.length >= 8) return front;
-  }
-  return cardName;
-}
-
 const MESSAGES: Record<Exclude<SourceStatus, 'ok'>, (name: string) => string> = {
   blocked: n => `${n} stopped answering (it showed a "checking your browser" page or refused the request).`,
   slowed: n => `${n} asked MagicFinder to slow down.`,
@@ -132,7 +123,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
   report();
 
   const useStale = (src: Source, card: SearchCard, st: SourceRunStatus) => {
-    const c = deps.cache.get(src.id, queryFor(src.id, card.name), STALE_MS);
+    const c = deps.cache.get(src.id, card.name, STALE_MS);
     if (c) {
       raw.get(src.id)!.set(card.oracleId, c.listings);
       st.searched++;
@@ -147,7 +138,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
       for (let i = 0; i < cards.length; i++) {
         signal?.throwIfAborted();
         const card = cards[i];
-        const q = queryFor(src.id, card.name);
+        const q = card.name;
         const elsewhere = st.status === 'ok' ? deps.blockedElsewhere?.(src.id) : null;
         if (elsewhere) {
           st.status = 'blocked';
@@ -206,7 +197,7 @@ export async function searchAll(cards: SearchCard[], deps: SearchDeps, onProgres
     await (deps.retryPause ?? (() => new Promise(r => setTimeout(r, RETRY_PAUSE_MS))))();
     for (const card of failed) {
       signal?.throwIfAborted();
-      const q = queryFor(src.id, card.name);
+      const q = card.name;
       try {
         const listings = await src.search(q, signal);
         deps.cache.put(src.id, q, listings);

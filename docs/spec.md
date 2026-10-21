@@ -137,9 +137,9 @@ The owner decided not to ask the Sources for permission ([Ask MtgSingles for per
 - **Store** = the individual seller (`listedByUserId`, `sellerBusinessName`). Location and pickup come from `regionAddress`.
 
 ### 5.2 MtgSingles
-- Plain HTTP: `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1`, one request every 1.5 seconds (at 1/second Cloudflare starts answering 429 with `Retry-After: 10` after about 30 requests), with the identifying User-Agent. Cloudflare refuses (403) any request without `Referer: https://www.mtgsingles.co.nz/`; the User-Agent doesn't matter. No browser is needed.
+- Plain HTTP: `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1`, one request every 1.5 seconds (at 1/second Cloudflare starts answering 429 with `Retry-After: 10` after about 30 requests), with the identifying User-Agent. Cloudflare refuses (403) any request without `Referer: https://www.mtgsingles.co.nz/`; the User-Agent doesn't matter. No browser is needed.
 - Paging: 20 results per page. Keep paging until fewer than 20 come back. A card with no Listings comes back as `204 No Content` with an empty body.
-- Don't use exact match. Normalise names ourselves, because double-faced card titles differ.
+- `isExactMatch=true` (the website's "exact match" filter) matches the whole card name. Without it the query matches any title containing the text, so a name inside a set name ("Fracture" in "Reality Fracture") returns hundreds of unrelated Listings and, with paging capped, never reaches the card. A double-faced card is searched twice, by its front face and by its full name, because Stores title it either way, and a name with accents is also searched without them. A Listing with an odd title (e.g. "Fracture |  (065)") isn't matched by it.
 - `includeMarketplaces=false`: Fetch sellers are handled by the Fetch Source.
 - There's no collector number or Store location. Location comes from the Store table. `features[]` gives treatment and `Non-English`. Prices are strings such as `"$1,345.99"`.
 - There's no stealth and no challenge-solving.

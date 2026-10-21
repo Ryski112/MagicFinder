@@ -142,7 +142,7 @@ export function ShopsView({ ladder, onBuyAll, onPrefer, onExclude, preferred }: 
       </div>
 
       <div className="space-y-3 min-w-0">
-        {!current && <div className={cx(panel, 'rounded-xl p-6 text-slate-500')}>StorePick a Store to see every card of your list it has in stock, with each Printing and finish.</div>}
+        {!current && <div className={cx(panel, 'rounded-xl p-6 text-slate-500')}>Pick a Store to see every card of your list it has in stock, with each Printing and finish.</div>}
         {current && <ShopDetail row={current} wanted={wanted} showMissing={showMissing} onToggleMissing={() => setShowMissing(!showMissing)}
           missing={ladder.cards.filter(c => !current.stocked.some(s => s.buyKey === c.buyKey))}
           chosen={Object.fromEntries(Object.entries(chosen).filter(([k]) => k.startsWith(`${current.shop.id}|`)).map(([k, v]) => [k.slice(current.shop.id.length + 1), v]))}

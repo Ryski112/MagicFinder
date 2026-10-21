@@ -521,10 +521,10 @@ function SplitPanel({ runId, planId, k, onTakeOut }: { runId: string; planId: nu
   };
   return (
     <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-2">
+      <div className="font-semibold">Split between CardKingdom and the NZ Stores</div>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="font-semibold">Split between CardKingdom and the NZ Stores</div>
+        <Button disabled={mine?.busy} onClick={run}>{mine?.busy ? 'Working it out…' : r ? 'Work it out again' : 'Work out the best split'}</Button>
         <span className="text-xs text-slate-500">Shipping is paid once at CardKingdom, so a few dear cards can be worth adding to one order.</span>
-        <Button className="ml-auto" disabled={mine?.busy} onClick={run}>{mine?.busy ? 'Working it out…' : r ? 'Work it out again' : 'Work out the best split'}</Button>
       </div>
       {mine?.error && <Notice tone="warn">{mine.error}</Notice>}
       <SweepTable runId={runId} planId={planId} k={k} onTakeOut={onTakeOut} />

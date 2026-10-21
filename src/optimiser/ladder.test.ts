@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildLadder, LadderKnowledge, type LadderState } from './ladder';
-import { solveRung } from './milp';
-import { pruneDominated, type Plan, type Problem } from './problem';
+import { buildLadder, findRunnerUp, LadderKnowledge, type LadderState } from './ladder';
+import { minimumStores, solveRung } from './milp';
+import { planFrom, pruneDominated, shortScore, type Plan, type Problem } from './problem';
 import { syntheticProblemForBench } from './synthetic';
 
 const fakePlan = (stores: number, total: number): Plan => ({
@@ -138,5 +138,56 @@ describe('Short Plans', () => {
     k.wanted = 10;
     for (let n = 1; n <= 5; n++) k.offerShort(n, fakePlan(n, 100 - n));
     expect(k.state(false).rungs.filter(r => r.short).map(r => r.k)).toEqual([1, 2, 3]);
+  });
+});
+
+describe('preferred Stores and runner-up Plans', () => {
+  // A is a preferred (free) Store. Without it two Stores are needed; with it, C alone (or B, dearer) is enough.
+  const p: Problem = {
+    lines: [{ key: 'a', need: 1 }, { key: 'b', need: 1 }, { key: 'c', need: 1 }],
+    stores: [{ id: 'A', postage: 0, freeOver: null, free: true }, { id: 'B', postage: 5, freeOver: null }, { id: 'C', postage: 5, freeOver: null }, { id: 'D', postage: 5, freeOver: null }],
+    offers: [
+      { id: 'a@A', line: 0, store: 0, price: 1, qty: 1 },
+      { id: 'a@B', line: 0, store: 1, price: 1, qty: 1 },
+      { id: 'b@B', line: 1, store: 1, price: 2, qty: 1 },
+      { id: 'b@C', line: 1, store: 2, price: 2, qty: 1 },
+      { id: 'c@C', line: 2, store: 2, price: 3, qty: 1 },
+      { id: 'c@D', line: 2, store: 3, price: 3, qty: 1 },
+      { id: 'c@B', line: 2, store: 1, price: 4, qty: 1 },
+    ],
+  };
+
+  it("doesn't count preferred Stores toward the Store limit", async () => {
+    expect(await minimumStores(p)).toBe(1);
+    const r = await solveRung(p, 1, { timeLimitS: 5 });
+    expect(r.kind).toBe('optimal');
+    if (r.kind !== 'optimal') return;
+    expect(r.plan.paid).toBe(1);
+    expect(r.plan.stores.length).toBe(2);
+    expect(r.plan.postage).toBe(5);
+  });
+
+  it('can be filled by preferred Stores alone', async () => {
+    const only: Problem = { lines: [{ key: 'a', need: 1 }], stores: [{ id: 'A', postage: 0, freeOver: null, free: true }], offers: [{ id: 'a@A', line: 0, store: 0, price: 4, qty: 1 }] };
+    expect(await minimumStores(only)).toBe(0);
+    const final = await buildLadder(only, { solve: solveRung, timeLimitS: 5, onUpdate: () => {} });
+    expect(final.rungs).toHaveLength(1);
+    expect(final.rungs[0]).toMatchObject({ k: 0 });
+    expect(final.rungs[0].plan!.total).toBe(4);
+  });
+
+  it('finds a runner-up that uses different Stores', async () => {
+    const know = new LadderKnowledge();
+    await buildLadder(p, { solve: solveRung, timeLimitS: 5, knowledge: know, onUpdate: () => {} });
+    expect(know.state(true).rungs[0].next).toBeUndefined();
+    await findRunnerUp(p, know, 1, false, solveRung, 5);
+    const final = know.state(true);
+    const rung = final.rungs[0];
+    expect(rung.k).toBe(1);
+    const stores = (plan: Plan) => plan.stores.map(s => s.store).filter(s => !p.stores[s].free).sort();
+    expect(rung.next).toBeDefined();
+    expect(stores(rung.next!.plan!)).not.toEqual(stores(rung.plan!));
+    expect(rung.next!.plan!.paid).toBe(1);
+    expect(rung.next!.plan!.total).toBeGreaterThanOrEqual(rung.plan!.total);
   });
 });

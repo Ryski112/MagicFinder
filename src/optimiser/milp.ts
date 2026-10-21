@@ -18,7 +18,7 @@ const num = (n: number) => (Math.round(n * 1e6) / 1e6).toString();
 export type ModelMode = { kind: 'full' } | { kind: 'cover' } | { kind: 'cost'; minCovered: number };
 
 /** CPLEX LP text for the Landed Cost model with a Store-count row named "rung". */
-export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }): string {
+export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }, exclude: number[][] = []): string {
   const obj: string[] = [];
   const rows: string[] = [];
   const bounds: string[] = [];
@@ -56,7 +56,15 @@ export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }): string 
     const sub = p.offers.map((o, i) => (o.store === s ? `${num(o.price)} x${i}` : null)).filter(Boolean);
     rows.push(` free${s}: ${sub.join(' + ')} - ${num(st.freeOver)} z${s}_1 >= 0`);
   }
-  rows.push(` rung: ${usedStores.map(s => `y${s}`).join(' + ')} <= ${usedStores.length}`);
+  // Preferred Stores are free to add, so only the others count toward the limit.
+  const paid = usedStores.filter(s => !p.stores[s].free);
+  if (paid.length) rows.push(` rung: ${paid.map(s => `y${s}`).join(' + ')} <= ${paid.length}`);
+  // Each excluded Store set may not be chosen again exactly (that is how a runner-up Plan is asked for).
+  exclude.forEach((set, j) => {
+    const inSet = new Set(set);
+    const terms = paid.map(s => `${inSet.has(s) ? '+' : '-'} y${s}`);
+    if (set.length && terms.length) rows.push(` nogood${j}: ${terms.join(' ').replace(/^\+ /, '')} <= ${set.length - 1}`);
+  });
 
   return [
     'Minimize',
@@ -84,6 +92,8 @@ export interface SolveOptions {
   start?: Plan;
   /** Short Plan: leave out the fewest copies when k Stores can't supply everything. */
   partial?: boolean;
+  /** Store sets (the Stores that count toward the limit) that a runner-up Plan must not use exactly. */
+  exclude?: number[][];
 }
 
 interface ModelResult {
@@ -93,12 +103,12 @@ interface ModelResult {
   bound: number;
 }
 
-async function runModel(p: Problem, mode: ModelMode, k: number, timeLimitS: number, start?: Plan): Promise<ModelResult> {
+async function runModel(p: Problem, mode: ModelMode, k: number, timeLimitS: number, start?: Plan, exclude?: number[][]): Promise<ModelResult> {
   const highs = await getHighs();
-  const model = highs.createModel({ format: 'lp', data: buildLp(p, mode) });
+  const model = highs.createModel({ format: 'lp', data: buildLp(p, mode, exclude) });
   try {
-    model.options.set({ output_flag: false, time_limit: timeLimitS, mip_rel_gap: mode.kind === 'cover' ? 0 : 0.005, presolve: 'on' });
-    model.changeRowBounds(model.getRowByName('rung'), -Infinity, k);
+    model.options.set({ output_flag: false, time_limit: timeLimitS, mip_rel_gap: 0.005, presolve: 'on' });
+    if (paidStoreIds(p).length) model.changeRowBounds(model.getRowByName('rung'), -Infinity, k);
     if (start) {
       const n = model.getDimensions().numCols;
       const values = new Array<number>(n).fill(0);
@@ -131,7 +141,7 @@ async function runModel(p: Problem, mode: ModelMode, k: number, timeLimitS: numb
 /** Solves one rung: the cheapest Plan using at most k Stores (or, for a Short Plan, covering the most it can). */
 export async function solveRung(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
   if (opts.partial) return solveShort(p, k, opts);
-  const r = await runModel(p, { kind: 'full' }, k, opts.timeLimitS, opts.start);
+  const r = await runModel(p, { kind: 'full' }, k, opts.timeLimitS, opts.start, opts.exclude);
   if (r.status === 'infeasible') return { kind: 'infeasible' };
   if (r.status === 'no-solution-in-time') return { kind: 'no-plan-in-time' };
   const plan = planFrom(p, r.take);
@@ -140,16 +150,12 @@ export async function solveRung(p: Problem, k: number, opts: SolveOptions): Prom
 
 /** Short Plan: first the most copies k Stores can supply, then the cheapest way to buy that many. */
 async function solveShort(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
-  const half = opts.timeLimitS / 2;
-  const cover = await runModel(p, { kind: 'cover' }, k, half, opts.start);
-  if (cover.status === 'infeasible' || cover.status === 'no-solution-in-time') return { kind: 'no-plan-in-time' };
-  const most = Math.round(-cover.objective);
-  if (most <= 0) return { kind: 'infeasible' };
-  const cost = await runModel(p, { kind: 'cost', minCovered: most }, k, half, planFrom(p, cover.take));
-  const take = cost.status === 'optimal' || cost.status === 'timed-out' ? cost.take : cover.take;
-  const plan = planFrom(p, take);
-  if (cover.status === 'optimal' && cost.status === 'optimal') return { kind: 'optimal', plan };
-  return { kind: 'timed-out', plan, bound: cost.status === 'timed-out' ? round2(cost.bound) : plan.total };
+  const r = await runModel(p, { kind: 'value' }, k, opts.timeLimitS, opts.start, opts.exclude);
+  if (r.status === 'infeasible' || r.status === 'no-solution-in-time' || !r.take.size) return { kind: 'no-plan-in-time' };
+  const plan = planFrom(p, r.take);
+  if (r.status === 'optimal') return { kind: 'optimal', plan };
+  // The bound is on the adjusted objective; the same gap applies to the price.
+  return { kind: 'timed-out', plan, bound: round2(Math.max(0, plan.total - Math.max(0, r.objective - r.bound))) };
 }
 
 /** The fewest Stores (not counting preferred ones) that can supply every line, or null if none can. */

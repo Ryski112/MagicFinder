@@ -172,7 +172,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
   }
   const staleBySource = new Map(x.search.sources.filter(s => s.staleSince).map(s => [s.source, s.staleSince!]));
 
-  const rungs: RungView[] = state.rungs.map(r => {
+  const viewRung = (r: Rung): RungView => {
     if (!r.plan) {
       return { k: r.k, total: null, cards: null, postage: null, status: r.status, saves: null, cheapestOverall: false, stores: [], pickupHints: [] };
     }
@@ -225,6 +225,28 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
     return {
       k: r.k, total: r.plan.total, cards: r.plan.cards, postage: r.plan.postage, status: r.status, mightSave: r.mightSave,
       saves: r.saves, cheapestOverall: r.cheapestOverall, stores, pickupHints, short,
+    };
+  };
+  const rungs: RungView[] = state.rungs.map(r => {
+    const view = viewRung(r);
+    return r.next ? { ...view, next: { ...viewRung(r.next), runnerUp: true } } : r.noRunnerUp ? { ...view, noRunnerUp: true } : view;
+  });
+
+  const cards: WantedCardView[] = prep.buy.map(b => ({
+    buyKey: b.key, lineIds: b.lineIds, oracleId: b.oracleId, name: b.name, qty: b.quantity, image: cardImage(catalogue, b.oracleId), locked: !!b.lock,
+  }));
+  const shopListings = new Map<string, Listing[]>();
+  for (const list of prep.offers.values()) for (const { listing, store } of list) {
+    let g = shopListings.get(store.id);
+    if (!g) shopListings.set(store.id, (g = []));
+    g.push(listing);
+  }
+  const shops: ShopView[] = prep.stores.filter(rec => shopListings.has(rec.id)).map(rec => {
+    const cost = storeCost(rec, prep.buyer);
+    const sources = [...new Set(shopListings.get(rec.id)!.map(l => l.source))];
+    return {
+      id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', sources, storeUrl: storeUrl(rec, shopListings.get(rec.id)!),
+      preferred: prep.buyer.preferredStores.has(rec.id), postage: cost.postage, postageEstimated: cost.estimated && cost.kind !== 'pickup', freeOver: cost.kind === 'pickup' ? null : cost.freeOver,
     };
   });
 

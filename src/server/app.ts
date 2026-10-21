@@ -199,7 +199,9 @@ export function createApp(d: AppDeps) {
   app.post('/api/runs/:id/cart', async c => {
     const run = d.runs.get(c.req.param('id'));
     const { storeId, k } = await c.req.json<{ storeId: string; k: number }>();
-    const store = run?.ladder?.rungs.find(r => r.k === k)?.stores.find(s => s.id === storeId);
+    // A negative k names the runner-up Plan of that rung.
+    const rung = run?.ladder?.rungs.find(r => r.k === Math.abs(k));
+    const store = (k < 0 ? rung?.next : rung)?.stores.find(s => s.id === storeId);
     if (!run) return c.json({ error: gone ?? 'That Plan has changed. Pick it again.' }, 404);
     if (!run.search || !store) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
     const byId = new Map(run.search.listings.map(l => [l.id, l]));

@@ -85,12 +85,16 @@ export function PlanStep(p: Props) {
       )}
 
       {p.ladder.cardKingdom && <CardKingdomPanel ck={p.ladder.cardKingdom} planTotal={rung?.total ?? null} />}
+      {p.ladder.cardKingdom && base && !base.short && base.total !== null && (
+        <SplitPanel runId={p.runId} planId={p.ladder.planId} k={base.k} onTakeOut={removeCards} />
+      )}
 
       {rung && rung.total !== null && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-semibold">
-              Your {rung.k}-Store Plan
+              Your {storeCountLabel(rung.k, hasPreferred)} Plan
+              {rung.runnerUp && <span className="font-normal text-indigo-600 dark:text-indigo-400"> · runner-up</span>}
               {rung.short && <span className="font-normal text-amber-600 dark:text-amber-400"> · leaves out {rung.short.wanted - rung.short.covered} of {rung.short.wanted} cards</span>}
             </h2>
             <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Group by">
@@ -107,6 +111,32 @@ export function PlanStep(p: Props) {
               </div>
             )}
           </div>
+          {base && !base.next && !rung.runnerUp && (
+            <div className="text-sm flex flex-wrap items-center gap-2">
+              {base.noRunnerUp
+                ? <span className="text-slate-500">There is no other {storeCountLabel(base.k, hasPreferred)} Plan with different Stores.</span>
+                : (
+                  <>
+                    <Button disabled={finding === base.k} onClick={() => { setFinding(base.k); void api.runnerUp(p.runId, base.k); }}>
+                      {finding === base.k ? 'Looking…' : 'Find the runner-up Plan'}
+                    </Button>
+                    <span className="text-slate-500">The next best Plan with different Stores, to compare what you leave out.</span>
+                  </>
+                )}
+            </div>
+          )}
+          {base?.next && (
+            <div className="text-sm flex flex-wrap items-center gap-2">
+              <Button onClick={() => setShowRunnerUp(!showRunnerUp)} aria-pressed={showRunnerUp}>
+                {showRunnerUp ? '← Back to the best Plan' : 'See the runner-up Plan'}
+              </Button>
+              <span className="text-slate-500">
+                {showRunnerUp
+                  ? `The best ${storeCountLabel(base.k, hasPreferred)} Plan is ${money(base.total ?? 0)}${base.short ? ` and covers ${base.short.covered} of ${base.short.wanted} cards` : ''}.`
+                  : `Different Stores: ${money(base.next.total ?? 0)} (${runnerUpDiff(base)})`}
+              </span>
+            </div>
+          )}
           {rung.short && rung.short.leftOut.length > 0 && (
             <CardList
               tone="warn"
@@ -296,11 +326,24 @@ function keepOrder(stores: StoreView[], ids: string[] | null): StoreView[] {
   return [...stores].sort((a, b) => (pos.get(a.id) ?? ids.length) - (pos.get(b.id) ?? ids.length));
 }
 
-function RungCard({ r, selected, onSelect, onTryLonger }: { r: RungView; selected: boolean; onSelect: () => void; onTryLonger: () => void }) {
+const storeCountLabel = (k: number, preferred: boolean) =>
+  k === 0 ? 'preferred-Stores-only' : `${k}-Store${preferred ? ' + preferred' : ''}`;
+
+/** How a runner-up differs from the best Plan: price, and for a Short Plan the cards it covers. */
+function runnerUpDiff(r: RungView): string {
+  const next = r.next!;
+  const diff = (next.total ?? 0) - (r.total ?? 0);
+  const price = diff === 0 ? 'same price' : `${diff > 0 ? '+' : '−'}${money(Math.abs(diff))}`;
+  if (!r.short || !next.short) return price;
+  const cards = next.short.covered - r.short.covered;
+  return `${price}, ${cards === 0 ? 'same number of cards' : `${Math.abs(cards)} ${cards > 0 ? 'more' : 'fewer'} card${Math.abs(cards) > 1 ? 's' : ''}`}`;
+}
+
+function RungCard({ r, preferred, selected, onSelect, onTryLonger }: { r: RungView; preferred: boolean; selected: boolean; onSelect: () => void; onTryLonger: () => void }) {
   if (r.total === null) {
     return (
       <div className="min-w-[190px] rounded-xl p-3 ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-900 text-sm">
-        <div className="text-slate-500">{r.k} Store{r.k > 1 ? 's' : ''}</div>
+        <div className="text-slate-500">{r.k} Store{r.k > 1 ? 's' : ''}{preferred && ' + preferred'}</div>
         <div className="my-1">Couldn't find a {r.k}-Store Plan in time.</div>
         <Button variant="link" onClick={onTryLonger}>Try longer</Button>
       </div>

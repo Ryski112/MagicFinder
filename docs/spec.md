@@ -212,6 +212,8 @@ Decided in [What optimiser approach produces the Trade-off Ladder?](https://gith
 - Quantities may be split across Listings and Stores.
 - Postage is a step function of each Store's subtotal: a binary per tier or free threshold, with a lower bound on subtotal.
 - Pickup Stores have zero postage but still count toward k.
+- **Preferred Stores** (owner's change, 2026-10-20) are Stores the buyer can collect from easily. They are a Settings list (also a ☆ Prefer button on each Store of the Plan screen). Their cards cost no postage (only the Store's pickup fee, if any), and they do **not** count toward k: a "2-Store" Plan means 2 other Stores plus any preferred ones it uses. k_min and every rung are counted that way, so a list a preferred Store can cover alone has a rung with 0 other Stores, labelled "Preferred Stores only".
+- **Runner-up Plans** (owner's change, 2026-10-20): on request ("Find the runner-up Plan" on a rung; it costs one solve, so it isn't done unasked), the best Plan whose set of Stores (preferred ones aside) differs from every shown rung's of the same kind. It is solved as the same model with a no-good cut on each shown Store set. The Plan screen then offers "See the runner-up Plan" with the price difference (and, for a Short Plan, how many more or fewer cards it covers), so the buyer can compare leaving out different cards.
 - Locks are handled by filtering Listings, and dominated Listings are pruned.
 - A small cover MILP finds k_min, the fewest Stores that cover every obtainable card.
 

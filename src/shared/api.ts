@@ -180,8 +180,20 @@ export interface RungView {
   cheapestOverall: boolean;
   stores: StoreView[];
   pickupHints: { storeId: string; name: string; saves: number }[];
+  /** The best Plan that uses a different set of Stores. */
+  next?: RungView;
+  /** The runner-up was looked for and there is none. */
+  noRunnerUp?: boolean;
+  /** Set on a `next` Plan. */
+  runnerUp?: boolean;
   /** Short Plans: copies bought out of copies wanted, and the cards left out. */
-  short?: { covered: number; wanted: number; leftOut: LeftOutView[] };
+  short?: {
+    covered: number;
+    wanted: number;
+    leftOut: LeftOutView[];
+    /** What buying just the left-out cards at CardKingdom would cost; null unless the comparison is on. */
+    cardKingdom: CardKingdomView | null;
+  };
 }
 
 export interface LeftOutView {

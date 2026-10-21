@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { Lock, LadderView, OfferView, ShopView } from '../../shared/api';
 import { costAtStore } from '../planCards';
-import { Button, CardImage, cx, money, SourceBadge, Tag } from './ui';
+import { AustraliaTag, Button, CardImage, cx, money, SourceBadge, Tag } from './ui';
 
 const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
 
@@ -129,7 +129,7 @@ export function ShopsView({ ladder, onBuyAll, onPrefer, onExclude, preferred }: 
                 className={cx('w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60', selected === r.shop.id && 'bg-indigo-50 dark:bg-indigo-950/40')}>
                 <div className="flex items-center gap-2">
                   <span className="font-medium truncate flex-1">{preferred[r.shop.id] ? '★ ' : ''}{r.shop.name}</span>
-                  {r.shop.country === 'AU' && <Tag tone="warn">AU</Tag>}
+                  {r.shop.country === 'AU' && <Tag tone={r.shop.shipsToNz ? 'plain' : 'warn'} title={r.shop.shipsToNz ? 'Ships to NZ' : r.shop.shipsToNz === false ? "Doesn't ship to NZ" : 'May not ship to NZ'}>AU</Tag>}
                 </div>
                 <div className="text-xs text-slate-500 tabnum">
                   {r.full} of {wanted} cards{r.cards > r.full ? ` (+${r.cards - r.full} short)` : ''}{r.shop.city ? ` · ${r.shop.city}` : ''}
@@ -142,7 +142,7 @@ export function ShopsView({ ladder, onBuyAll, onPrefer, onExclude, preferred }: 
       </div>
 
       <div className="space-y-3 min-w-0">
-        {!current && <div className={cx(panel, 'rounded-xl p-6 text-slate-500')}>StorePick a Store to see every card of your list it has in stock, with each Printing and finish.</div>}
+        {!current && <div className={cx(panel, 'rounded-xl p-6 text-slate-500')}>Pick a Store to see every card of your list it has in stock, with each Printing and finish.</div>}
         {current && <ShopDetail row={current} wanted={wanted} showMissing={showMissing} onToggleMissing={() => setShowMissing(!showMissing)}
           missing={ladder.cards.filter(c => !current.stocked.some(s => s.buyKey === c.buyKey))}
           chosen={Object.fromEntries(Object.entries(chosen).filter(([k]) => k.startsWith(`${current.shop.id}|`)).map(([k, v]) => [k.slice(current.shop.id.length + 1), v]))}
@@ -194,11 +194,11 @@ function ShopDetail({ skipped, onSkip, chosen, onChoose, row, wanted, missing, s
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
         {shop.storeUrl ? <a href={shop.storeUrl} target="_blank" rel="noreferrer" className="font-semibold hover:underline">{shop.name} ↗</a> : <span className="font-semibold">{shop.name}</span>}
         {shop.city && <span className="text-sm text-slate-500">{shop.city}</span>}
-        {shop.country === 'AU' && <Tag tone="warn" title="An Australian Store. Not all of them ship to NZ.">Australia · check it ships to NZ</Tag>}
+        {shop.country === 'AU' && <AustraliaTag shipsToNz={shop.shipsToNz} estimated={shop.postageEstimated} />}
         {shop.sources.map(s => <SourceBadge key={s} source={s} />)}
         <div className="ml-auto flex items-center gap-3">
           <Button variant="link" className="text-xs" onClick={() => onPrefer(shop)}>{isPreferred ? '★ Preferred' : '☆ Prefer'}</Button>
-          <Button variant="link" className="text-xs" onClick={() => onExclude(shop)}>🚫 {shop.country === 'AU' ? "Doesn't ship to NZ" : 'Exclude Store'}</Button>
+          <Button variant="link" className="text-xs" onClick={() => onExclude(shop)}>🚫 {shop.country === 'AU' && !shop.shipsToNz ? "Doesn't ship to NZ" : 'Exclude Store'}</Button>
         </div>
       </div>
       <div className="px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm border-b border-slate-100 dark:border-slate-800">

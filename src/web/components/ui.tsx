@@ -97,6 +97,15 @@ export function SourceBadge({ source }: { source: SourceId }) {
   return <span className={cx('text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded', SOURCE_STYLE[source])}>{SOURCE_NAME[source]}</span>;
 }
 
+/** Whether an Australian Store posts to NZ, as the weekly checkout check found. */
+export function AustraliaTag({ shipsToNz, estimated }: { shipsToNz: boolean | null; estimated: boolean }) {
+  if (shipsToNz === true) {
+    return <Tag title={`An Australian Store whose checkout offers postage to NZ.${estimated ? ' Postage here is a guess.' : ''}`}>Australia · ships to NZ</Tag>;
+  }
+  if (shipsToNz === false) return <Tag tone="warn" title="Its checkout offers no postage to NZ. Shown because you turned off leaving these Stores out.">Australia · doesn't ship to NZ</Tag>;
+  return <Tag tone="warn" title="An Australian Store nobody could check yet. Check its site ships to NZ before ordering; postage here is a guess.">Australia · may not ship to NZ</Tag>;
+}
+
 export function Tag({ children, tone = 'plain', title }: { children: ReactNode; tone?: 'plain' | 'warn'; title?: string }) {
   return (
     <span title={title} className={cx('text-[11px] px-1.5 rounded', tone === 'warn' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300')}>

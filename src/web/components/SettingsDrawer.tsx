@@ -152,11 +152,15 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
           <Switch checked={s.sources.mtgsingles} onChange={v => onChange({ sources: { ...s.sources, mtgsingles: v } })} label="Search MtgSingles" />
           <Switch checked={s.sources['mtgsingles-au']} onChange={v => onChange({ sources: { ...s.sources, 'mtgsingles-au': v } })} label="Include Australian Stores (MtgSingles AU)" />
           {s.sources['mtgsingles-au'] && (
-            <label className="block">Australian Store postage to NZ (NZ$)
-              <input type="number" min={0} step={1} className={field} value={s.australiaPostage}
-                onChange={e => onChange({ australiaPostage: Number(e.target.value) })} />
-              <span className="text-xs text-slate-500">A guess for each Australian Store. Prices are converted from AUD. Not every Store ships to NZ: use "Doesn't ship to NZ" on the Plan screen to drop one.</span>
-            </label>
+            <>
+              <Switch checked={s.excludeAuNoNzShipping} onChange={v => onChange({ excludeAuNoNzShipping: v })} label="Exclude Australian Stores that don't ship to NZ" />
+              <span className="block text-xs text-slate-500">Each Store's checkout is checked every week. Stores that couldn't be checked stay in, marked "may not ship to NZ".</span>
+              <label className="block">Australian Store postage to NZ (NZ$)
+                <input type="number" min={0} step={1} className={field} value={s.australiaPostage}
+                  onChange={e => onChange({ australiaPostage: Number(e.target.value) })} />
+                <span className="text-xs text-slate-500">A guess, for Australian Stores whose checkout didn't give a price. Prices are converted from AUD. Use "Doesn't ship to NZ" on the Plan screen to drop a Store.</span>
+              </label>
+            </>
           )}
           <ExcludedStores excluded={s.excludedStores} onChange={excludedStores => onChange({ excludedStores })} />
           {/* Hosted mode: the cache is shared by everyone and at most an hour old. */}

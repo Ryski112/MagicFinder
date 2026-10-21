@@ -9,14 +9,14 @@ This spec gathers the decisions made on the [Wayfinder map](https://github.com/R
 **In scope**
 - A locally run app on each user's own computer. It's started with one command and opens in the browser. Friends with some coding knowledge can install it.
 - Two Sources: Fetch TCG and MtgSingles. The data layer takes more Sources later as plug-ins.
-- NZ-based Stores, plus an optional "Australian Stores" mode (off by default, MtgSingles AU only): prices are converted from AUD, postage to NZ is a buyer-editable guess, and the buyer excludes any Store that turns out not to ship to NZ (excluded Stores are remembered). Plans combine NZ and AU Stores.
+- NZ-based Stores, plus an optional "Australian Stores" mode (off by default, MtgSingles AU only): prices are converted from AUD, and Plans combine NZ and AU Stores. Each Australian Store's checkout is checked weekly for postage to NZ (§3.2). "Exclude Australian Stores that don't ship to NZ" (on by default) leaves out the ones that don't. Ones nobody could check stay in, marked "may not ship to NZ". Postage is checkout's rate to Auckland where known, otherwise a buyer-editable guess. The buyer can still exclude any Store by hand (excluded Stores are remembered).
 - Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL, plus a card searcher that adds cards by name.
 - Live search per run with about a 1 h cache, then a Trade-off Ladder of Plans and a per-Store breakdown with clean links.
 - A per-Store button that opens the Store with the Plan's cards in the cart (where the Store supports it). The buyer checks out themselves.
 
 **Out of scope**
 - Sources beyond Fetch TCG and MtgSingles (design for them, don't build them). This includes reading Stores' own Shopify shops as a Source.
-- Australian Stores beyond MtgSingles AU, and knowing which ones ship to NZ (the buyer checks and excludes).
+- Australian Stores beyond MtgSingles AU, and Australian Stores' free-postage thresholds.
 - A public hosted site.
 - Docker/NAS and shared multi-user installs.
 - Automating checkout or placing orders.
@@ -79,7 +79,15 @@ Notes:
 - Stores that don't publish postage use an editable default of $7 tracked (+$5 rural) and are shown as "est.".
 - The buyer can override postage per Store in Settings.
 - Shopify Stores' postage comes from what their checkout actually offers (`npm run probe-postage` puts one cheap single in a throwaway cart and reads `/cart/shipping_rates.json` for an Auckland, Wellington and Christchurch address), because policy pages can disagree with checkout. Those entries have `confidence: checkout`.
-- A monthly change-detection job hashes each Store's policy page, `meta.json` and checkout postage, and opens an issue for a human to update the table when something changes.
+- A monthly change-detection job hashes each NZ Store's policy page, `meta.json` and checkout postage, and opens an issue for a human to update the table when something changes.
+- **Australian Stores** (#61) are listed at the end of the table with `country: AU` and `ships_to_nz: true | false | null`. Their ids are the ones MagicFinder gave them before they were listed (`mtgsingles:AU/<Key>`), so buyers' exclusions still apply. `npm run probe-au` finds them by searching MtgSingles AU for a few staples. It then puts an in-stock single in a throwaway cart (a fresh cart per address, because a cart keeps the rates of the first address it was asked about) and asks `/cart/shipping_rates.json`:
+  - Rates for Auckland: ships, and the cheapest becomes the Store's postage. The cart is put in the NZ market (`?country=NZ`), because Shopify quotes in the visitor's currency (some shops quote NZD from NZ, and GitHub's US runners get USD). An NZD rate is used as it is, an AUD rate is converted at that day's rate, and any other currency leaves the postage unknown.
+  - "Country/region not supported": doesn't ship.
+  - No rates for Auckland: doesn't ship, but only if a Sydney address does get rates.
+  - Anything else: `null`.
+  - A site that fails keeps its last result.
+
+  `meta.json`'s `ships_to_countries` isn't used, because checkout disagrees with it (Area52, ManaMarket, TheGamesDistrict and MightyCoolGames list NZ but offer no rate for it). A weekly GitHub Action runs `npm run probe-au -- --write` and commits the table to `main`. In hosted mode the server also runs the check weekly, keeping its results in `au-stores.json` on the data volume (they override the shipped entries and include Stores found since the release). Desktop installs never run it.
 
 ### 3.3 CardKingdom comparison
 

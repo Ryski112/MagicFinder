@@ -15,7 +15,9 @@ import { MtgSinglesSource } from '../sources/mtgSingles';
 import { Throttle } from '../sources/policy';
 import { requestCount } from '../sources/requestCount';
 import { createApp } from './app';
+import { AuStoreFile, WeeklyAuCheck, withAuStores } from './auStores';
 import { CardKingdom, CardKingdomPrices } from './cardKingdom';
+import { storeThrottle } from './cart';
 import { ExchangeRate } from './exchangeRate';
 import { hostingFromEnv } from './hosting';
 import { choosePort } from './instance';
@@ -49,7 +51,9 @@ const dir = dataDir();
 const settings = new SettingsStore(dir);
 const catalogue = new CatalogueStore(dir);
 const cache = new SearchCache(dir);
-const stores: StoreRecord[] = parse(readFileSync(storesFile, 'utf8'));
+const shipped: StoreRecord[] = parse(readFileSync(storesFile, 'utf8'));
+// Hosted mode swaps in the weekly Australian Store check's results; the desktop uses the shipped table as it is.
+let stores = shipped;
 let directory = new StoreDirectory(stores);
 const exchangeRate = new ExchangeRate(dir);
 const cardKingdom = new CardKingdom(new CardKingdomPrices(dir), exchangeRate);
@@ -65,6 +69,29 @@ const mtgsinglesAu = new MtgSinglesSource({
     return exchangeRate.audToNzd;
   },
 });
+if (hosting.hosted) {
+  const auCheck = new WeeklyAuCheck({
+    file: new AuStoreFile(dir),
+    baseline: shipped.filter(s => s.country === 'AU'),
+    // Shares the MtgSingles pace with friends' searches, and each Store's pace with their cart checks.
+    source: mtgsinglesAu,
+    audToNzd: async () => {
+      await exchangeRate.refreshIfStale();
+      return exchangeRate.audToNzd;
+    },
+    wait: host => storeThrottle(host).wait(),
+    onUpdate: au => {
+      stores = withAuStores(shipped, au);
+      directory = new StoreDirectory(stores);
+    },
+  });
+  stores = withAuStores(shipped, auCheck.current());
+  directory = new StoreDirectory(stores);
+  // A few minutes after start-up (so a restart loop doesn't hammer anyone), then hourly to see if a week has passed.
+  setTimeout(() => void auCheck.runIfDue(), 5 * 60 * 1000).unref();
+  setInterval(() => void auCheck.runIfDue(), 60 * 60 * 1000).unref();
+}
+
 // Identical searches already on their way are shared between runs.
 const sources = [new FetchTcgSource(), mtgsingles, mtgsinglesAu].map(mergeInFlight);
 

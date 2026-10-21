@@ -45,7 +45,7 @@ function rewrite(text: string, s: StoreRecord, option: PostageOption): string {
 }
 
 for (const s of stores) {
-  if (s.cart !== 'shopify' || !s.site || (only.length && !only.includes(s.id))) continue;
+  if (s.cart !== 'shopify' || !s.site || s.country === 'AU' || (only.length && !only.includes(s.id))) continue;
   const rates = await checkoutRates(s.site);
   if (!rates) {
     console.log(`${s.id}: couldn't read checkout rates`);

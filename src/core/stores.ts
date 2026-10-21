@@ -22,8 +22,10 @@ export interface StoreRecord {
   postage?: PostageOption[];
   free_postage?: { threshold: RegionValue; applies_to: 'all' | 'singles_only' };
   cart: CartKind;
-  /** Where the Store is; Australian Stores ship internationally, so their postage is a guess unless the buyer sets it. */
+  /** Where the Store is. An Australian Store's postage is a guess unless checkout gave it or the buyer sets it. */
   country?: 'NZ' | 'AU';
+  /** Australian Stores: whether checkout posts to NZ; null or missing when nobody could tell. */
+  ships_to_nz?: boolean | null;
   provenance?: { url: string | null; checked_on: string; confidence: 'checkout' | 'published' | 'inferred' | 'default' };
 }
 
@@ -99,7 +101,8 @@ export function storeCost(store: StoreRecord, buyer: BuyerContext): StoreCost {
   const threshold = store.free_postage ? valueFor(store.free_postage.threshold, region) ?? null : null;
   if (override !== undefined) return { postage: override, freeOver: threshold, kind: 'postage', estimated: false };
 
-  if (store.country === 'AU') return { postage: buyer.australiaPostage, freeOver: threshold, kind: 'postage', estimated: true };
+  // Australian Stores whose checkout gave a rate to NZ use it; the rest use the buyer's guess.
+  if (store.country === 'AU' && !store.postage?.length) return { postage: buyer.australiaPostage, freeOver: threshold, kind: 'postage', estimated: true };
 
   const options = (store.postage ?? []).filter(o => buyer.postageType === 'standard' || o.tracked !== false);
   if (!options.length) {
@@ -155,7 +158,7 @@ export class StoreDirectory {
         site: null,
         location: { city: l.city ?? null, region: regionOf(l.city) },
         pickup: { available: l.pickupOffered ?? null, fee: 0 },
-        // Stores not in the Store table (the Australian ones) that link to Shopify product pages get "Add all to cart";
+        // Stores not in the Store table (Australian ones found since the last check) that link to Shopify product pages get "Add all to cart";
         // the cart pre-check falls back to Open Listings if the shop turns out not to be Shopify.
         cart: l.source === 'fetch' ? 'fetch' : shopifyHandle(l.url) ? 'shopify' : 'open-listings',
         country: l.source === 'mtgsingles-au' ? 'AU' : undefined,

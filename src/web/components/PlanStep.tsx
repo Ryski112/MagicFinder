@@ -39,6 +39,14 @@ export function PlanStep(p: Props) {
   const hasPreferred = anyPreferred && p.settings.preferredOn;
   const [cart, setCart] = useState<CartTarget | null>(null);
   const [view, setView] = useState<'stores' | 'cards'>('stores');
+  // How cards are ordered within a Store (or in the card list): by name, or dearest first. Remembered in this browser.
+  const [sortBy, setSortByState] = useState<'name' | 'price'>(() => {
+    try { return localStorage.getItem('planSort') === 'price' ? 'price' : 'name'; } catch { return 'name'; }
+  });
+  const setSortBy = (v: 'name' | 'price') => {
+    setSortByState(v);
+    try { localStorage.setItem('planSort', v); } catch { /* the choice just isn't remembered */ }
+  };
   // Toggling pickup changes a Store's total, which would re-sort it; hold the order it had when the switch was flipped.
   const [heldOrder, setHeldOrder] = useState<{ k: number; ids: string[] } | null>(null);
   const stores = rung ? keepOrder(rung.stores, heldOrder?.k === rung.k ? heldOrder.ids : null) : [];
@@ -255,6 +263,14 @@ export function PlanStep(p: Props) {
                 </button>
               ))}
             </div>
+            <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Sort cards by">
+              {(['name', 'price'] as const).map(v => (
+                <button key={v} type="button" aria-pressed={sortBy === v} onClick={() => setSortBy(v)} title={v === 'price' ? 'Dearest first' : 'A to Z'}
+                  className={cx('px-3 py-1', sortBy === v ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                  Sort by {v}
+                </button>
+              ))}
+            </div>
             {rung.pickupHints.length > 0 && (
               <div className="text-xs text-emerald-700 dark:text-emerald-400">
                 {rung.pickupHints.map(h => `Pickup available at ${h.name}, saves ${money(h.saves)}`).join(' · ')}
@@ -299,9 +315,9 @@ export function PlanStep(p: Props) {
               }))}
             />
           )}
-          {view === 'cards' && <CardsView runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onLock={setLock} stores={stores} leftOut={leftOut} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
+          {view === 'cards' && <CardsView sortBy={sortBy} runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onLock={setLock} stores={stores} leftOut={leftOut} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
           {view === 'stores' && stores.map(s => (
-            <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
+            <StoreSection key={s.id} sortBy={sortBy} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin} onPinAll={setPins}
               onCart={() =>
                 setCart(
@@ -321,10 +337,13 @@ export function PlanStep(p: Props) {
   );
 }
 
-function CardsView({ runId, planStoreIds, onBuyFrom, onPinStore, onBlock, onBlockListing, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
+function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock, onBlockListing, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { sortBy: 'name' | 'price'; runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const [printingsOpen, setPrintingsOpen] = useState<string | null>(null);
+  const cost = (c: { bought: { item: ItemView }[] }) => c.bought.reduce((n, b) => n + b.item.price * b.item.qty, 0);
   const cards = planCards(stores, leftOut, notFound);
+  // Dearest first; cards with nothing bought (left out, Not Found) go last, still by name.
+  if (sortBy === 'price') cards.sort((a, b) => cost(b) - cost(a) || a.name.localeCompare(b.name));
   return (
     <ul className={cx(panel, 'rounded-xl divide-y divide-slate-100 dark:divide-slate-800')}>
       {cards.map(c => {
@@ -862,8 +881,8 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onAvoid, onExclude }: {
-  onAvoid: (item: ItemView, storeId: string) => void;
+function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onAvoid, onExclude }: {
+  sortBy: 'name' | 'price'; onAvoid: (item: ItemView, storeId: string) => void;
   onExclude: () => void; onPinAll: (buyKeys: string[], storeId: string) => void; qtyOf: Map<string, number>;
   planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing'];
   store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
@@ -917,7 +936,7 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
       </div>
       <div className="grid md:grid-cols-[minmax(0,1fr)_230px]">
         <ul className="divide-y divide-slate-100 dark:divide-slate-800 min-w-0">
-          {s.items.map(i => (
+          {(sortBy === 'price' ? [...s.items].sort((a, b) => b.price * b.qty - a.price * a.qty || a.name.localeCompare(b.name)) : s.items).map(i => (
             <li key={i.listingId} className="px-4 py-2">
               <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onAvoid={() => onAvoid(i, s.id)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (

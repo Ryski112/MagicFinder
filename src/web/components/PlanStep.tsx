@@ -67,13 +67,48 @@ export function PlanStep(p: Props) {
     setRemoved(r => [...r.filter(x => x.name !== name), { name, lineIds }]);
     setIncluded(lineIds, false);
   };
+  const removeCards = (cards: { name: string; lineIds: string[] }[]) => {
+    const ids = cards.flatMap(c => c.lineIds);
+    if (!ids.length) return;
+    setRemoved(r => [...r.filter(x => !cards.some(c => c.name === x.name)), ...cards.filter(c => c.lineIds.length)]);
+    setIncluded(ids, false);
+  };
+  /** Several cards at once: one `onChoices` call each would overwrite the last. */
+  const setPins = (buyKeys: string[], storeId: string) => {
+    if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    p.onChoices({ ...p.choices, pins: { ...p.choices.pins, ...Object.fromEntries(buyKeys.map(k => [k, storeId])) } });
+  };
   const putBack = (card: { name: string; lineIds: string[] }) => {
     setRemoved(r => r.filter(x => x !== card));
     setIncluded(card.lineIds, true);
   };
 
+  /** Stops the condition, foil and Printing filters from leaving this card's Listings out. */
+  const relax = (lineIds: string[]) =>
+    p.onChoices({ ...p.choices, relaxed: { ...p.choices.relaxed, ...Object.fromEntries(lineIds.map(id => [id, true])) } });
   const setLock = (lineIds: string[], lock: Lock | null) =>
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(lineIds.map(id => [id, lock])) } });
+  // Locking changes a line's key (card + Printing), so the Store pin has to be filed under the new key.
+  const buyFrom = (item: { buyKey: string; oracleId: string; lineIds: string[] }, lock: Lock, storeId: string) => {
+    if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    const pins = { ...p.choices.pins };
+    delete pins[item.buyKey];
+    pins[`${item.oracleId}|${lock.printingId}:${lock.finish}`] = storeId;
+    p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(item.lineIds.map(id => [id, lock])) }, pins });
+  };
+  const blockPrinting = (printing: PrintingView, blocked: boolean, cardName: string) => {
+    const next = { ...p.settings.blockedPrintings };
+    if (blocked) next[printing.id] = `${cardName} · ${printing.setName} #${printing.collectorNumber}`;
+    else delete next[printing.id];
+    p.onSettings({ blockedPrintings: next });
+  };
+  const planStoreIds = new Set(stores.map(s => s.id));
+  const qtyOf = new Map(planCards(stores, rung?.short?.leftOut ?? [], p.ladder.notFound).map(c => [c.buyKey, c.qty]));
+  // For a Store that can't be used (an Australian one that doesn't ship to NZ, say): the Plan is made again without it.
+  const excludeStore = (s: StoreView) => {
+    setHeldOrder(null);
+    p.onSettings({ excludedStores: { ...p.settings.excludedStores, [s.id]: s.name } });
+  };
 
   return (
     <div className="space-y-6">
@@ -85,8 +120,44 @@ export function PlanStep(p: Props) {
         </div>
       </div>
 
-      <Notices ladder={p.ladder} settings={p.settings} onSettings={p.onSettings} onSearchAgain={p.onSearchAgain} onUnlock={ids => setLock(ids, null)} />
+      <div className={cx('space-y-6', p.updating && 'opacity-50 pointer-events-none transition-opacity')} aria-busy={p.updating}>
+      <Notices ladder={p.ladder} settings={p.settings} onSettings={p.onSettings} onSearchAgain={p.onSearchAgain} onUnlock={ids => setLock(ids, null)} onRelax={relax} />
 
+      <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="View">
+        {([['plans', 'Plans'], ['shops', 'Browse by Store']] as const).map(([m, label]) => (
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
+            className={cx('px-3 py-1', mode === m ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>{label}</button>
+        ))}
+      </div>
+
+      {anyPreferred && (
+        <Switch checked={p.settings.preferredOn} onChange={v => p.onSettings({ preferredOn: v })}
+          label={`Use my preferred Stores (${Object.keys(p.settings.preferredStores).length})`} />
+      )}
+
+      {mode === 'shops' && (
+        <ShopsView ladder={p.ladder} preferred={p.settings.preferredOn ? p.settings.preferredStores : {}}
+          onBuyAll={(picks: StorePick[], storeId) => {
+            // A chosen Printing is locked, which changes the line's key, so its pin is filed under the new key.
+            const pins = { ...p.choices.pins };
+            const locks = { ...p.choices.locks };
+            for (const pick of picks) {
+              delete pins[pick.buyKey];
+              if (pick.lock) for (const id of pick.lineIds) locks[id] = pick.lock;
+              pins[pick.lock ? `${pick.oracleId}|${pick.lock.printingId}:${pick.lock.finish}` : pick.buyKey] = storeId;
+            }
+            if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+            p.onChoices({ ...p.choices, locks, pins });
+            setMode('plans');
+          }}
+          onPrefer={s => {
+            const { [s.id]: _gone, ...rest } = p.settings.preferredStores;
+            p.onSettings({ preferredStores: p.settings.preferredStores[s.id] ? rest : { ...p.settings.preferredStores, [s.id]: s.name } });
+          }}
+          onExclude={s => p.onSettings({ excludedStores: { ...p.settings.excludedStores, [s.id]: s.name } })} />
+      )}
+
+      <div className={cx('space-y-6', mode === 'shops' && 'hidden')}>
       {p.ladder.rungs.length > 0 && (
         <section>
           <h2 className="font-semibold mb-2">How many Stores do you want to order from?</h2>
@@ -182,21 +253,21 @@ export function PlanStep(p: Props) {
             <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
               <SourceBadge source="fetch" />
               <span className="flex-1 text-slate-600 dark:text-slate-300">Fetch TCG uses one cart for every seller, so all {fetchItems.length} Fetch Listings in this Plan check out together.</span>
-              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: rung.k })}>Open {fetchItems.length} Fetch Listings ↗</Button>
+              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: cartK })}>Open {fetchItems.length} Fetch Listings ↗</Button>
             </div>
           )}
-          {view === 'cards' && <CardsView stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} />}
+          {view === 'cards' && <CardsView runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onBlock={blockPrinting} onLock={setLock} stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
           {view === 'stores' && stores.map(s => (
             <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
-              elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin}
+              elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin} onPinAll={setPins}
               onCart={() =>
                 setCart(
                   s.cart === 'fetch'
-                    ? { kind: 'fetch', items: s.items, k: rung.k, seller: s.name }
-                    : { kind: 'store', store: s, k: rung.k, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
+                    ? { kind: 'fetch', items: s.items, k: cartK, seller: s.name }
+                    : { kind: 'store', store: s, k: cartK, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
                 )
               }
-              onLock={setLock} onRemove={removeCard} />
+              onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onBlock={blockPrinting} onExclude={() => excludeStore(s)} />
           ))}
           <div className="text-right text-lg font-bold tabnum">
             Landed Cost {money(rung.total)}
@@ -204,13 +275,16 @@ export function PlanStep(p: Props) {
           </div>
         </section>
       )}
+      </div>
+      </div>
       {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(c => (c === cart ? null : c))} />}
     </div>
   );
 }
 
-function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }: { stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void }) {
+function CardsView({ runId, planStoreIds, onBuyFrom, onBlock, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onBlock: PrintingActions['onBlock']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [printingsOpen, setPrintingsOpen] = useState<string | null>(null);
   const cards = planCards(stores, leftOut, notFound);
   return (
     <ul className={cx(panel, 'rounded-xl divide-y divide-slate-100 dark:divide-slate-800')}>
@@ -231,6 +305,7 @@ function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }:
                   {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
                   {c.lineIds.length > 0 && <RemoveButton className="ml-auto" name={c.name} onClick={() => onRemove(c.name, c.lineIds)} />}
                 </div>
+                {c.waivable && <Button variant="link" className="text-xs mt-1" onClick={() => onRelax(c.lineIds)}>Don't exclude this card</Button>}
                 <ul className="mt-1 space-y-0.5">
                   {c.bought.map(({ store, item }) => (
                     <li key={item.listingId} className="flex flex-wrap items-center gap-2">
@@ -558,7 +633,7 @@ function RungCard({ r, preferred, selected, onSelect, onTryLonger }: { r: RungVi
   );
 }
 
-function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { ladder: LadderView; settings: Settings; onSettings: (p: Partial<Settings>) => void; onSearchAgain: () => void; onUnlock: (ids: string[]) => void }) {
+function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRelax }: { ladder: LadderView; settings: Settings; onSettings: (p: Partial<Settings>) => void; onSearchAgain: () => void; onUnlock: (ids: string[]) => void; onRelax: (ids: string[]) => void }) {
   const [copied, setCopied] = useState(false);
   const troubled = ladder.sources.filter(s => s.status !== 'ok' && s.status !== 'off');
   const skipped = ladder.sources.filter(s => s.status === 'ok' && s.notSearched.length > 0);
@@ -605,7 +680,10 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock }: { la
               n.notSearchedOn.length ? `${n.notSearchedOn.join(' and ')} not searched` : '',
               excludedNote(n, settings),
             ].filter(Boolean).join(' · '),
-            action: n.locked ? { label: 'locked to one printing: allow any printing', onClick: () => onUnlock(n.lineIds) } : undefined,
+            actions: [
+              ...(n.locked ? [{ label: 'locked to one printing: allow any printing', onClick: () => onUnlock(n.lineIds) }] : []),
+              ...(n.waivable ? [{ label: "Don't exclude this card", onClick: () => onRelax(n.lineIds) }] : []),
+            ],
           }))}
         />
       )}
@@ -941,7 +1019,7 @@ interface CardListItem {
   qty: number;
   image: string | null;
   note?: string;
-  action?: { label: string; onClick: () => void };
+  actions?: { label: string; onClick: () => void }[];
 }
 
 const CONDITION_NAME: Record<Settings['minCondition'], string> = { NM: 'Near Mint', LP: 'Lightly Played', MP: 'Moderately Played', HP: 'Heavily Played', DMG: 'Damaged' };
@@ -988,7 +1066,7 @@ function CardList({ title, note, cards, tone }: { title: string; note?: string; 
                 </div>
                 <div className="mt-1 font-medium leading-tight">{c.name}</div>
                 {c.note && <div className="opacity-80">{c.note}</div>}
-                {c.action && <Button variant="link" className="text-xs" onClick={c.action.onClick}>{c.action.label}</Button>}
+                {c.actions?.map(a => <Button key={a.label} variant="link" className="block text-xs" onClick={a.onClick}>{a.label}</Button>)}
               </div>
             ))}
           </div>

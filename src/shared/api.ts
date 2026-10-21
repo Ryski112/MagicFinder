@@ -85,6 +85,8 @@ export interface ArchidektResponse {
 export interface PlanChoices {
   included: Record<string, boolean>;
   locks: Record<string, Lock | null>;
+  /** Line ids whose condition, foil and Printing filters are waived. */
+  relaxed?: Record<string, boolean>;
   pins?: Record<string, string>;
 }
 
@@ -219,6 +221,8 @@ export interface NotFoundView {
   searchedOn: string[];
   /** Listings of this card that were found but left out, counted by reason. */
   excluded: Partial<Record<Exclusion, number>>;
+  /** Some of the left-out Listings were excluded by the buyer's own filters, which can be waived for this card. */
+  waivable: boolean;
   image: string | null;
 }
 

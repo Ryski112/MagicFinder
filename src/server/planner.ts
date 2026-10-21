@@ -2,13 +2,13 @@
 // into what the UI shows.
 import type { Catalogue, Printing } from '../catalogue/catalogue';
 import { applyPin } from '../core/pins';
-import { exclusion, isEligible, passesListingFilters, type Exclusion } from '../core/eligibility';
+import { exclusion, isEligible, passesListingFilters, WAIVABLE, type Exclusion } from '../core/eligibility';
 import { pickupEligible, storeCost, type BuyerContext, type StoreDirectory, type StoreRecord } from '../core/stores';
 import type { Finish, Listing } from '../core/types';
 import { buyLines, isIncluded, lockFor, lockKey, type BuyLine, type ListChoices, type ResolvedWantList } from '../core/wantList';
-import type { LadderState } from '../optimiser/ladder';
+import type { LadderState, Rung } from '../optimiser/ladder';
 import { pruneDominated, type Problem } from '../optimiser/problem';
-import type { ItemView, LadderView, NotFoundView, OfferView, PlanChoices, PrintingOption, PrintingView, RungView, StoreView } from '../shared/api';
+import type { ItemView, LadderView, ShopView, UnconfirmedListingView, WantedCardView, NotFoundView, OfferView, PlanChoices, PrintingOption, PrintingView, RungView, StoreView } from '../shared/api';
 import { cardKingdomUnitNzd, compareAtCardKingdom, overCardKingdom, type CardKingdomContext } from './cardKingdom';
 import type { SearchResult } from './search';
 import type { Settings } from './settings';
@@ -31,7 +31,7 @@ export interface Prepared {
 }
 
 export function listChoices(choices: PlanChoices, s: Settings): ListChoices {
-  return { included: choices.included, locks: choices.locks, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
+  return { included: choices.included, locks: choices.locks, relaxed: choices.relaxed, includeBasics: s.includeBasics, useListPrintings: s.useListPrintings };
 }
 
 export function buyerContext(s: Settings): BuyerContext {
@@ -91,6 +91,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
       notFound.push({
         buyKey: line.key, lineIds: line.lineIds, name: line.name, missing: line.quantity - need, wanted: line.quantity,
         locked: !!line.lock, notSearchedOn: notSearched(line.oracleId), searchedOn: searched(line.oracleId), excluded,
+        waivable: !line.relaxed && (Object.keys(excluded) as Exclusion[]).some(e => WAIVABLE.has(e)),
         image: cardImage(ctx.catalogue, line.oracleId),
       });
     }

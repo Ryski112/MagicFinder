@@ -76,6 +76,14 @@ describe('buyLines', () => {
     const b = buyLines(r.lines, choices({ includeBasics: true, included: { [rhystic.id]: true } }));
     expect(b.map(l => l.name)).toEqual(expect.arrayContaining(['Island', 'Rhystic Study']));
   });
+
+  it('relaxes a merged line when any of its lines is relaxed', () => {
+    const r = resolveWantList(LIST, cat);
+    const one = r.lines.find(l => l.name === 'Counterspell')!;
+    const b = buyLines(r.lines, choices({ relaxed: { [one.id]: true } }));
+    expect(b.find(l => l.name === 'Counterspell')?.relaxed).toBe(true);
+    expect(b.find(l => l.name === 'Sol Ring')?.relaxed).toBe(false);
+  });
 });
 
 describe('isEligible', () => {
@@ -125,5 +133,15 @@ describe('isEligible', () => {
     expect(exclusion(listing({ finish: 'foil' }), counter(), cat, { ...settings, allowFoils: false })).toBe('foil');
     expect(exclusion(listing({ confidence: 'exact', printingId: gold.id }), counter(), cat, settings)).toBe('non-tournament');
     expect(exclusion(listing({ confidence: 'card-only' }), locked, cat, settings)).toBe('other-printing');
+  });
+
+  it("doesn't apply the buyer's filters to a relaxed line, but still skips Listings nobody can buy", () => {
+    const gold = printings().find(p => p.nonTournament)!;
+    const relaxed = { ...counter(), relaxed: true };
+    expect(isEligible(listing({ condition: 'MP' }), relaxed, cat, settings)).toBe(true);
+    expect(isEligible(listing({ finish: 'foil' }), relaxed, cat, { ...settings, allowFoils: false })).toBe(true);
+    expect(isEligible(listing({ confidence: 'exact', printingId: gold.id }), relaxed, cat, settings)).toBe(true);
+    expect(isEligible(listing({ english: false }), relaxed, cat, settings)).toBe(false);
+    expect(isEligible(listing({ quantity: 0 }), relaxed, cat, settings)).toBe(false);
   });
 });

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import type { CardKingdomView, Exclusion, Finish, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, PrintingView, RungView, Settings, SplitView, StoreView, SweepView } from '../../shared/api';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { UnconfirmedListingView, CardKingdomView, Exclusion, Finish, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, PrintingView, RungView, Settings, SplitView, StoreView, SweepView } from '../../shared/api';
 import { api } from '../api';
 import { ShopsView, type StorePick } from './ShopsView';
 import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
-import { cardsElsewhere, costAtStore, planCards, type Elsewhere } from '../planCards';
+import { cardsElsewhere, costAtStore, isWaivable, planCards, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
 import { Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo } from './ui';
 
@@ -84,8 +84,10 @@ export function PlanStep(p: Props) {
   };
 
   /** Stops the condition, foil and Printing filters from leaving this card's Listings out. */
-  const relax = (lineIds: string[]) =>
-    p.onChoices({ ...p.choices, relaxed: { ...p.choices.relaxed, ...Object.fromEntries(lineIds.map(id => [id, true])) } });
+  const relax = (lineIds: string[], require = false) => {
+    const set = (ids: string[]) => Object.fromEntries(ids.map(id => [id, true]));
+    p.onChoices({ ...p.choices, relaxed: { ...p.choices.relaxed, ...set(lineIds) }, ...(require ? { required: { ...p.choices.required, ...set(lineIds) } } : {}) });
+  };
   const setLock = (lineIds: string[], lock: Lock | null) =>
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(lineIds.map(id => [id, lock])) } });
   // Locking changes a line's key (card + Printing), so the Store pin has to be filed under the new key.
@@ -96,14 +98,31 @@ export function PlanStep(p: Props) {
     pins[`${item.oracleId}|${lock.printingId}:${lock.finish}`] = storeId;
     p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(item.lineIds.map(id => [id, lock])) }, pins });
   };
+  /** Take a Listing whose Printing isn't known: any Printing is allowed, and the line is pinned to its Store. */
+  const pinStore = (item: { buyKey: string; oracleId: string; lineIds: string[] }, storeId: string) => {
+    if (rung) setHeldOrder({ k: rung.k, ids: stores.map(s => s.id) });
+    const pins = { ...p.choices.pins };
+    delete pins[item.buyKey];
+    pins[`${item.oracleId}|`] = storeId;
+    p.onChoices({ ...p.choices, locks: { ...p.choices.locks, ...Object.fromEntries(item.lineIds.map(id => [id, null])) }, pins });
+  };
+  const blockListing = (u: UnconfirmedListingView, blocked: boolean, cardName: string) => {
+    const next = { ...p.settings.blockedListings };
+    if (blocked) next[u.listingId] = `${cardName} · ${u.storeName} · ${u.title}`;
+    else delete next[u.listingId];
+    p.onSettings({ blockedListings: next });
+  };
   const blockPrinting = (printing: PrintingView, blocked: boolean, cardName: string) => {
     const next = { ...p.settings.blockedPrintings };
     if (blocked) next[printing.id] = `${cardName} · ${printing.setName} #${printing.collectorNumber}`;
     else delete next[printing.id];
     p.onSettings({ blockedPrintings: next });
   };
-  const planStoreIds = new Set(stores.map(s => s.id));
-  const qtyOf = new Map(planCards(stores, rung?.short?.leftOut ?? [], p.ladder.notFound).map(c => [c.buyKey, c.qty]));
+  // Preferred Stores count as part of the order: they cost nothing to add, so their Listings are marked like the Plan's own.
+  const planStoreIds = new Set([...stores.map(s => s.id), ...(p.settings.preferredOn ? Object.keys(p.settings.preferredStores) : [])]);
+  // A Plan from before the server sent line ids takes them from the wanted cards.
+  const leftOut = (rung?.short?.leftOut ?? []).map(l => l.lineIds ? l : { ...l, lineIds: p.ladder.cards.find(c => c.buyKey === l.buyKey)?.lineIds ?? [] });
+  const qtyOf = new Map(planCards(stores, leftOut, p.ladder.notFound).map(c => [c.buyKey, c.qty]));
   // For a Store that can't be used (an Australian one that doesn't ship to NZ, say): the Plan is made again without it.
   const excludeStore = (s: StoreView) => {
     setHeldOrder(null);
@@ -121,7 +140,36 @@ export function PlanStep(p: Props) {
       </div>
 
       <div className={cx('space-y-6', p.updating && 'opacity-50 pointer-events-none transition-opacity')} aria-busy={p.updating}>
-      <Notices ladder={p.ladder} settings={p.settings} onSettings={p.onSettings} onSearchAgain={p.onSearchAgain} onUnlock={ids => setLock(ids, null)} onRelax={relax} />
+      <OverridesBar
+        cards={p.ladder.cards}
+        choices={p.choices}
+        settings={p.settings}
+        onUndoRelax={ids => p.onChoices({ ...p.choices, relaxed: { ...p.choices.relaxed, ...Object.fromEntries(ids.map(id => [id, false])) }, required: { ...p.choices.required, ...Object.fromEntries(ids.map(id => [id, false])) } })}
+        onUnlock={ids => setLock(ids, null)}
+        onUnpin={keys => p.onChoices({ ...p.choices, pins: Object.fromEntries(Object.entries(p.choices.pins ?? {}).filter(([k]) => !keys.includes(k))) })}
+        onSettings={p.onSettings}
+      />
+
+      <Notices extra={[
+          ...(removed.length > 0 ? [{ key: 'removed', label: `${removed.length} removed from your list`, node: (
+            <div className="text-sm text-slate-600 dark:text-slate-300">
+              Removed from your list:{' '}
+              {removed.map((r, n) => (
+                <span key={r.name}>
+                  {n > 0 && ', '}
+                  {r.name} (<Button variant="link" className="text-sm" onClick={() => putBack(r)}>put back</Button>)
+                </span>
+              ))}
+            </div>
+          ) }] : []),
+          ...(fetchItems.length > 0 ? [{ key: 'fetch', label: 'Fetch TCG checks out together', node: (
+            <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
+              <SourceBadge source="fetch" />
+              <span className="flex-1 text-slate-600 dark:text-slate-300">Fetch TCG uses one cart for every seller, so all {fetchItems.length} Fetch Listings in this Plan check out together.</span>
+              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: cartK })}>Open {fetchItems.length} Fetch Listings ↗</Button>
+            </div>
+          ) }] : []),
+        ]} ladder={p.ladder} settings={p.settings} onSettings={p.onSettings} onSearchAgain={p.onSearchAgain} onUnlock={ids => setLock(ids, null)} onRelax={relax} />
 
       <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="View">
         {([['plans', 'Plans'], ['shops', 'Browse by Store']] as const).map(([m, label]) => (
@@ -129,11 +177,6 @@ export function PlanStep(p: Props) {
             className={cx('px-3 py-1', mode === m ? 'bg-indigo-600 text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>{label}</button>
         ))}
       </div>
-
-      {anyPreferred && (
-        <Switch checked={p.settings.preferredOn} onChange={v => p.onSettings({ preferredOn: v })}
-          label={`Use my preferred Stores (${Object.keys(p.settings.preferredStores).length})`} />
-      )}
 
       {mode === 'shops' && (
         <ShopsView ladder={p.ladder} preferred={p.settings.preferredOn ? p.settings.preferredStores : {}}
@@ -169,10 +212,14 @@ export function PlanStep(p: Props) {
         </section>
       )}
 
-      {p.ladder.cardKingdom && <CardKingdomPanel ck={p.ladder.cardKingdom} planTotal={rung?.total ?? null} />}
-      {p.ladder.cardKingdom && base && !base.short && base.total !== null && (
-        <SplitPanel runId={p.runId} planId={p.ladder.planId} k={base.k} onTakeOut={removeCards} />
-      )}
+      <CardKingdomPanel
+        ck={p.ladder.cardKingdom}
+        planTotal={rung?.total ?? null}
+        leftOut={rung?.short?.cardKingdom ? { ck: rung.short.cardKingdom, count: rung.short.wanted - rung.short.covered, planTotal: rung.total } : null}
+        split={p.ladder.cardKingdom && base && !base.short && base.total !== null
+          ? <SplitPanel runId={p.runId} planId={p.ladder.planId} k={base.k} onTakeOut={removeCards} />
+          : undefined}
+      />
 
       {rung && rung.total !== null && (
         <section className="space-y-4">
@@ -182,6 +229,10 @@ export function PlanStep(p: Props) {
               {rung.runnerUp && <span className="font-normal text-indigo-600 dark:text-indigo-400"> · runner-up</span>}
               {rung.short && <span className="font-normal text-amber-600 dark:text-amber-400"> · leaves out {rung.short.wanted - rung.short.covered} of {rung.short.wanted} cards</span>}
             </h2>
+            <div className="tabnum text-lg font-bold" title={`cards ${money(rung.cards)} + postage ${money(rung.postage)}`}>
+              {money(rung.total)}
+              <span className="ml-2 text-xs font-normal text-slate-500">Landed Cost · cards {money(rung.cards)} + postage {money(rung.postage)}</span>
+            </div>
             <div className="inline-flex rounded-md border border-slate-300 dark:border-slate-700 overflow-hidden text-sm" role="group" aria-label="Group by">
               {(['stores', 'cards'] as const).map(v => (
                 <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
@@ -202,17 +253,17 @@ export function PlanStep(p: Props) {
                 ? <span className="text-slate-500">There is no other {storeCountLabel(base.k, hasPreferred)} Plan with different Stores.</span>
                 : (
                   <>
-                    <Button disabled={finding === base.k} onClick={() => { setFinding(base.k); void api.runnerUp(p.runId, base.k); }}>
+                    <Button variant="link" className="text-sm" disabled={finding === base.k} title="The next best Plan with different Stores, to compare what you leave out."
+                      onClick={() => { setFinding(base.k); void api.runnerUp(p.runId, base.k); }}>
                       {finding === base.k ? 'Looking…' : 'Find the runner-up Plan'}
                     </Button>
-                    <span className="text-slate-500">The next best Plan with different Stores, to compare what you leave out.</span>
                   </>
                 )}
             </div>
           )}
           {base?.next && (
             <div className="text-sm flex flex-wrap items-center gap-2">
-              <Button onClick={() => setShowRunnerUp(!showRunnerUp)} aria-pressed={showRunnerUp}>
+              <Button className="text-xs py-1" onClick={() => setShowRunnerUp(!showRunnerUp)} aria-pressed={showRunnerUp}>
                 {showRunnerUp ? '← Back to the best Plan' : 'See the runner-up Plan'}
               </Button>
               <span className="text-slate-500">
@@ -222,41 +273,19 @@ export function PlanStep(p: Props) {
               </span>
             </div>
           )}
-          {rung.short && rung.short.leftOut.length > 0 && (
+          {rung.short && leftOut.length > 0 && (
             <CardList
               tone="warn"
+              bulk={leftOut.some(l => l.waivable !== false && l.lineIds.length) ? { label: "Don't exclude any of these", onClick: () => relax(leftOut.filter(l => l.waivable !== false).flatMap(l => l.lineIds), true) } : undefined}
               title={`Left out of this Plan (${rung.short.wanted - rung.short.covered})`}
               note={`${rung.k} Store${rung.k > 1 ? 's' : ''} can't supply your whole list. These are the fewest cards to leave out; pick a bigger Plan to include them.`}
-              cards={rung.short.leftOut.map(l => ({ key: l.buyKey, name: l.name, qty: l.missing, image: l.image }))}
+              cards={leftOut.map(l => ({
+                key: l.buyKey, name: l.name, qty: l.missing, image: l.image, note: l.note,
+                actions: l.waivable !== false && l.lineIds.length ? [{ label: "Don't exclude this card", onClick: () => relax(l.lineIds, true) }] : [],
+              }))}
             />
           )}
-          {rung.short?.cardKingdom && (
-            <CardKingdomPanel
-              ck={rung.short.cardKingdom}
-              planTotal={null}
-              title={`The ${rung.short.wanted - rung.short.covered} left-out cards at CardKingdom`}
-              alongside={rung.total}
-            />
-          )}
-          {removed.length > 0 && (
-            <div className="text-sm text-slate-600 dark:text-slate-300">
-              Removed from your list:{' '}
-              {removed.map((r, n) => (
-                <span key={r.name}>
-                  {n > 0 && ', '}
-                  {r.name} (<Button variant="link" className="text-sm" onClick={() => putBack(r)}>put back</Button>)
-                </span>
-              ))}
-            </div>
-          )}
-          {fetchItems.length > 0 && (
-            <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
-              <SourceBadge source="fetch" />
-              <span className="flex-1 text-slate-600 dark:text-slate-300">Fetch TCG uses one cart for every seller, so all {fetchItems.length} Fetch Listings in this Plan check out together.</span>
-              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: cartK })}>Open {fetchItems.length} Fetch Listings ↗</Button>
-            </div>
-          )}
-          {view === 'cards' && <CardsView runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onBlock={blockPrinting} onLock={setLock} stores={stores} leftOut={rung.short?.leftOut ?? []} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
+          {view === 'cards' && <CardsView runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onLock={setLock} stores={stores} leftOut={leftOut} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
           {view === 'stores' && stores.map(s => (
             <StoreSection key={s.id} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin} onPinAll={setPins}
@@ -267,12 +296,8 @@ export function PlanStep(p: Props) {
                     : { kind: 'store', store: s, k: cartK, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
                 )
               }
-              onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onBlock={blockPrinting} onExclude={() => excludeStore(s)} />
+              onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onExclude={() => excludeStore(s)} />
           ))}
-          <div className="text-right text-lg font-bold tabnum">
-            Landed Cost {money(rung.total)}
-            <div className="text-xs font-normal text-slate-500">cards {money(rung.cards)} + postage {money(rung.postage)}</div>
-          </div>
         </section>
       )}
       </div>
@@ -282,7 +307,7 @@ export function PlanStep(p: Props) {
   );
 }
 
-function CardsView({ runId, planStoreIds, onBuyFrom, onBlock, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onBlock: PrintingActions['onBlock']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
+function CardsView({ runId, planStoreIds, onBuyFrom, onPinStore, onBlock, onBlockListing, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const [printingsOpen, setPrintingsOpen] = useState<string | null>(null);
   const cards = planCards(stores, leftOut, notFound);
@@ -334,9 +359,10 @@ function CardsView({ runId, planStoreIds, onBuyFrom, onBlock, onLock, stores, le
               </div>
             </div>
             {printingsOpen === c.buyKey && c.bought.length > 0 && (
-              <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock}
+              <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
                 onLock={lock => { onLock(c.lineIds, lock); setPrintingsOpen(null); }}
-                onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); setPrintingsOpen(null); }} />
+                onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); setPrintingsOpen(null); }}
+                onPinStore={storeId => { onPinStore(c.bought[0].item, storeId); setPrintingsOpen(null); }} />
             )}
             {open === c.buyKey && (
               <div className="mt-3 grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -461,7 +487,7 @@ function SplitPanel({ runId, planId, k, onTakeOut }: { runId: string; planId: nu
     }
   };
   return (
-    <section className={cx(panel, 'rounded-xl px-4 py-3 space-y-2')}>
+    <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 space-y-2">
       <div className="flex flex-wrap items-center gap-3">
         <div className="font-semibold">Split between CardKingdom and the NZ Stores</div>
         <span className="text-xs text-slate-500">Shipping is paid once at CardKingdom, so a few dear cards can be worth adding to one order.</span>
@@ -525,56 +551,77 @@ function SplitPanel({ runId, planId, k, onTakeOut }: { runId: string; planId: nu
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-function CardKingdomPanel({ ck, planTotal, title = 'Compare: CardKingdom (USA)', alongside = null }: { ck: CardKingdomView; planTotal: number | null; title?: string; alongside?: number | null }) {
+/** CardKingdom against the whole list and, for a Short Plan, against just the cards it leaves out: one row, details behind a toggle. */
+function CardKingdomPanel({ ck, planTotal, leftOut, split }: { split?: ReactNode; ck: CardKingdomView | null; planTotal: number | null; leftOut?: { ck: CardKingdomView; count: number; planTotal: number | null } | null }) {
   const [open, setOpen] = useState(false);
-  if (!ck.items.length) return null;
-  // A CardKingdom total that leaves cards out isn't comparable with the Plan's, so no "less/more" then.
-  const diff = planTotal === null || ck.missing.length ? null : Math.round((ck.totalNzd - planTotal) * 100) / 100;
+  const [cardsOpen, setCardsOpen] = useState<Record<string, boolean>>({});
+  const parts = [
+    ck?.items.length ? { key: 'all', ck, label: 'Whole list', planTotal, alongside: null as number | null } : null,
+    leftOut?.ck.items.length ? { key: 'left', ck: leftOut.ck, label: `${leftOut.count} left-out cards`, planTotal: null, alongside: leftOut.planTotal } : null,
+  ].filter((x): x is NonNullable<typeof x> => !!x);
+  if (!parts.length) return null;
+  const notSold = parts.reduce((n, x) => n + x.ck.missing.reduce((m, c) => m + c.missing, 0), 0);
   return (
     <section className={cx(panel, 'rounded-xl')}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-        <div className="font-semibold">{title}</div>
-        <div className="text-xl font-bold tabnum">{money(ck.totalNzd)}</div>
-        <div className="text-xs text-slate-500 tabnum">
-          cards {usd(ck.subtotalUsd)} + shipping {usd(ck.shippingUsd)} = {usd(ck.totalUsd)} at {ck.usdToNzd.toFixed(4)} NZD/USD
-          {ck.gstNzd > 0 && <>, + {money(ck.gstNzd)} GST</>}
-        </div>
-        {diff !== null && diff !== 0 && (
-          <div className={cx('text-sm tabnum', diff < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
-            {money(Math.abs(diff))} {diff < 0 ? 'less' : 'more'} than the selected Plan
-          </div>
-        )}
-        {alongside !== null && !ck.missing.length && (
-          <div className="text-sm text-slate-500 tabnum">
-            {money(alongside)} Plan + {money(ck.totalNzd)} = <span className="font-semibold text-slate-900 dark:text-slate-100">{money(Math.round((alongside + ck.totalNzd) * 100) / 100)}</span> for the whole list
-          </div>
-        )}
-        <Button variant="link" className="ml-auto text-sm" onClick={() => setOpen(!open)}>{open ? 'hide cards' : 'show cards'}</Button>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3">
+        <div className="font-semibold">Compare: CardKingdom (USA)</div>
+        {parts.map(x => {
+          // A CardKingdom total that leaves cards out isn't comparable with the Plan's, so no "less/more" then.
+          const diff = x.planTotal === null || x.ck.missing.length ? null : Math.round((x.ck.totalNzd - x.planTotal) * 100) / 100;
+          const whole = x.alongside !== null && !x.ck.missing.length ? Math.round((x.alongside + x.ck.totalNzd) * 100) / 100 : null;
+          return (
+            <div key={x.key} className="flex items-baseline gap-2">
+              {parts.length > 1 && <span className="text-xs text-slate-500">{x.label}</span>}
+              <span className="text-xl font-bold tabnum">{money(x.ck.totalNzd)}</span>
+              {diff !== null && diff !== 0 && (
+                <span className={cx('text-sm tabnum', diff < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
+                  {money(Math.abs(diff))} {diff < 0 ? 'less' : 'more'} than the Plan
+                </span>
+              )}
+              {whole !== null && <span className="text-sm text-slate-500 tabnum">Plan + this = <span className="font-semibold text-slate-900 dark:text-slate-100">{money(whole)}</span></span>}
+            </div>
+          );
+        })}
+        {notSold > 0 && <Tag tone="warn">{notSold} not sold there</Tag>}
+        <Button variant="link" className="ml-auto text-sm" onClick={() => setOpen(!open)}>{open ? 'hide' : split ? 'details & split' : 'details'}</Button>
       </div>
-      {ck.missing.length > 0 && (
-        <div className="px-4 pb-2 text-xs text-amber-700 dark:text-amber-400">
-          Not available at CardKingdom: {ck.missing.map(m => `${m.missing}× ${m.name}`).join(', ')}. Its total leaves these out, so it isn't compared with the Plan.
+      {open && parts.map(x => (
+        <div key={x.key} className="border-t border-slate-200 dark:border-slate-800">
+          <div className="px-4 pt-2 pb-1 text-xs text-slate-500 tabnum space-y-1">
+            <div>
+              {parts.length > 1 && <span className="font-semibold">{x.label}: </span>}
+              cards {usd(x.ck.subtotalUsd)} + shipping {usd(x.ck.shippingUsd)} = {usd(x.ck.totalUsd)} at {x.ck.usdToNzd.toFixed(4)} NZD/USD
+              {x.ck.gstNzd > 0 && <>, + {money(x.ck.gstNzd)} GST</>}
+              <Button variant="link" className="ml-3 text-xs" onClick={() => setCardsOpen({ ...cardsOpen, [x.key]: !cardsOpen[x.key] })}>
+                {cardsOpen[x.key] ? 'hide cards' : `show ${x.ck.items.length} card${x.ck.items.length > 1 ? 's' : ''}`}
+              </Button>
+            </div>
+            {x.ck.missing.length > 0 && (
+              <div className="text-amber-700 dark:text-amber-400">
+                Not available at CardKingdom: {x.ck.missing.map(m => `${m.missing}× ${m.name}`).join(', ')}. Its total leaves these out, so it isn't compared with the Plan.
+              </div>
+            )}
+          </div>
+          {cardsOpen[x.key] && <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {x.ck.items.map(i => (
+              <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="px-4 py-2 flex items-center gap-3 text-sm">
+                <span className="tabnum text-slate-500">{i.qty}×</span>
+                <span className="font-medium">{i.name}</span>
+                {i.finish !== 'nonfoil' && <Tag>Foil</Tag>}
+                <span className="text-xs text-slate-500 truncate flex-1">{i.label}</span>
+                <span className="tabnum text-slate-500">{usd(i.priceUsd)}</span>
+                <span className="tabnum">{money(i.priceNzd)}</span>
+                <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View ↗</a>
+              </li>
+            ))}
+          </ul>}
         </div>
-      )}
-      {open && (
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-200 dark:border-slate-800">
-          {ck.items.map(i => (
-            <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="px-4 py-2 flex items-center gap-3 text-sm">
-              <span className="tabnum text-slate-500">{i.qty}×</span>
-              <span className="font-medium">{i.name}</span>
-              {i.finish !== 'nonfoil' && <Tag>Foil</Tag>}
-              <span className="text-xs text-slate-500 truncate flex-1">{i.label}</span>
-              <span className="tabnum text-slate-500">{usd(i.priceUsd)}</span>
-              <span className="tabnum">{money(i.priceNzd)}</span>
-              <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View ↗</a>
-            </li>
-          ))}
-        </ul>
-      )}
+      ))}
+      {split && <div className={open ? '' : 'hidden'}>{split}</div>}
     </section>
   );
 }
@@ -633,13 +680,25 @@ function RungCard({ r, preferred, selected, onSelect, onTryLonger }: { r: RungVi
   );
 }
 
-function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRelax }: { ladder: LadderView; settings: Settings; onSettings: (p: Partial<Settings>) => void; onSearchAgain: () => void; onUnlock: (ids: string[]) => void; onRelax: (ids: string[]) => void }) {
+function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRelax, extra = [] }: { extra?: { key: string; label: string; node: ReactNode }[]; ladder: LadderView; settings: Settings; onSettings: (p: Partial<Settings>) => void; onSearchAgain: () => void; onUnlock: (ids: string[]) => void; onRelax: (ids: string[]) => void }) {
   const [copied, setCopied] = useState(false);
   const troubled = ladder.sources.filter(s => s.status !== 'ok' && s.status !== 'off');
   const skipped = ladder.sources.filter(s => s.status === 'ok' && s.notSearched.length > 0);
   const allFailed = ladder.sources.filter(s => s.status !== 'off').every(s => s.status !== 'ok') && ladder.rungs.length === 0;
+  const notFoundCount = ladder.notFound.reduce((n, x) => n + x.missing, 0);
+  const summary = [
+    troubled.length + skipped.length > 0 && `${troubled.length + skipped.length} Source problem${troubled.length + skipped.length > 1 ? 's' : ''}`,
+    notFoundCount > 0 && `${notFoundCount} Not Found`,
+    ladder.unrecognised.length > 0 && `${ladder.unrecognised.length} not recognised`,
+    ladder.skippedBasics.length > 0 && 'basic lands skipped',
+    ladder.unidentified.length > 0 && `${ladder.unidentified.length} unmatched Listing${ladder.unidentified.length > 1 ? 's' : ''}`,
+    settings.useListPrintings && "using your list's Printings",
+    ...extra.map(e => e.label),
+  ].filter((x): x is string => !!x);
   return (
     <div className="space-y-2">
+      {allFailed && <Notice tone="bad">No Source could be searched, so there's no Plan this time. Check your internet connection and try again.</Notice>}
+      <HeadsUp summary={summary} urgent={troubled.length > 0 || notFoundCount > 0 || ladder.unrecognised.length > 0}>
       {skipped.map(s => (
         <Notice key={s.source} tone="info">
           {s.name} had a server error on {s.notSearched.length} card{s.notSearched.length > 1 ? 's' : ''}, so {s.notSearched.length > 1 ? 'they were' : 'it was'} only
@@ -665,7 +724,6 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRela
           </div>
         </Notice>
       ))}
-      {allFailed && <Notice tone="bad">No Source could be searched, so there's no Plan this time. Check your internet connection and try again.</Notice>}
       {ladder.notFound.length > 0 && (
         <CardList
           tone="bad"
@@ -682,7 +740,7 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRela
             ].filter(Boolean).join(' · '),
             actions: [
               ...(n.locked ? [{ label: 'locked to one printing: allow any printing', onClick: () => onUnlock(n.lineIds) }] : []),
-              ...(n.waivable ? [{ label: "Don't exclude this card", onClick: () => onRelax(n.lineIds) }] : []),
+              ...(isWaivable(n) ? [{ label: "Don't exclude this card", onClick: () => onRelax(n.lineIds) }] : []),
             ],
           }))}
         />
@@ -695,6 +753,65 @@ function Notices({ ladder, settings, onSettings, onSearchAgain, onUnlock, onRela
       )}
       {ladder.unidentified.length > 0 && <Unidentified listings={ladder.unidentified} />}
       {settings.useListPrintings && <Notice tone="info">Using the Printings from your list. <Button variant="link" onClick={() => onSettings({ useListPrintings: false })}>Stop</Button></Notice>}
+      {extra.map(e => <div key={e.key}>{e.node}</div>)}
+      </HeadsUp>
+    </div>
+  );
+}
+
+/** Everything the buyer has overridden for this Plan, in one place, each with a way to undo it. */
+function OverridesBar({ cards, choices, settings, onUndoRelax, onUnlock, onUnpin, onSettings }: {
+  cards: LadderView['cards']; choices: PlanChoices; settings: Settings;
+  onUndoRelax: (lineIds: string[]) => void; onUnlock: (lineIds: string[]) => void; onUnpin: (keys: string[]) => void; onSettings: (p: Partial<Settings>) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const chips: { key: string; kind: string; text: string; undo: () => void; undoLabel: string }[] = [];
+  for (const c of cards) {
+    if (c.lineIds.some(id => choices.relaxed?.[id])) chips.push({ key: `relax:${c.buyKey}`, kind: "Don't exclude", text: c.name, undo: () => onUndoRelax(c.lineIds), undoLabel: 'Exclude again' });
+    if (c.lineIds.some(id => choices.locks[id])) chips.push({ key: `lock:${c.buyKey}`, kind: 'Locked to one Printing', text: c.name, undo: () => onUnlock(c.lineIds), undoLabel: 'Allow any Printing' });
+  }
+  // "Move all here" can pin dozens of cards, so a long list collapses into one chip.
+  const pinned = cards.filter(c => choices.pins?.[c.buyKey]);
+  if (pinned.length > 4) chips.push({ key: 'pins', kind: 'Pinned to Stores', text: `${pinned.length} cards`, undo: () => onUnpin(pinned.map(c => c.buyKey)), undoLabel: 'Unpin all' });
+  else for (const c of pinned) chips.push({ key: `pin:${c.buyKey}`, kind: 'Pinned to a Store', text: c.name, undo: () => onUnpin([c.buyKey]), undoLabel: 'Unpin' });
+  for (const [id, label] of Object.entries(settings.blockedPrintings)) {
+    chips.push({ key: `block:${id}`, kind: "Don't use this Printing", text: label, undoLabel: 'Allow again', undo: () => { const { [id]: _gone, ...rest } = settings.blockedPrintings; onSettings({ blockedPrintings: rest }); } });
+  }
+  for (const [id, label] of Object.entries(settings.blockedListings)) {
+    chips.push({ key: `listing:${id}`, kind: "Don't use this Listing", text: label, undoLabel: 'Allow again', undo: () => { const { [id]: _gone, ...rest } = settings.blockedListings; onSettings({ blockedListings: rest }); } });
+  }
+  if (!chips.length) return null;
+  return (
+    <section className={cx(panel, 'rounded-xl px-4 py-3')} aria-label="Your overrides">
+      <button type="button" className="w-full flex items-center justify-between gap-2 text-left" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="font-semibold text-sm">Your overrides ({chips.length})</span>
+        <span className="text-xs text-slate-500 whitespace-nowrap">{open ? 'hide ▴' : 'show ▾'}</span>
+      </button>
+      {open && <ul className="flex flex-wrap gap-2 mt-2">
+        {chips.map(c => (
+          <li key={c.key} className="inline-flex items-center gap-2 rounded-full border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 pl-3 pr-1 py-0.5 text-xs">
+            <span><span className="text-slate-500">{c.kind}:</span> <span className="font-medium">{c.text}</span></span>
+            <Button variant="link" className="text-xs px-1" onClick={c.undo}>{c.undoLabel}</Button>
+          </li>
+        ))}
+      </ul>}
+    </section>
+  );
+}
+
+/** Every notice behind one line, so the Plan isn't pushed down the page; opens to the details. */
+function HeadsUp({ summary, urgent, children }: { summary: string[]; urgent: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  if (!summary.length) return null;
+  return (
+    <div className={cx('border rounded-lg text-sm', urgent
+      ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200'
+      : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-300')}>
+      <button type="button" className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span><span className="font-medium">Heads up ({summary.length})</span> · {summary.join(' · ')}</span>
+        <span className="text-xs opacity-80 whitespace-nowrap">{open ? 'hide ▴' : 'show ▾'}</span>
+      </button>
+      {open && <div className="px-3 pb-3 space-y-2">{children}</div>}
     </div>
   );
 }
@@ -728,9 +845,9 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onBlock, onExclude }: {
+function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onExclude }: {
   onExclude: () => void; onPinAll: (buyKeys: string[], storeId: string) => void; qtyOf: Map<string, number>;
-  planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onBlock: PrintingActions['onBlock'];
+  planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing'];
   store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -786,8 +903,8 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
             <li key={i.listingId} className="px-4 py-2">
               <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (
-                <PrintingGrid runId={runId} lineId={i.lineIds[0]} planStoreIds={planStoreIds} need={qtyOf.get(i.buyKey) ?? i.qty} current={s.items.filter(x => x.buyKey === i.buyKey).map(x => ({ storeId: s.id, printingId: x.printing?.id ?? null, finish: x.finish }))} onBlock={onBlock}
-                  onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} onBuyFrom={(lock, storeId) => { onBuyFrom(i, lock, storeId); setOpen(null); }} />
+                <PrintingGrid runId={runId} lineId={i.lineIds[0]} planStoreIds={planStoreIds} need={qtyOf.get(i.buyKey) ?? i.qty} current={s.items.filter(x => x.buyKey === i.buyKey).map(x => ({ storeId: s.id, printingId: x.printing?.id ?? null, finish: x.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
+                  onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} onBuyFrom={(lock, storeId) => { onBuyFrom(i, lock, storeId); setOpen(null); }} onPinStore={storeId => { onPinStore(i, storeId); setOpen(null); }} />
               )}
             </li>
           ))}
@@ -882,10 +999,14 @@ interface PrintingActions {
   onLock: (lock: Lock | null) => void;
   /** Lock the Printing and pin the line to a Store in one go. */
   onBuyFrom: (lock: Lock, storeId: string) => void;
+  /** Pin the line to a Store without choosing a Printing (for a Listing whose Printing isn't known). */
+  onPinStore: (storeId: string) => void;
   onBlock: (printing: PrintingView, blocked: boolean, cardName: string) => void;
+  /** Never use one Listing whose Printing isn't known (or use it again). */
+  onBlockListing: (listing: UnconfirmedListingView, blocked: boolean, cardName: string) => void;
 }
 
-function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBuyFrom, onBlock }: { runId: string; lineId: string } & PrintingActions) {
+function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBuyFrom, onPinStore, onBlock, onBlockListing }: { runId: string; lineId: string } & PrintingActions) {
   const [data, setData] = useState<PrintingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [blockedHere, setBlockedHere] = useState<Record<string, boolean>>({});
@@ -926,7 +1047,7 @@ function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBu
                   {[...offers].sort((a, b) => Number(planStoreIds.has(b.storeId)) - Number(planStoreIds.has(a.storeId)) || a.price - b.price).map(x => (
                     <li key={`${x.storeId}:${x.url}`} className="flex items-center gap-1">
                       <span className="min-w-0 flex-1 truncate" title={x.storeName}>
-                        {planStoreIds.has(x.storeId) && <span title="This Store is already in your Plan" className="text-emerald-600 dark:text-emerald-400">● </span>}
+                        {planStoreIds.has(x.storeId) && <span title="This Store is in your Plan or is one of your preferred Stores" className="text-emerald-600 dark:text-emerald-400">● </span>}
                         {x.storeName}
                         {x.qty < need && <span className="text-amber-600 dark:text-amber-400" title={`Only ${x.qty} in stock; you need ${need}`}> ({x.qty} left)</span>}
                       </span>
@@ -954,16 +1075,21 @@ function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBu
       </div>
       {unconfirmed.length > 0 && (
         <div className={data.options.length ? 'mt-4' : ''}>
-          {data.options.length > 0 && <p className="mb-2 text-xs text-slate-500">Also in stock, but the Printing isn't stated (go by the Store's picture; these can't be chosen):</p>}
+          {data.options.length > 0 && <p className="mb-2 text-xs text-slate-500">Also in stock, but the Printing isn't stated (go by the Store's picture, then buy from that Store):</p>}
           <div className="flex gap-2 overflow-x-auto pb-1">
             {unconfirmed.map(u => (
-              <a key={`${u.storeId}:${u.url}`} href={u.url} target="_blank" rel="noreferrer" title={`${u.title} · ${u.storeName}`}
-                className="shrink-0 w-[118px] rounded-lg border border-slate-200 dark:border-slate-700 p-1.5 text-xs hover:border-indigo-400">
-                <CardImage src={u.image} alt={u.title} className="w-full aspect-[5/7] rounded object-cover" />
+              <div key={`${u.storeId}:${u.url}`} title={`${u.title} · ${u.storeName}`}
+                className={cx('shrink-0 w-[118px] rounded-lg border border-slate-200 dark:border-slate-700 p-1.5 text-xs flex flex-col', u.blocked && 'opacity-60')}>
+                <a href={u.url} target="_blank" rel="noreferrer" className="hover:opacity-80">
+                  <CardImage src={u.image} alt={u.title} className="w-full aspect-[5/7] rounded object-cover" />
+                </a>
                 <div className="mt-1 flex items-baseline justify-between"><span className="tabnum font-semibold text-sm">{money(u.price)}</span><span className="text-slate-500 tabnum">{u.qty}×</span></div>
                 <div className="truncate text-slate-600 dark:text-slate-300">{u.storeName}</div>
                 <div className="text-slate-500">{u.finish !== 'nonfoil' ? 'Foil · ' : ''}{u.condition ?? 'cond. not stated'}</div>
-              </a>
+                <Button className="mt-1 w-full text-[11px] py-0.5" disabled={u.blocked || u.qty < need} title={u.qty < need ? `${u.storeName} has ${u.qty}; you need ${need}` : `Buy this card from ${u.storeName}, whichever Printing they send`} onClick={() => onPinStore(u.storeId)}>Buy here</Button>
+                <Button variant="link" className="w-full text-[11px]" title={u.blocked ? 'Allow this Listing to be picked again.' : "Never pick this Listing, for example when its picture shows a Printing you don't want. Saved in your overrides."}
+                  onClick={() => onBlockListing(u, !u.blocked, data.name)}>{u.blocked ? 'Use this Listing again' : '🚫 Never use this Listing'}</Button>
+              </div>
             ))}
           </div>
         </div>
@@ -975,7 +1101,7 @@ function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBu
 
 function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; settings: Settings; onSettings: (p: Partial<Settings>) => void }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(s.postage || settings.defaultPostage.tracked));
+  const [value, setValue] = useState(String(s.postageKind === 'pickup' ? s.postage : s.postage || settings.defaultPostage.tracked));
   const override = settings.postageOverrides[s.id];
   const postageLabel = s.preferred ? 'Collect' : s.postageKind === 'pickup' ? 'Pickup' : `Postage (${settings.postageType})`;
   return (
@@ -985,8 +1111,8 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
         <span className="whitespace-nowrap">
           {postageLabel}
           {s.postageEstimated && <Button variant="link" className="ml-1 text-xs text-amber-600 dark:text-amber-400" title="This Store doesn't publish postage; click to enter what it charges you" onClick={() => setEditing(true)}>est.</Button>}
-          {override !== undefined && s.postageKind !== 'pickup' && <Button variant="link" className="ml-1 text-xs" title="Your price for this Store" onClick={() => setEditing(true)}>yours</Button>}
-          {override === undefined && !s.postageEstimated && s.postageKind === 'postage' && <Button variant="link" className="ml-1 text-xs" title="Enter what this Store really charges you" onClick={() => setEditing(true)}>edit</Button>}
+          {override !== undefined && <Button variant="link" className="ml-1 text-xs" title="Your price for this Store" onClick={() => setEditing(true)}>yours</Button>}
+          {override === undefined && !s.postageEstimated && s.postageKind !== 'free' && <Button variant="link" className="ml-1 text-xs" title="Enter what this Store really charges you" onClick={() => setEditing(true)}>edit</Button>}
         </span>
         <span>{s.postageKind === 'free' ? 'Free' : money(s.postage)}</span>
       </div>
@@ -997,7 +1123,7 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
           <Button variant="primary" className="text-xs py-0.5" type="submit">Save</Button>
           <Button variant="ghost" className="text-xs py-0.5" onClick={() => setEditing(false)}>Cancel</Button>
           {override !== undefined && (
-            <Button variant="link" className="text-xs" title="Go back to the Store's usual postage" onClick={() => {
+            <Button variant="link" className="text-xs" title="Go back to the Store's usual price" onClick={() => {
               const { [s.id]: _gone, ...rest } = settings.postageOverrides;
               onSettings({ postageOverrides: rest });
               setEditing(false);
@@ -1036,13 +1162,14 @@ function excludedNote(n: NotFoundView, settings: Settings): string {
     foil: 'foil (foils are off)',
     'non-tournament': 'not tournament legal',
     'blocked-printing': 'on your never-buy Printings list',
+    'blocked-listing': 'on your never-buy Listings list',
   };
   const parts = (Object.entries(n.excluded) as [Exclusion, number][]).sort((a, b) => b[1] - a[1]).map(([why, count]) => `${count} ${reasons[why]}`);
   return parts.length ? `found but left out: ${parts.join(', ')}` : '';
 }
 
 /** A collapsible list of cards with their images, for Not Found and for cards a Short Plan leaves out. */
-function CardList({ title, note, cards, tone }: { title: string; note?: string; cards: CardListItem[]; tone: 'bad' | 'warn' }) {
+function CardList({ title, note, cards, tone, bulk }: { title: string; note?: string; cards: CardListItem[]; tone: 'bad' | 'warn'; bulk?: { label: string; onClick: () => void } }) {
   const [open, setOpen] = useState(false);
   const toneClass = tone === 'bad'
     ? 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/50 dark:border-rose-900 dark:text-rose-200'
@@ -1056,17 +1183,22 @@ function CardList({ title, note, cards, tone }: { title: string; note?: string; 
       {!open && <div className="px-3 pb-2 -mt-1 text-xs opacity-80 truncate">{cards.map(c => c.name).join(', ')}</div>}
       {open && (
         <div className="px-3 pb-3">
-          {note && <p className="text-xs opacity-80 mb-2">{note}</p>}
+          {(note || bulk) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              {note && <p className="text-xs opacity-80">{note}</p>}
+              {bulk && <Button className="text-xs py-1" onClick={bulk.onClick}>{bulk.label}</Button>}
+            </div>
+          )}
           <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-3">
             {cards.map(c => (
-              <div key={c.key} className="text-xs">
+              <div key={c.key} className="text-xs flex flex-col">
                 <div className="relative">
                   <CardImage src={c.image} alt={c.name} className="w-full aspect-[5/7] rounded-lg" />
                   {c.qty > 1 && <span className="absolute top-1 left-1 bg-black/75 text-white font-bold rounded px-1.5">×{c.qty}</span>}
                 </div>
                 <div className="mt-1 font-medium leading-tight">{c.name}</div>
                 {c.note && <div className="opacity-80">{c.note}</div>}
-                {c.actions?.map(a => <Button key={a.label} variant="link" className="block text-xs" onClick={a.onClick}>{a.label}</Button>)}
+                {c.actions?.map(a => <Button key={a.label} className="w-full mt-2 text-xs py-1 leading-tight" onClick={a.onClick}>{a.label}</Button>)}
               </div>
             ))}
           </div>

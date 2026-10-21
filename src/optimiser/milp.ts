@@ -110,7 +110,7 @@ async function runModel(p: Problem, mode: ModelMode, k: number, timeLimitS: numb
   const highs = await getHighs();
   const model = highs.createModel({ format: 'lp', data: buildLp(p, mode, exclude) });
   try {
-    model.options.set({ output_flag: false, time_limit: timeLimitS, mip_rel_gap: 0.005, presolve: 'on' });
+    model.options.set({ output_flag: false, time_limit: timeLimitS, mip_rel_gap: mode.kind === 'cover' ? 0 : 0.005, presolve: 'on' });
     if (paidStoreIds(p).length) model.changeRowBounds(model.getRowByName('rung'), -Infinity, k);
     if (start) {
       const n = model.getDimensions().numCols;

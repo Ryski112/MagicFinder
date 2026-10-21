@@ -145,6 +145,14 @@ export function PlanStep(p: Props) {
               cards={rung.short.leftOut.map(l => ({ key: l.buyKey, name: l.name, qty: l.missing, image: l.image }))}
             />
           )}
+          {rung.short?.cardKingdom && (
+            <CardKingdomPanel
+              ck={rung.short.cardKingdom}
+              planTotal={null}
+              title={`The ${rung.short.wanted - rung.short.covered} left-out cards at CardKingdom`}
+              alongside={rung.total}
+            />
+          )}
           {removed.length > 0 && (
             <div className="text-sm text-slate-600 dark:text-slate-300">
               Removed from your list:{' '}
@@ -274,7 +282,165 @@ function CardsView({ stores, leftOut, notFound, offers, pins, onPin, onRemove }:
 
 const usd = (n: number) => `US$${n.toFixed(2)}`;
 
-function CardKingdomPanel({ ck, planTotal }: { ck: CardKingdomView; planTotal: number | null }) {
+/** Moves the dearest cards to CardKingdom one at a time and totals every step, so the cut-off can be picked by eye. */
+function SweepTable({ runId, planId, k, onTakeOut }: { runId: string; planId: number; k: number; onTakeOut: (cards: { name: string; lineIds: string[] }[]) => void }) {
+  const [state, setState] = useState<{ planId: number; k: number; busy?: boolean; result?: SweepView; error?: string } | null>(null);
+  const mine = state && state.planId === planId && state.k === k ? state : null;
+  const run = async () => {
+    setState({ planId, k, busy: true });
+    try {
+      setState({ planId, k, result: await api.sweep(runId, k) });
+    } catch (e) {
+      setState({ planId, k, error: (e as Error).message });
+    }
+  };
+  const r = mine?.result;
+  const base = r?.points[0]?.n === 0 ? r.points[0].total : null;
+  const worst = r ? Math.max(...r.points.map(x => x.total)) : 0;
+  const best = r ? r.points[r.best] : null;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button disabled={mine?.busy} onClick={run}>{mine?.busy ? 'Comparing…' : r ? 'Compare again' : 'Compare by price, dearest first'}</Button>
+        <span className="text-xs text-slate-500">Moves your dearest cards to CardKingdom one at a time and totals each step, with the rest from the NZ Stores.</span>
+      </div>
+      {mine?.error && <Notice tone="warn">{mine.error}</Notice>}
+      {r && best && base !== null && (
+        <div className="space-y-2 text-sm">
+          <div>
+            {best.n === 0
+              ? <>Moving cards to CardKingdom never beats the NZ Stores alone ({money(base)}).</>
+              : <>Cheapest: move the dearest <span className="font-semibold">{best.n} card{best.n > 1 ? 's' : ''}</span> to CardKingdom for <span className="font-semibold tabnum">{money(best.total)}</span>, <span className="tabnum text-emerald-600 dark:text-emerald-400">{money(base - best.total)} less</span> than the NZ Stores alone ({money(base)}).</>}
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-xs tabnum">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900 text-slate-500">
+                <tr><th className="text-left p-1.5">Dearest cards at CardKingdom</th><th className="text-right p-1.5">CardKingdom</th><th className="text-right p-1.5">NZ Stores</th><th className="text-right p-1.5">Total</th><th className="p-1.5 w-40" aria-label="Compared with the others" /><th /></tr>
+              </thead>
+              <tbody>
+                {r.points.map((x, i) => (
+                  <tr key={x.n} className={cx('border-t border-slate-100 dark:border-slate-800', i === r.best && 'bg-emerald-50 dark:bg-emerald-950/30 font-semibold')}>
+                    <td className="p-1.5 truncate max-w-[16rem]" title={r.order.slice(0, x.n).map(o => o.name).join(', ')}>
+                      {x.n === 0 ? 'None: all NZ' : <>{x.n} · up to <span className="font-normal">{r.order[x.n - 1].name}</span></>}
+                    </td>
+                    <td className="p-1.5 text-right">{x.n ? money(x.ckTotal) : '—'}</td>
+                    <td className="p-1.5 text-right">{money(x.nzTotal)}{x.status === 'timed-out' && <span title="Ran out of time; might be a little lower"> ~</span>}</td>
+                    <td className="p-1.5 text-right">{money(x.total)}</td>
+                    <td className="p-1.5">
+                      <div className="h-2 rounded bg-slate-100 dark:bg-slate-800">
+                        <div className={cx('h-2 rounded', i === r.best ? 'bg-emerald-500' : 'bg-indigo-400')} style={{ width: `${Math.max(4, (x.total / worst) * 100)}%` }} />
+                      </div>
+                    </td>
+                    <td className="p-1.5 text-right">
+                      {x.n > 0 && <Button variant="link" className="text-xs" onClick={() => onTakeOut(r.order.slice(0, x.n).map(o => ({ name: o.name, lineIds: o.lineIds })))}>take out</Button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-xs text-slate-500">CardKingdom totals include US${r.shippingUsd.toFixed(2)} shipping once, and GST. "Take out" unticks those cards so the Plan is the NZ part; the CardKingdom panel lists them.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Works out which cards are better bought at CardKingdom (one shipping charge plus GST) and which from the NZ Stores. */
+function SplitPanel({ runId, planId, k, onTakeOut }: { runId: string; planId: number; k: number; onTakeOut: (cards: { name: string; lineIds: string[] }[]) => void }) {
+  const [state, setState] = useState<{ planId: number; k: number; busy?: boolean; result?: SplitView; error?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const mine = state && state.planId === planId && state.k === k ? state : null;
+  const run = async () => {
+    setState({ planId, k, busy: true });
+    try {
+      setState({ planId, k, result: await api.split(runId, k) });
+    } catch (e) {
+      setState({ planId, k, error: (e as Error).message });
+    }
+  };
+  const r = mine?.result;
+  const useful = !!r?.ck && r.saves >= 0.5;
+  const copy = async () => {
+    if (!r?.ck) return;
+    try {
+      await navigator.clipboard.writeText(r.ck.items.map(i => `${i.qty} ${i.name}`).join('\n'));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <section className={cx(panel, 'rounded-xl px-4 py-3 space-y-2')}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="font-semibold">Split between CardKingdom and the NZ Stores</div>
+        <span className="text-xs text-slate-500">Shipping is paid once at CardKingdom, so a few dear cards can be worth adding to one order.</span>
+        <Button className="ml-auto" disabled={mine?.busy} onClick={run}>{mine?.busy ? 'Working it out…' : r ? 'Work it out again' : 'Work out the best split'}</Button>
+      </div>
+      {mine?.error && <Notice tone="warn">{mine.error}</Notice>}
+      <SweepTable runId={runId} planId={planId} k={k} onTakeOut={onTakeOut} />
+      {r && (
+        <div className="space-y-2 text-sm">
+          {useful ? (
+            <div>
+              Buy <span className="font-semibold">{r.ck!.items.reduce((s, i) => s + i.qty, 0)} cards at CardKingdom</span> and the rest from the NZ Stores:{' '}
+              <span className="font-semibold tabnum">{money(r.split)}</span>, which is <span className="font-semibold tabnum text-emerald-600 dark:text-emerald-400">{money(r.saves)} less</span> than the NZ Stores alone ({money(r.nzOnly)})
+              {r.ckOnly !== null && <> and {money(r.ckOnly - r.split)} less than everything from CardKingdom ({money(r.ckOnly)})</>}.
+            </div>
+          ) : (
+            <div>No card is cheap enough at CardKingdom to make up for its shipping: stay with the NZ Plan at <span className="font-semibold tabnum">{money(r.nzOnly)}</span>
+              {r.ckOnly !== null && <> (everything from CardKingdom would be {money(r.ckOnly)})</>}.</div>
+          )}
+          {r.status === 'timed-out' && <div className="text-xs text-amber-700 dark:text-amber-400">This ran out of time, so a slightly better split may exist.</div>}
+          {useful && r.ck && (
+            <div className="grid md:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="font-medium mb-1">At CardKingdom · {money(r.ck.totalNzd)}</div>
+                <ul className="space-y-0.5">
+                  {r.ck.items.map(i => (
+                    <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="flex gap-2 tabnum">
+                      <span className="text-slate-500">{i.qty}×</span>
+                      <a href={i.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 truncate hover:underline" title={i.label}>{i.name}{i.finish !== 'nonfoil' && ' (foil)'}</a>
+                      <span>{money(i.priceNzd * i.qty)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-xs text-slate-500 mt-1 tabnum">
+                  cards {usd(r.ck.subtotalUsd)} + shipping {usd(r.ck.shippingUsd)}, converted, with GST where it applies
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="font-medium mb-1">From the NZ Stores · {money(r.nz.total)}</div>
+                <ul className="space-y-0.5">
+                  {r.nz.stores.map(s => (
+                    <li key={s.id} className="flex gap-2 tabnum">
+                      <span className="flex-1 min-w-0 truncate">{s.name}</span>
+                      <span className="text-slate-500">{s.cards} card{s.cards > 1 ? 's' : ''}</span>
+                      <span>{money(s.subtotal + s.postage)}</span>
+                    </li>
+                  ))}
+                  {!r.nz.stores.length && <li className="text-slate-500">Nothing: everything is cheaper at CardKingdom.</li>}
+                </ul>
+              </div>
+            </div>
+          )}
+          {useful && r.ck && (
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={copy}>{copied ? 'Copied' : 'Copy the CardKingdom list'}</Button>
+              <Button variant="accent" onClick={() => onTakeOut(r.ck!.items.map(i => ({ name: i.name, lineIds: i.lineIds })))}
+                title="Takes these cards off the Plan (they stay on your Want List, ticked off) so the Plan is the NZ part only. You can put them back.">
+                Take them out of the Plan
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CardKingdomPanel({ ck, planTotal, title = 'Compare: CardKingdom (USA)', alongside = null }: { ck: CardKingdomView; planTotal: number | null; title?: string; alongside?: number | null }) {
   const [open, setOpen] = useState(false);
   if (!ck.items.length) return null;
   // A CardKingdom total that leaves cards out isn't comparable with the Plan's, so no "less/more" then.
@@ -282,7 +448,7 @@ function CardKingdomPanel({ ck, planTotal }: { ck: CardKingdomView; planTotal: n
   return (
     <section className={cx(panel, 'rounded-xl')}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3">
-        <div className="font-semibold">Compare: CardKingdom (USA)</div>
+        <div className="font-semibold">{title}</div>
         <div className="text-xl font-bold tabnum">{money(ck.totalNzd)}</div>
         <div className="text-xs text-slate-500 tabnum">
           cards {usd(ck.subtotalUsd)} + shipping {usd(ck.shippingUsd)} = {usd(ck.totalUsd)} at {ck.usdToNzd.toFixed(4)} NZD/USD
@@ -291,6 +457,11 @@ function CardKingdomPanel({ ck, planTotal }: { ck: CardKingdomView; planTotal: n
         {diff !== null && diff !== 0 && (
           <div className={cx('text-sm tabnum', diff < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500')}>
             {money(Math.abs(diff))} {diff < 0 ? 'less' : 'more'} than the selected Plan
+          </div>
+        )}
+        {alongside !== null && !ck.missing.length && (
+          <div className="text-sm text-slate-500 tabnum">
+            {money(alongside)} Plan + {money(ck.totalNzd)} = <span className="font-semibold text-slate-900 dark:text-slate-100">{money(Math.round((alongside + ck.totalNzd) * 100) / 100)}</span> for the whole list
           </div>
         )}
         <Button variant="link" className="ml-auto text-sm" onClick={() => setOpen(!open)}>{open ? 'hide cards' : 'show cards'}</Button>

@@ -83,12 +83,14 @@ Notes:
 
 ### 3.3 CardKingdom comparison
 
-An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there and it never changes a Plan. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
+An optional comparison (off by default) prices the Want List at CardKingdom (USA) and flags NZ Listings more than 30% above it. It isn't a Source: nothing is bought there. It only changes a Plan if the buyer switches on "Ignore Listings over 30% above CardKingdom" (off by default), which drops flagged Listings, except where the remaining Listings couldn't cover the copies wanted. It uses two outside services, called only while the comparison is switched on, refreshed once a day, with the identifying User-Agent:
 
 - **CardKingdom's public price list**, `GET https://api.cardkingdom.com/api/v2/pricelist` (about 22 MB), saved to the user's data directory. Matched by Scryfall id. Planning never waits for it; the Plan's view is updated when it arrives.
 - **frankfurter.dev** for the USD→NZD rate, `GET https://api.frankfurter.dev/v1/latest?base=USD&symbols=NZD`, saved to the user's data directory, with 1.7 as the fallback.
 
-Totals add a flat shipping estimate and, by default, 15% NZ GST so they compare fairly with NZ prices. When CardKingdom lacks some cards, its total isn't compared with the Plan's.
+Totals add a flat shipping estimate and, by default, 15% NZ GST so they compare fairly with NZ prices. When CardKingdom lacks some cards, its total isn't compared with the Plan's. The shipping figure is a flat US$ amount the buyer sets (their own checkout is the best source: a 59-card order to Auckland by Asendia e-PAQ Plus was US$11.50), and GST is charged on cards and shipping together.
+
+**Split** (owner's change, 2026-10-20). "Work out the best split" on the Plan screen adds CardKingdom to the optimiser as one more Store: its prices are converted to NZD with GST, its postage is the shipping figure with GST (paid once, never waived), and it doesn't count toward the Store limit. It solves for the selected rung's Store count and reports the NZ-only Plan, everything-at-CardKingdom, and the split with the cards to buy at CardKingdom. "Take them out of the Plan" unticks those cards so the Plan becomes the NZ part; "Copy the CardKingdom list" copies them as a Want List. When no card repays the shipping it says to stay with the NZ Plan.
 
 ## 4. Want List input
 
@@ -138,8 +140,9 @@ The owner decided not to ask the Sources for permission ([Ask MtgSingles for per
 
 ### 5.2 MtgSingles
 - Plain HTTP: `GET https://api.mtgsingles.co.nz/MtgSingle?query=<name>&isExactMatch=true&tcgType=1&includeMarketplaces=false&sortOrder=2&page=N&pageSize=20&Country=1`, one request every 1.5 seconds (at 1/second Cloudflare starts answering 429 with `Retry-After: 10` after about 30 requests), with the identifying User-Agent. Cloudflare refuses (403) any request without `Referer: https://www.mtgsingles.co.nz/`; the User-Agent doesn't matter. No browser is needed.
+- `isExactMatch=true` (the website's "exact match" filter) matches the whole card name. Without it the query matches any title containing the text, so a name inside a set name ("Fracture" in "Reality Fracture") returns hundreds of unrelated Listings and, with paging capped, never reaches the card. A double-faced card is searched twice, by its front face and by its full name, because Stores title it either way. A Listing with an odd title (e.g. "Fracture |  (065)") isn't matched by it.
 - Paging: 20 results per page. Keep paging until fewer than 20 come back. A card with no Listings comes back as `204 No Content` with an empty body.
-- `isExactMatch=true` (the website's "exact match" filter) matches the whole card name. Without it the query matches any title containing the text, so a name inside a set name ("Fracture" in "Reality Fracture") returns hundreds of unrelated Listings and, with paging capped, never reaches the card. A double-faced card is searched twice, by its front face and by its full name, because Stores title it either way, and a name with accents is also searched without them. A Listing with an odd title (e.g. "Fracture |  (065)") isn't matched by it.
+- Don't use exact match. Normalise names ourselves, because double-faced card titles differ.
 - `includeMarketplaces=false`: Fetch sellers are handled by the Fetch Source.
 - There's no collector number or Store location. Location comes from the Store table. `features[]` gives treatment and `Non-English`. Prices are strings such as `"$1,345.99"`.
 - There's no stealth and no challenge-solving.

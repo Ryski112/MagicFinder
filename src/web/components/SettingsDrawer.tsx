@@ -171,6 +171,8 @@ export function SettingsDrawer({ open, onClose, settings, onChange, hosted = fal
             <span className="text-xs text-slate-500">A flat estimate; CardKingdom only quotes the real figure at checkout.</span>
           </label>
           <Switch checked={s.cardKingdom.addGst} onChange={v => onChange({ cardKingdom: { ...s.cardKingdom, addGst: v } })} label="Add 15% GST to CardKingdom prices" />
+          <Switch checked={s.cardKingdom.ignoreOver} onChange={v => onChange({ cardKingdom: { ...s.cardKingdom, ignoreOver: v } })} label="Ignore Listings over 30% above CardKingdom" />
+          <span className="block text-xs text-slate-500">Unless that would leave too few copies of a card.</span>
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 grid grid-cols-2 gap-3">

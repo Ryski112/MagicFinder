@@ -4,9 +4,10 @@ import { stream, streamSSE } from 'hono/streaming';
 import type { Catalogue } from '../catalogue/catalogue';
 import { CardSearchIndex } from '../catalogue/cardSearch';
 import type { CatalogueStore } from '../catalogue/updater';
+import type { StoreRecord } from '../core/stores';
 import { resolveWantList } from '../core/wantList';
 import type {
-  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, StartRunRequest, StatusResponse,
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, StartRunRequest, SplitView, StatusResponse, SweepView, StoreChoice,
 } from '../shared/api';
 import type { SourceId } from '../core/types';
 import { importArchidekt } from './archidekt';
@@ -186,6 +187,30 @@ export function createApp(d: AppDeps) {
     const { k } = await c.req.json<{ k: number }>();
     void run.tryLonger(k).catch(e => console.error(e));
     return c.json({ ok: true });
+  });
+
+  app.post('/api/runs/:id/runner-up', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    void run.runnerUp(k).catch(e => console.error(e));
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/runs/:id/split', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    const result = await run.split(k);
+    return 'error' in result ? c.json(result, 409) : c.json<SplitView>(result);
+  });
+
+  app.post('/api/runs/:id/sweep', async c => {
+    const run = d.runs.get(c.req.param('id'));
+    if (!run) return c.json({ error: 'Search again.' }, 404);
+    const { k } = await c.req.json<{ k: number }>();
+    const result = await run.sweep(k);
+    return 'error' in result ? c.json(result, 409) : c.json<SweepView>(result);
   });
 
   app.get('/api/runs/:id/printings/:lineId', c => {

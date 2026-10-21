@@ -1,6 +1,6 @@
 // Calls to the local MagicFinder server.
 import type {
-  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, Settings, StatusResponse,
+  ArchidektResponse, CardPrintingsResponse, CardSearchResponse, CartCheckEvent, CartCheckResponse, ParseResponse, PlanChoices, PrintingsResponse, RunEvent, RunStateResponse, Settings, SplitView, StatusResponse, SweepView, StoreChoice,
 } from '../shared/api';
 
 const BROWSER_KEY = 'magicfinder:browser';
@@ -75,6 +75,10 @@ export const api = {
   run: (runId: string) => runState(`/api/runs/${runId}`),
   /** Hosted mode: this browser's search, if it is still alive. */
   browserRun: () => runState(`/api/browsers/${browserId()}/run`),
+  stores: () => call<StoreChoice[]>('GET', '/api/stores'),
+  runnerUp: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/runner-up`, { k }),
+  sweep: (runId: string, k: number) => call<SweepView>('POST', `/api/runs/${runId}/sweep`, { k }),
+  split: (runId: string, k: number) => call<SplitView>('POST', `/api/runs/${runId}/split`, { k }),
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),
   printings: (runId: string, lineId: string) => call<PrintingsResponse>('GET', `/api/runs/${runId}/printings/${encodeURIComponent(lineId)}`),
   /** Runs the cart pre-check, reporting each card as it is checked. */

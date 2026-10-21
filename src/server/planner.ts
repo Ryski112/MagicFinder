@@ -50,10 +50,13 @@ export function buyerContext(s: Settings): BuyerContext {
 export function preparePlan(want: ResolvedWantList, search: SearchResult, choices: PlanChoices, ctx: PlanContext): Prepared {
   const buy = buyLines(want.lines, listChoices(choices, ctx.settings));
   const buyer = buyerContext(ctx.settings);
-  const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils };
+  const ck = ctx.cardKingdom && ctx.settings.cardKingdom.enabled && ctx.settings.cardKingdom.ignoreOver
+    ? { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst }
+    : null;
+  const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils, blockedPrintings: ctx.settings.blockedPrintings };
   const byOracle = new Map<string, Listing[]>();
   for (const l of search.listings) {
-    if (!l.oracleId) continue;
+    if (!l.oracleId || ctx.settings.excludedStores[ctx.directory.forListing(l).id]) continue;
     let list = byOracle.get(l.oracleId);
     if (!list) byOracle.set(l.oracleId, (list = []));
     list.push(l);
@@ -69,12 +72,14 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
   const searched = (oracleId: string) => search.sources.filter(s => s.status !== 'off' && !s.notSearched.includes(oracleId)).map(s => s.name);
 
   for (const line of buy) {
-    const eligible = applyPin(
-      (byOracle.get(line.oracleId) ?? []).filter(l => isEligible(l, line, ctx.catalogue, settings)),
+    const usable = (byOracle.get(line.oracleId) ?? []).filter(l => isEligible(l, line, ctx.catalogue, settings));
+    const pinned = applyPin(
+      usable,
       choices.pins?.[line.key],
       l => ctx.directory.forListing(l).id,
       line.quantity,
     );
+    const eligible = ck ? withoutOverpriced(pinned, line, ctx.catalogue, ck) : pinned;
     const available = eligible.reduce((s, l) => s + l.quantity, 0);
     const need = Math.min(line.quantity, available);
     if (need < line.quantity) {
@@ -94,6 +99,11 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
     problem.lines.push({ key: line.key, need });
     const lineOffers: { listing: Listing; store: StoreRecord }[] = [];
     offers.set(line.key, lineOffers);
+    // The Store a card is pinned to is the only one the Plan may use, but every Store's Listings stay visible.
+    for (const l of ck ? withoutOverpriced(usable, line, ctx.catalogue, ck) : usable) {
+      listings.set(l.id, l);
+      lineOffers.push({ listing: l, store: ctx.directory.forListing(l) });
+    }
     for (const l of eligible) {
       const rec = ctx.directory.forListing(l);
       let si = storeIndex.get(rec.id);
@@ -108,6 +118,15 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
     }
   }
   return { buy, problem: pruneDominated(problem), stores, listings, notFound, buyer, offers };
+}
+
+/**
+ * Drops Listings flagged as over CardKingdom's price. If the rest couldn't cover the line, the overpriced ones stay
+ * (all of them when nothing else matches), so a card is never reported Not Found just because it's dear.
+ */
+function withoutOverpriced(listings: Listing[], line: BuyLine, catalogue: Catalogue, ck: CardKingdomContext): Listing[] {
+  const fair = listings.filter(l => !overCardKingdom(l.price, cardKingdomUnitNzd(ck, catalogue, line.oracleId, l.finish)));
+  return fair.reduce((s, l) => s + l.quantity, 0) >= line.quantity ? fair : listings;
 }
 
 export function printingView(p: Printing, finish: Finish): PrintingView {
@@ -220,7 +239,11 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         const b = buyByKey.get(l.key)!;
         return missing > 0 ? [{ buyKey: l.key, name: b.name, missing, image: cardImage(catalogue, b.oracleId) }] : [];
       });
-      short = { covered: r.short.covered, wanted: r.short.wanted, leftOut };
+      const leftOutBuy = leftOut.map(l => ({ ...buyByKey.get(l.buyKey)!, quantity: l.missing }));
+      const leftOutCk = ck && leftOutBuy.length
+        ? compareAtCardKingdom(leftOutBuy, catalogue, ck, { allowFoils: settings.allowFoils, shippingUsd: settings.cardKingdom.shippingUsd })
+        : null;
+      short = { covered: r.short.covered, wanted: r.short.wanted, leftOut, cardKingdom: leftOutCk };
     }
     return {
       k: r.k, total: r.plan.total, cards: r.plan.cards, postage: r.plan.postage, status: r.status, mightSave: r.mightSave,

@@ -42,7 +42,13 @@ export interface Settings {
   sourceHealth: Record<SourceId, SourceHealth>;
   /** The "new version available" check: when it last ran, what it found, and a version the buyer dismissed. */
   updateCheck: { lastCheckedAt: string | null; latest: { version: string; url: string } | null; dismissed: string | null };
-  cardKingdom: { enabled: boolean; shippingUsd: number; addGst: boolean };
+  cardKingdom: {
+    enabled: boolean;
+    shippingUsd: number;
+    addGst: boolean;
+    /** Drop Listings more than 30% over CardKingdom's price, unless that would leave too few copies. */
+    ignoreOver: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -68,9 +74,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sourceHealth: {
     fetch: { blockedAt: null, consecutiveBlockedRuns: 0 },
     mtgsingles: { blockedAt: null, consecutiveBlockedRuns: 0 },
+    'mtgsingles-au': { blockedAt: null, consecutiveBlockedRuns: 0 },
   },
   updateCheck: { lastCheckedAt: null, latest: null, dismissed: null },
-  cardKingdom: { enabled: true, shippingUsd: 20, addGst: true },
+  cardKingdom: { enabled: true, shippingUsd: 20, addGst: true, ignoreOver: false },
 };
 
 /**

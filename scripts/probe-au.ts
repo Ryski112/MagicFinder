@@ -53,8 +53,9 @@ if (write) {
     MARKER,
     '# Written by `npm run probe-au` (weekly, by the "Australian Store check" Action). Edit by hand only to fix the script.',
     '# Ids are the ones MagicFinder gave these Stores before they were listed, so buyers\' exclusions still apply.',
-    '# ships_to_nz: true | false | null (checkout couldn\'t tell). postage is checkout\'s cheapest rate to Auckland, in NZD',
-    '# at that day\'s rate (the AUD price is in its name); without it the buyer\'s Australian postage guess applies.',
+    '# ships_to_nz: true | false | null (checkout couldn\'t tell). postage is checkout\'s cheapest rate to Auckland in the',
+    '# NZ market, in NZD (an AUD rate is converted at that day\'s rate; the quoted price is in its name). Without it the',
+    '# buyer\'s Australian postage guess applies.',
   ];
   writeFileSync(STORES, `${nzText}\n\n${header.join('\n')}\n\n${result.records.map(entry).join('\n\n')}\n`);
   console.log(`\nWrote ${result.records.length} Australian Stores to ${STORES}.`);

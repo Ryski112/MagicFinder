@@ -28,15 +28,15 @@ function shop(rates: { NZ: [number, unknown]; AU?: [number, unknown] }, opts: { 
   };
   return { f, calls };
 }
-const rate = (name: string, price: string) => ({ name, price });
+const rate = (name: string, price: string, currency = 'AUD') => ({ name, price, currency });
 
 describe('probeAuStore', () => {
   it('reads the cheapest delivery option to Auckland, leaving out pickup', async () => {
     const { f, calls } = shop({ NZ: [200, { shipping_rates: [rate('Express International', '60.00'), rate('Pickup from store', '0.00'), rate('Standard  International', '12.95')] }] });
     const p = await probeAuStore({ site: 'https://shop.example', productUrl: 'https://shop.example/collections/x/products/sol-ring?utm_source=a' }, { fetch: f });
-    expect(p).toMatchObject({ shipsToNz: true, rate: { name: 'Standard International', priceAud: 12.95 }, shopify: true, host: 'https://shop.example' });
-    // The Listing's own product, so no search; one cart, no Sydney check.
-    expect(calls).toEqual(['/products/sol-ring.js', '/cart/add.js', expect.stringMatching(/^\/cart\/shipping_rates\.json\?.*NZ/)]);
+    expect(p).toMatchObject({ shipsToNz: true, rate: { name: 'Standard International', price: 12.95, currency: 'AUD' }, shopify: true, host: 'https://shop.example' });
+    // The Listing's own product, so no search; one cart, in the NZ market; no Sydney check.
+    expect(calls).toEqual(['/products/sol-ring.js', '/cart/add.js?country=NZ', expect.stringMatching(/^\/cart\/shipping_rates\.json\?.*NZ/)]);
   });
 
   it('says no when checkout has no shipping zone for NZ', async () => {
@@ -47,7 +47,7 @@ describe('probeAuStore', () => {
   it('says no when checkout offers nothing for NZ but does for Sydney, asking each in a fresh cart', async () => {
     const { f, calls } = shop({ NZ: [200, { shipping_rates: [] }], AU: [200, { shipping_rates: [rate('AusPost', '8.50')] }] });
     expect(await probeAuStore({ site: 'https://shop.example' }, { fetch: f })).toMatchObject({ shipsToNz: false, rate: null });
-    expect(calls.filter(c => c === '/cart/add.js')).toHaveLength(2);
+    expect(calls.filter(c => c.startsWith('/cart/add.js'))).toEqual(['/cart/add.js?country=NZ', '/cart/add.js?country=AU']);
   });
 
   it("can't tell when checkout offers nothing for Sydney either", async () => {
@@ -67,7 +67,7 @@ describe('probeAuStore', () => {
   });
 });
 
-const ships = (priceAud: number): AuProbe => ({ shipsToNz: true, rate: { name: 'Standard', priceAud }, shopify: true, host: null, note: '' });
+const ships = (price: number, currency = 'AUD'): AuProbe => ({ shipsToNz: true, rate: { name: 'Standard', price, currency }, shopify: true, host: null, note: '' });
 const doesnt: AuProbe = { shipsToNz: false, rate: null, shopify: true, host: null, note: '' };
 
 describe('auRecord', () => {
@@ -76,6 +76,14 @@ describe('auRecord', () => {
     expect(r).toMatchObject({ id: 'mtgsingles:AU/CardHouse', source_keys: { mtgsingles: 'AU/CardHouse' }, site: 'https://cardhouse.com.au', country: 'AU', ships_to_nz: true, cart: 'shopify' });
     expect(r.postage).toEqual([{ name: 'Standard (AU$21.00)', tracked: null, price: 25.2, rural_surcharge: 0 }]);
     expect(auRecord({ key: 'AU/X', name: 'X', site: 'https://x.au' }, doesnt, 1.2, '2026-10-22').postage).toBeUndefined();
+  });
+
+  it('keeps an NZD rate as it is, and leaves postage unknown for any other currency', () => {
+    const at = (p: AuProbe) => auRecord({ key: 'AU/X', name: 'X', site: 'https://x.au' }, p, 1.2, '2026-10-22');
+    expect(at(ships(45, 'NZD')).postage).toEqual([{ name: 'Standard (NZ$45.00)', tracked: null, price: 45, rural_surcharge: 0 }]);
+    const usd = at(ships(26, 'USD'));
+    expect(usd.ships_to_nz).toBe(true);
+    expect(usd.postage).toBeUndefined();
   });
 });
 

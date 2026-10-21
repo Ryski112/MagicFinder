@@ -24,8 +24,8 @@ export interface SeenAuStore {
 export interface AuProbe {
   /** False only when checkout posts to Australia but offers nothing for NZ; null when the check couldn't tell. */
   shipsToNz: boolean | null;
-  /** The cheapest delivery option to Auckland, in AUD. */
-  rate: { name: string; priceAud: number } | null;
+  /** The cheapest delivery option to Auckland, in the currency checkout quoted it in. */
+  rate: { name: string; price: number; currency: string } | null;
   shopify: boolean;
   /** The host the shop's cart answers on (it can differ from the Listing links'). */
   host: string | null;
@@ -43,6 +43,8 @@ export const AU_STAPLES = [
   'Brainstorm', 'Dark Ritual', 'Cultivate', 'Evolving Wilds', 'Negate',
 ];
 
+// The cart is put in a market (?country=), because Shopify prices it in the visitor's currency: from NZ some shops
+// quote NZD, from GitHub's US runners USD. In the NZ market the rate is what an NZ buyer pays, in NZD or AUD.
 const SYDNEY = { 'shipping_address[country]': 'AU', 'shipping_address[zip]': '2000', 'shipping_address[province]': 'NSW', 'shipping_address[city]': 'Sydney' };
 const AUCKLAND = { 'shipping_address[country]': 'NZ', 'shipping_address[zip]': '1010', 'shipping_address[city]': 'Auckland' };
 const isPickup = (name: string) => /pick ?up|collect|in.store|local delivery/i.test(name);
@@ -105,7 +107,7 @@ export async function probeAuStore(store: { site: string; productUrl?: string },
 
   // A cart keeps the rates of the first address it was asked about, so each address gets a fresh cart.
   const rates = async (address: Record<string, string>) => {
-    const add = await get(`${host}/cart/add.js`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `id=${variant}&quantity=1` });
+    const add = await get(`${host}/cart/add.js?country=${address['shipping_address[country]']}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `id=${variant}&quantity=1` });
     if (!add.ok) return 'refused' as const;
     const cookie = add.headers.getSetCookie().map(c => c.split(';')[0]).join('; ');
     const res = await get(`${host}/cart/shipping_rates.json?${new URLSearchParams(address)}`, { headers: { Cookie: cookie } });
@@ -113,9 +115,9 @@ export async function probeAuStore(store: { site: string; productUrl?: string },
     // 422 "Country/region not supported": no shipping zone covers that country at all.
     if (res.status === 422 && body?.country) return 'unsupported' as const;
     if (!res.ok || !Array.isArray(body?.shipping_rates)) return null;
-    return (body.shipping_rates as { name: string; price: string }[])
-      .map(r => ({ name: r.name.replace(/\s+/g, ' ').trim(), priceAud: Number(r.price) }))
-      .filter(r => !isPickup(r.name) && Number.isFinite(r.priceAud));
+    return (body.shipping_rates as { name: string; price: string; currency?: string }[])
+      .map(r => ({ name: r.name.replace(/\s+/g, ' ').trim(), price: Number(r.price), currency: r.currency ?? 'AUD' }))
+      .filter(r => !isPickup(r.name) && Number.isFinite(r.price));
   };
   const nz = await rates(AUCKLAND);
   if (nz === 'refused') return unknown('cart refused the single', true, host);
@@ -127,8 +129,8 @@ export async function probeAuStore(store: { site: string; productUrl?: string },
     if (!Array.isArray(au) || !au.length) return unknown("checkout gave no rates for Australia either, so it can't tell", true, host);
     return { shipsToNz: false, rate: null, shopify, host, note: 'checkout offers nothing for NZ' };
   }
-  const rate = nz.sort((a, b) => a.priceAud - b.priceAud)[0];
-  return { shipsToNz: true, rate, shopify, host, note: `ships to NZ: ${rate.name}, AU$${rate.priceAud.toFixed(2)}` };
+  const rate = nz.sort((a, b) => a.price - b.price)[0];
+  return { shipsToNz: true, rate, shopify, host, note: `ships to NZ: ${rate.name}, ${money(rate)}` };
 }
 
 /** The Australian Stores in a Source's Listings for the staples, by MtgSingles key. Stops early (keeping what it found) if the Source fails. */
@@ -160,6 +162,9 @@ export async function discoverAuStores(source: Source, cards = AU_STAPLES, signa
 /** The Store-table entry for an Australian Store. Its id is the one MagicFinder gave it before it was listed, so buyers' exclusions still apply. */
 export function auRecord(s: { key: string; name: string; site: string }, probe: AuProbe, audToNzd: number, today: string): StoreRecord {
   const site = probe.host ?? new URL(s.site).origin;
+  // Another currency (the market didn't take) leaves the postage unknown, so the buyer's guess applies.
+  const r = probe.rate;
+  const nzd = !r ? null : r.currency === 'NZD' ? r.price : r.currency === 'AUD' ? Math.round(r.price * audToNzd * 100) / 100 : null;
   return {
     id: `mtgsingles:${s.key}`,
     name: s.name,
@@ -167,8 +172,8 @@ export function auRecord(s: { key: string; name: string; site: string }, probe: 
     site,
     location: { city: null, region: null },
     pickup: { available: false, fee: 0 },
-    ...(probe.rate && {
-      postage: [{ name: `${probe.rate.name} (AU$${probe.rate.priceAud.toFixed(2)})`, tracked: null, price: Math.round(probe.rate.priceAud * audToNzd * 100) / 100, rural_surcharge: 0 }],
+    ...(nzd !== null && {
+      postage: [{ name: `${probe.rate!.name} (${money(probe.rate!)})`, tracked: null, price: nzd, rural_surcharge: 0 }],
     }),
     cart: probe.shopify ? 'shopify' : 'open-listings',
     country: 'AU',
@@ -231,6 +236,8 @@ export async function checkAuStores(
   records.sort((a, b) => a.name.localeCompare(b.name));
   return { records, changes, failed };
 }
+
+const money = (r: { price: number; currency: string }) => `${r.currency === 'AUD' ? 'AU$' : r.currency === 'NZD' ? 'NZ$' : `${r.currency} `}${r.price.toFixed(2)}`;
 
 const describe = (r: StoreRecord) =>
   r.ships_to_nz === true ? `ships to NZ${r.postage?.[0] ? ` (${r.postage[0].name})` : ''}` : r.ships_to_nz === false ? "doesn't ship to NZ" : 'unknown';

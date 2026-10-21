@@ -81,7 +81,7 @@ Notes:
 - Shopify Stores' postage comes from what their checkout actually offers (`npm run probe-postage` puts one cheap single in a throwaway cart and reads `/cart/shipping_rates.json` for an Auckland, Wellington and Christchurch address), because policy pages can disagree with checkout. Those entries have `confidence: checkout`.
 - A monthly change-detection job hashes each NZ Store's policy page, `meta.json` and checkout postage, and opens an issue for a human to update the table when something changes.
 - **Australian Stores** (#61) are listed at the end of the table with `country: AU` and `ships_to_nz: true | false | null`. Their ids are the ones MagicFinder gave them before they were listed (`mtgsingles:AU/<Key>`), so buyers' exclusions still apply. `npm run probe-au` finds them by searching MtgSingles AU for a few staples. It then puts an in-stock single in a throwaway cart (a fresh cart per address, because a cart keeps the rates of the first address it was asked about) and asks `/cart/shipping_rates.json`:
-  - Rates for Auckland: ships, and the cheapest becomes the Store's postage, converted to NZD at that day's rate.
+  - Rates for Auckland: ships, and the cheapest becomes the Store's postage. The cart is put in the NZ market (`?country=NZ`), because Shopify quotes in the visitor's currency (some shops quote NZD from NZ, and GitHub's US runners get USD). An NZD rate is used as it is, an AUD rate is converted at that day's rate, and any other currency leaves the postage unknown.
   - "Country/region not supported": doesn't ship.
   - No rates for Auckland: doesn't ship, but only if a Sydney address does get rates.
   - Anything else: `null`.

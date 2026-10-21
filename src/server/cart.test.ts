@@ -66,4 +66,26 @@ describe('checkShopifyCart', () => {
     expect(r.lines[0].status).toBe('unconfirmed');
     expect(r.cartUrl).toBeNull();
   });
+
+  it('checks an Australian Store in AUD and reports the price in NZD', async () => {
+    // A$2.10 at 1.1 NZD per AUD is NZ$2.31; the shop now asks A$3.00.
+    const au = (id: string, aud: string, nzd: number, handle: string) =>
+      listing({ id, source: 'mtgsingles-au', price: nzd, url: `https://inngames.com.au/collections/mtg-singles-instock/products/${handle}`, extra: { rawCondition: 'NM / SP', priceAud: aud } });
+    const r = await checkShopifyCart('mtgsingles:AU/InnGames', 'Inn Games', [
+      { listing: au('a', '2.1', 2.31, 'same'), qty: 1, name: 'Sol Ring' },
+      { listing: au('b', '2.1', 2.31, 'dearer'), qty: 2, name: 'Counterspell' },
+    ], async url => ({ status: 200, body: { variants: [
+      { id: url.includes('dearer') ? 2 : 1, title: 'Near Mint', price: url.includes('dearer') ? 300 : 210, available: true, sku: 'C21-263-EN-NF-1' },
+      { id: 9, title: 'Lightly Played', price: 190, available: true, sku: 'C21-263-EN-NF-2' },
+    ] } }), noWait);
+    expect(r.lines.map(l => [l.status, l.variantId])).toEqual([['ok', '1'], ['price-changed', '2']]);
+    expect(r.lines[1].currentPrice).toBe(3.3);
+    expect(r.cartUrl).toBe('https://inngames.com.au/cart/1:1,2:2?storefront=true');
+  });
+
+  it("builds the cart on the domain the Store's shop redirects to", async () => {
+    const r = await checkShopifyCart('a52', 'Area 52', [{ listing: listing({ price: 5, url: 'https://singles.area52.com.au/collections/x/products/sol-ring' }), qty: 1, name: 'Sol Ring' }],
+      async () => ({ status: 200, redirectedTo: 'https://shop.area52.com.au/products/sol-ring.js', body: { variants: shuffle } }), noWait);
+    expect(r.cartUrl).toBe('https://shop.area52.com.au/cart/100:1?storefront=true');
+  });
 });

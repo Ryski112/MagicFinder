@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
-import { pickupEligible, postageFor, regionOf, storeCost, type BuyerContext, type StoreRecord } from './stores';
+import { pickupEligible, postageFor, regionOf, StoreDirectory, storeCost, type BuyerContext, type StoreRecord } from './stores';
+import type { Listing } from './types';
 
 const stores: StoreRecord[] = parse(readFileSync('data/stores.yaml', 'utf8'));
 const byId = (id: string) => stores.find(s => s.id === id)!;
@@ -100,5 +101,27 @@ describe('storeCost', () => {
     const s: StoreRecord = { ...byId('hobby-master'), postage: [{ name: 'Letter', tracked: false, price: 2 }, { name: 'Courier', tracked: true, price: 6 }] };
     expect(storeCost(s, buyer()).postage).toBe(6);
     expect(storeCost(s, buyer({ postageType: 'standard' })).postage).toBe(2);
+  });
+});
+
+describe('StoreDirectory.forListing', () => {
+  const au = (url: string, over: Partial<Listing> = {}): Listing => ({
+    id: url, source: 'mtgsingles-au', storeKey: 'mtgsingles:AU/Somewhere', storeName: 'Somewhere', finish: 'nonfoil', confidence: 'exact',
+    condition: 'NM', price: 2.31, quantity: 1, url, title: 'Sol Ring', english: true, buyable: true, ...over,
+  });
+
+  it('gives an Australian Shopify Store "Add all to cart"', () => {
+    const r = new StoreDirectory([]).forListing(au('https://inngames.com.au/collections/mtg-singles-instock/products/sol-ring-c21'));
+    expect(r.cart).toBe('shopify');
+    expect(r.country).toBe('AU');
+  });
+
+  it('keeps Open Listings for an Australian Store that is not on Shopify', () => {
+    expect(new StoreDirectory([]).forListing(au('https://magiccards.com.au/content/buy/sol-ring-17')).cart).toBe('open-listings');
+  });
+
+  it('keeps Fetch sellers on the Fetch cart', () => {
+    const fetch = au('https://www.fetchtcg.com/products/sol-ring', { source: 'fetch', storeKey: 'fetch:42' });
+    expect(new StoreDirectory([]).forListing(fetch).cart).toBe('fetch');
   });
 });

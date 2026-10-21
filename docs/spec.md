@@ -230,7 +230,7 @@ Decided in [What optimiser approach produces the Trade-off Ladder?](https://gith
 - Rungs are shown from k_min up to the Store count of the cheapest Plan overall, and the top rung is labelled **Cheapest overall**.
 - A rung that saves nothing over the one below it is hidden.
 - There's no cap; each rung shows "saves $X vs one fewer Store".
-- Below k_min: **Short Plans** for 1, 2 and 3 Stores (owner's change, 2026-10-17, reversing "no partial Plans"). Each leaves out the fewest copies, then is the cheapest Plan that does so. It is solved in two steps: the most copies k Stores can supply, then the cheapest way to buy that many. Short Plans come first in the Ladder, show "N of M cards", and list the cards they leave out (collapsible, with images). The status line still says "Fewest Stores that cover your list: N".
+- Below k_min: **Short Plans** for 1, 2 and 3 Stores (owner's change, 2026-10-17, reversing "no partial Plans"). Each leaves out the fewest copies, then is the cheapest way to buy the rest; the Plan never decides a card is "not worth" its price (owner's change, 2026-10-21, reversing the 2026-10-20 "worth it" rule): a dear card is covered and flagged +X% over CardKingdom, and the buyer decides. A card the buyer insisted on ("Don't exclude this card" on a left-out card) counts for more than all the others together. Short Plans come first in the Ladder, show "N of M cards", and list the cards they leave out (collapsible, with images). The status line still says "Fewest Stores that cover your list: N".
 
 **Timeouts**
 - A rung that hits its time limit shows the best Plan found, with "might be up to $X cheaper" (from the solver bound).

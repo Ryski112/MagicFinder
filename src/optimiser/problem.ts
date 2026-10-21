@@ -5,6 +5,8 @@ export interface ProblemLine {
   key: string;
   /** Copies to buy (already capped at what the Stores have in total). */
   need: number;
+  /** A Short Plan covers this line whatever it costs, choosing its Stores around it. */
+  required?: boolean;
 }
 
 export interface ProblemStore {
@@ -136,6 +138,20 @@ export function evaluateStoreSet(p: Problem, byLine: number[][], open: ReadonlyS
     if (need) return null;
   }
   return planFrom(p, take);
+}
+
+/** What covering one copy of each line counts for: 1, or enough to outweigh every other copy together when the buyer insisted on it. */
+export function coverWeights(p: Problem): number[] {
+  const all = p.lines.reduce((n, l) => n + l.need, 0);
+  return p.lines.map(l => (l.required ? all + 1 : 1));
+}
+
+/** How much of the list a Short Plan covers, counting the cards the buyer insisted on for more. */
+export function coverScore(p: Problem, plan: Plan): number {
+  const w = coverWeights(p);
+  let covered = 0;
+  for (const [i, q] of plan.take) covered += q * w[p.offers[i].line];
+  return covered;
 }
 
 /** Copies a Plan buys. */

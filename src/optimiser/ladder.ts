@@ -4,7 +4,7 @@
 // Stores leave out the fewest cards when the whole list can't fit in that many Stores.
 import { heuristicLadder, shortPlanDraft } from './heuristic';
 import { minimumStores, type RungOutcome, type SolveOptions } from './milp';
-import { copiesIn, copiesWanted, paidStoreIds, round2, shortScore, type Plan, type Problem } from './problem';
+import { copiesIn, copiesWanted, paidStoreIds, round2, coverScore, type Plan, type Problem } from './problem';
 
 /** Short Plans are offered for Store counts up to this. */
 export const SHORT_PLAN_MAX_STORES = 3;
@@ -46,6 +46,7 @@ export class LadderKnowledge {
   readonly alts = new Map<string, { plan: Plan | null; outcome?: RungOutcome }>();
   kmin: number | null = null;
   wanted = 0;
+  problem: Problem | null = null;
 
   static altKey(k: number, short: boolean) {
     return `${short ? 's' : 'f'}${k}`;
@@ -73,10 +74,11 @@ export class LadderKnowledge {
     return { ...rung, next };
   }
 
-  /** Keeps the better Short Plan for k Stores: the lower score, so a dear extra card doesn't beat a cheaper Plan. */
+  /** Keeps the better Short Plan for k Stores: more of the list covered, then cheaper. */
   offerShort(k: number, plan: Plan | null, outcome?: RungOutcome) {
     const cur = this.short.get(k);
-    const better = plan && (!cur || copiesIn(plan) > copiesIn(cur.plan) || (copiesIn(plan) === copiesIn(cur.plan) && plan.total < cur.plan.total - 1e-9));
+    const score = (x: Plan) => (this.problem ? coverScore(this.problem, x) : copiesIn(x));
+    const better = plan && (!cur || score(plan) > score(cur.plan) || (score(plan) === score(cur.plan) && plan.total < cur.plan.total - 1e-9));
     if (better) this.short.set(k, { plan, outcome });
     else if (cur && outcome) cur.outcome = outcome;
   }
@@ -185,6 +187,7 @@ export interface LadderOptions {
 export async function buildLadder(p: Problem, opts: LadderOptions): Promise<LadderState> {
   const know = opts.knowledge ?? new LadderKnowledge();
   know.wanted = copiesWanted(p);
+  know.problem = p;
   const emit = (final = false) => {
     const s = know.state(final);
     opts.onUpdate(s);

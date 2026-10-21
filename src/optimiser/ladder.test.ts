@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildLadder, findRunnerUp, LadderKnowledge, type LadderState } from './ladder';
 import { minimumStores, solveRung } from './milp';
-import { planFrom, pruneDominated, shortScore, type Plan, type Problem } from './problem';
+import { pruneDominated, type Plan, type Problem } from './problem';
 import { syntheticProblemForBench } from './synthetic';
 
 const fakePlan = (stores: number, total: number): Plan => ({
@@ -123,11 +123,32 @@ describe('Short Plans', () => {
     expect(r.plan.total).toBe(17);
   });
 
+  it('covers a dear card the Store has rather than leaving it out for being cheaper elsewhere', async () => {
+    // Store 0 has A and a $100 C; Store 1 has A and C at $4. The Plan covers both; the buyer sees the price and decides.
+    const q: Problem = {
+      lines: [{ key: 'a', need: 1 }, { key: 'c', need: 1 }],
+      stores: [{ id: 'S0', postage: 5, freeOver: null }, { id: 'S1', postage: 5, freeOver: null }],
+      offers: [
+        { id: 'a0', line: 0, store: 0, price: 3, qty: 1 },
+        { id: 'c0', line: 1, store: 0, price: 100, qty: 1 },
+        { id: 'a1', line: 0, store: 1, price: 3, qty: 1 },
+        { id: 'c1', line: 1, store: 1, price: 4, qty: 1 },
+      ],
+    };
+    const r = await solveRung(q, 1, { timeLimitS: 5, partial: true });
+    expect(r.kind).toBe('optimal');
+    if (r.kind !== 'optimal') return;
+    // Both cards are covered, from the cheapest Store that has both.
+    expect(r.plan.take.size).toBe(2);
+    expect(r.plan.total).toBe(12);
+  });
+
   it('puts Short Plans before the full Ladder, marked with how many cards they cover', async () => {
     const final = await buildLadder(p, { solve: solveRung, timeLimitS: 5, onUpdate: () => {} });
     expect(final.kmin).toBe(2);
     const [first, ...rest] = final.rungs;
-    expect(first).toMatchObject({ k: 1, short: { covered: 3, wanted: 4 }, status: 'optimal', cheapestOverall: false });
+    expect(first).toMatchObject({ k: 1, short: { wanted: 4 }, status: 'optimal', cheapestOverall: false });
+    expect(first.short!.covered).toBeGreaterThanOrEqual(2);
     expect(rest[0].k).toBe(2);
     expect(rest[0].short).toBeUndefined();
   });

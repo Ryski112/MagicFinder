@@ -1,7 +1,7 @@
 // Exact Plans with HiGHS (WebAssembly, MIT): one MILP per rung, "at most k Stores". The model follows the optimiser
 // research: split quantities, one link row per offer, free-postage thresholds as a lower bound on the subtotal.
 import highsLoader from 'highs';
-import { copyValues, paidStoreIds, planFrom, round2, type Plan, type Problem } from './problem';
+import { coverWeights, paidStoreIds, planFrom, round2, type Plan, type Problem } from './problem';
 
 type Highs = Awaited<ReturnType<typeof highsLoader>>;
 let highsPromise: Promise<Highs> | null = null;
@@ -12,8 +12,8 @@ const num = (n: number) => (Math.round(n * 1e6) / 1e6).toString();
 /**
  * What a model optimises:
  * - full: buy every line, cheapest Landed Cost;
- * - cover: buy as many copies as possible (Short Plans, step 1);
- * - cost: buy at least `minCovered` copies, cheapest Landed Cost (Short Plans, step 2).
+ * - cover: buy as many copies as possible (Short Plans, step 1; a copy the buyer insisted on counts for more);
+ * - cost: buy at least `minCovered` of that, cheapest Landed Cost (Short Plans, step 2).
  */
 export type ModelMode = { kind: 'full' } | { kind: 'cover' } | { kind: 'cost'; minCovered: number };
 
@@ -27,8 +27,9 @@ export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }, exclude:
   const usedStores = [...new Set(p.offers.map(o => o.store))];
 
   const costs = mode.kind !== 'cover';
+  const weight = coverWeights(p);
   p.offers.forEach((o, i) => {
-    obj.push(costs ? `${num(o.price)} x${i}` : `- x${i}`);
+    obj.push(costs ? `${num(o.price)} x${i}` : `- ${weight[o.line]} x${i}`);
     const ub = Math.min(o.qty, p.lines[o.line].need);
     if (ub === 1) binaries.push(`x${i}`);
     else {
@@ -41,7 +42,7 @@ export function buildLp(p: Problem, mode: ModelMode = { kind: 'full' }, exclude:
     const terms = p.offers.map((o, i) => (o.line === line ? `x${i}` : null)).filter(Boolean);
     rows.push(` need${line}: ${terms.join(' + ')} ${mode.kind === 'full' ? '=' : '<='} ${l.need}`);
   });
-  if (mode.kind === 'cost') rows.push(` covered: ${p.offers.map((_, i) => `x${i}`).join(' + ')} >= ${mode.minCovered}`);
+  if (mode.kind === 'cost') rows.push(` covered: ${p.offers.map((o, i) => `${weight[o.line]} x${i}`).join(' + ')} >= ${mode.minCovered}`);
   for (const s of usedStores) {
     const st = p.stores[s];
     binaries.push(`y${s}`);
@@ -148,14 +149,18 @@ export async function solveRung(p: Problem, k: number, opts: SolveOptions): Prom
   return r.status === 'optimal' ? { kind: 'optimal', plan } : { kind: 'timed-out', plan, bound: round2(r.bound) };
 }
 
-/** Short Plan: first the most copies k Stores can supply, then the cheapest way to buy that many. */
+/** Short Plan: first the most k Stores can supply (what the buyer insisted on first), then the cheapest way to buy that. */
 async function solveShort(p: Problem, k: number, opts: SolveOptions): Promise<RungOutcome> {
-  const r = await runModel(p, { kind: 'value' }, k, opts.timeLimitS, opts.start, opts.exclude);
-  if (r.status === 'infeasible' || r.status === 'no-solution-in-time' || !r.take.size) return { kind: 'no-plan-in-time' };
-  const plan = planFrom(p, r.take);
-  if (r.status === 'optimal') return { kind: 'optimal', plan };
-  // The bound is on the adjusted objective; the same gap applies to the price.
-  return { kind: 'timed-out', plan, bound: round2(Math.max(0, plan.total - Math.max(0, r.objective - r.bound))) };
+  const half = opts.timeLimitS / 2;
+  const cover = await runModel(p, { kind: 'cover' }, k, half, opts.start, opts.exclude);
+  if (cover.status === 'infeasible' || cover.status === 'no-solution-in-time') return { kind: 'no-plan-in-time' };
+  const most = Math.round(-cover.objective);
+  if (most <= 0) return { kind: 'infeasible' };
+  const cost = await runModel(p, { kind: 'cost', minCovered: most }, k, half, planFrom(p, cover.take), opts.exclude);
+  const take = cost.status === 'optimal' || cost.status === 'timed-out' ? cost.take : cover.take;
+  const plan = planFrom(p, take);
+  if (cover.status === 'optimal' && cost.status === 'optimal') return { kind: 'optimal', plan };
+  return { kind: 'timed-out', plan, bound: cost.status === 'timed-out' ? round2(cost.bound) : plan.total };
 }
 
 /** The fewest Stores (not counting preferred ones) that can supply every line, or null if none can. */

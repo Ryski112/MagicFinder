@@ -165,7 +165,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         const ckNzd = ck ? cardKingdomUnitNzd(ck, catalogue, b.oracleId, l.finish) : null;
         return {
           listingId: l.id, storeId: store.id, storeName: store.name, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish,
-          label: p ? printingView(p, l.finish).label : l.title, image: p?.imageSmall ?? cardImage(catalogue, b.oracleId), url: l.url, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd),
+          label: p ? printingView(p, l.finish).label : l.title, printingId: p?.id ?? null, storeImage: l.imageUrl ?? null, image: p?.imageSmall ?? cardImage(catalogue, b.oracleId), url: l.url, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd),
         };
       })
       .sort((a, b) => a.price - b.price);
@@ -196,7 +196,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
         return {
           listingId: l.id, buyKey: b.key, lineIds: b.lineIds, oracleId: b.oracleId, name: b.name, qty, price: l.price,
           condition: l.condition, finish: l.finish, printing: p ? printingView(p, l.finish) : null,
-          fallbackImage: p?.imageSmall ? null : cardImage(catalogue, b.oracleId), title: l.title, url: l.url, source: l.source,
+          fallbackImage: p?.imageSmall ? null : cardImage(catalogue, b.oracleId), title: l.title, storeImage: l.imageUrl ?? null, url: l.url, source: l.source,
           locked: !!b.lock, cardKingdomNzd: ckNzd, overCardKingdom: overCardKingdom(l.price, ckNzd), extra: l.extra,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
@@ -261,6 +261,20 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
       ? compareAtCardKingdom(prep.buy, catalogue, ck, { allowFoils: settings.allowFoils, shippingUsd: settings.cardKingdom.shippingUsd })
       : null,
   };
+}
+
+/** In-stock Listings of a line's card whose Printing the title and picture didn't settle, so they can't be locked. */
+export function unconfirmedListings(want: ResolvedWantList, search: SearchResult, lineId: string, ctx: PlanContext): UnconfirmedListingView[] {
+  const line = want.lines.find(l => l.id === lineId);
+  if (!line) return [];
+  const settings = { minCondition: ctx.settings.minCondition, allowFoils: true };
+  return search.listings
+    .filter(l => l.oracleId === line.oracleId && l.confidence === 'card-only' && passesListingFilters(l, settings) && !ctx.settings.excludedStores[ctx.directory.forListing(l).id])
+    .map(l => {
+      const rec = ctx.directory.forListing(l);
+      return { storeId: rec.id, storeName: rec.name, title: l.title, price: l.price, qty: l.quantity, condition: l.condition, finish: l.finish, image: l.imageUrl ?? null, url: l.url };
+    })
+    .sort((a, b) => a.price - b.price);
 }
 
 /** Alternative Printings for one Want List line, cheapest first, with what each costs and where. */

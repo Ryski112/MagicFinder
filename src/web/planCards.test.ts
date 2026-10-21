@@ -3,12 +3,12 @@ import type { ItemView, OfferView, StoreView } from '../shared/api';
 import { cardsElsewhere, costAtStore, planCards } from './planCards';
 
 const offer = (storeId: string, price: number, qty: number): OfferView => ({
-  listingId: `${storeId}:${price}`, storeId, storeName: storeId, price, qty, condition: 'NM', finish: 'nonfoil', label: '', image: null, url: '', cardKingdomNzd: null, overCardKingdom: false,
+  listingId: `${storeId}:${price}`, storeId, storeName: storeId, price, qty, condition: 'NM', finish: 'nonfoil', label: '', printingId: null, storeImage: null, image: null, url: '', cardKingdomNzd: null, overCardKingdom: false,
 });
 
 const item = (buyKey: string, qty: number, price: number): ItemView => ({
   listingId: `${buyKey}:${price}`, buyKey, lineIds: [buyKey], oracleId: buyKey, name: buyKey, qty, price, condition: 'NM', finish: 'nonfoil', printing: null,
-  fallbackImage: null, title: '', url: '', source: 'fetch', locked: false, cardKingdomNzd: null, overCardKingdom: false,
+  fallbackImage: null, title: '', storeImage: null, url: '', source: 'fetch', locked: false, cardKingdomNzd: null, overCardKingdom: false,
 });
 
 const store = (id: string, items: ItemView[]) => ({ id, name: id, items }) as StoreView;

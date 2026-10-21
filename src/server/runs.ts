@@ -251,6 +251,10 @@ export class Run {
     return printingOptions(this.want, this.search, lineId, this.choices, this.ctx());
   }
 
+  unconfirmed(lineId: string) {
+    return this.search ? unconfirmedListings(this.want, this.search, lineId, this.ctx()) : [];
+  }
+
   cancel() {
     this.searchAbort.abort();
     this.planAbort?.abort();

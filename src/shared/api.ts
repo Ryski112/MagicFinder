@@ -132,6 +132,8 @@ export interface ItemView {
   /** Card image to show when the Printing isn't known. */
   fallbackImage: string | null;
   title: string;
+  /** The Store's own picture of this Listing. */
+  storeImage: string | null;
   url: string;
   source: SourceId;
   locked: boolean;
@@ -284,7 +286,25 @@ export interface PrintingOption {
   printing: PrintingView;
   cheapest: number | null;
   stores: number;
+  /** Every in-stock Listing of this Printing, cheapest first. */
+  offers: { storeId: string; storeName: string; price: number; qty: number; condition: Condition | null; url: string }[];
   locked: boolean;
+  /** On the buyer's never-buy list. */
+  blocked: boolean;
+}
+
+/** A Listing of the card that the title and picture couldn't tie to one Printing. */
+export interface UnconfirmedListingView {
+  storeId: string;
+  storeName: string;
+  title: string;
+  price: number;
+  qty: number;
+  condition: Condition | null;
+  finish: Finish;
+  /** The Store's picture. */
+  image: string | null;
+  url: string;
 }
 
 export interface PrintingsResponse {
@@ -292,6 +312,8 @@ export interface PrintingsResponse {
   name: string;
   hint?: { text: string; lock: Lock | null };
   options: PrintingOption[];
+  /** In-stock Listings whose Printing isn't known, which can't be chosen but can be judged by their picture. */
+  unconfirmed: UnconfirmedListingView[];
 }
 
 export interface CartLineCheck {

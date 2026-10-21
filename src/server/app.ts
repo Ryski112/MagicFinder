@@ -193,7 +193,7 @@ export function createApp(d: AppDeps) {
     const lineId = c.req.param('lineId');
     const line = run?.want.lines.find(l => l.id === lineId);
     if (!run || !line) return c.json({ error: 'Not found' }, 404);
-    return c.json<PrintingsResponse>({ lineId, name: line.name, hint: line.hint, options: run.printings(lineId) });
+    return c.json<PrintingsResponse>({ lineId, name: line.name, hint: line.hint, options: run.printings(lineId), unconfirmed: run.unconfirmed(lineId) });
   });
 
   app.post('/api/runs/:id/cart', async c => {

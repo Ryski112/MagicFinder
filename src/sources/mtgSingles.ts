@@ -88,6 +88,7 @@ export function mapMtgSinglesListing(l: any, storeName?: (key: string) => string
     storeName: storeName?.(l.store) ?? storeNameFromKey(l.store),
     title,
     scryfallId,
+    imageUrl: typeof l.imageUrl === 'string' && l.imageUrl ? l.imageUrl : undefined,
     imageKey,
     setName: l.setName || undefined,
     collectorNumber: collector,

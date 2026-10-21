@@ -51,6 +51,7 @@ export function matchListing(catalogue: Catalogue, s: SourceListing): Listing {
     quantity: s.quantity,
     url: s.url,
     title: s.title,
+    imageUrl: s.imageUrl,
     english: s.english,
     buyable: s.buyable,
     extra: s.extra,

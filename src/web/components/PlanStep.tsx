@@ -561,7 +561,8 @@ function StoreSection({ store: s, runId, settings, onSettings, onCart, onLock, o
 }
 
 function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onRemove: () => void }) {
-  const img = i.printing?.image ?? i.fallbackImage;
+  // A Store's own picture is the best evidence when the title didn't settle the Printing.
+  const img = i.printing?.image ?? i.storeImage ?? i.fallbackImage;
   return (
     <div className="flex items-center gap-3 text-sm">
       <span className="relative group shrink-0">
@@ -626,24 +627,80 @@ function PrintingGrid({ runId, lineId, planStoreIds, need, current, onLock, onBu
   }, [runId, lineId]);
   if (error) return <p className="mt-2 text-sm text-rose-600">{error}</p>;
   if (!data) return <p className="mt-2 text-sm text-slate-500">Loading Printings…</p>;
-  if (!data.options.length) return <p className="mt-2 text-sm text-slate-500">No other confirmed Printings are in stock.</p>;
+  const unconfirmed = data.unconfirmed ?? [];
+  if (!data.options.length && !unconfirmed.length) return <p className="mt-2 text-sm text-slate-500">No Store has this card in stock{need > 1 ? '' : ' right now'}.</p>;
   return (
     <div className="mt-3">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-        {data.options.map(o => (
-          <div key={`${o.printing.id}:${o.printing.finish}`} className={cx('rounded-xl p-2', o.locked ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-950' : 'bg-slate-50 dark:bg-slate-800')}>
-            <CardImage src={o.printing.image} alt={data.name} className="w-full aspect-[5/7] rounded-lg" />
-            <div className="text-[11px] mt-1 h-8 overflow-hidden text-slate-600 dark:text-slate-300">{o.printing.label}</div>
-            {o.printing.nonTournament && <div className="text-[10px] text-slate-500">{o.printing.nonTournament}, used only if locked</div>}
-            <div className="text-sm font-semibold tabnum">
-              {o.cheapest == null ? <span className="text-slate-400">none in stock</span> : <>from {money(o.cheapest)}<div className="text-[11px] font-normal text-slate-500">at {o.stores} Store{o.stores > 1 ? 's' : ''}</div></>}
+      {!data.options.length && <p className="mb-2 text-sm text-slate-500">None of the Listings say which Printing they are, so none can be chosen. Go by the Store's picture:</p>}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {data.options.map(o => {
+          const lock: Lock = { printingId: o.printing.id, finish: o.printing.finish };
+          const blocked = blockedHere[o.printing.id] ?? o.blocked;
+          const isCurrent = (x: { storeId: string }) => current.some(c => c.storeId === x.storeId && c.printingId === o.printing.id && c.finish === o.printing.finish);
+          const bought = o.offers.some(isCurrent);
+          const offers = o.offers.filter(x => !isCurrent(x));
+          // A lock covers every copy of the line, so a Printing with fewer copies than you need would leave some Not Found.
+          const stock = o.offers.reduce((n, x) => n + x.qty, 0);
+          const short = stock < need;
+          const shortWhy = `Only ${stock} of this Printing in stock across all Stores; you need ${need}. Locking to it would leave ${need - stock} Not Found.`;
+          const inPlan = offers.filter(x => planStoreIds.has(x.storeId));
+          return (
+            <div key={`${o.printing.id}:${o.printing.finish}`} className={cx('rounded-xl p-2 flex flex-col', o.locked ? 'ring-2 ring-indigo-500 bg-indigo-50 dark:bg-indigo-950' : 'bg-slate-50 dark:bg-slate-800', blocked && 'opacity-60')}>
+              <CardImage src={o.printing.image} alt={data.name} className="w-full aspect-[5/7] rounded-lg" />
+              <div className="text-[11px] mt-1 min-h-8 text-slate-600 dark:text-slate-300">{o.printing.label}</div>
+              {o.printing.nonTournament && <div className="text-[10px] text-slate-500">{o.printing.nonTournament}, used only if locked</div>}
+              <div className="text-sm font-semibold tabnum">
+                {o.cheapest == null ? <span className="text-slate-400">none in stock</span> : <>from {money(o.cheapest)}</>}
+              </div>
+              {short && !bought && <div className="text-[11px] text-amber-600 dark:text-amber-400">Only {stock} in stock, need {need}</div>}
+              {bought && <div className="text-[11px] text-emerald-600 dark:text-emerald-400">● What you're buying now</div>}
+              {offers.length > 0 && (
+                <ul className="mt-1 space-y-1 text-[11px]">
+                  {[...offers].sort((a, b) => Number(planStoreIds.has(b.storeId)) - Number(planStoreIds.has(a.storeId)) || a.price - b.price).map(x => (
+                    <li key={`${x.storeId}:${x.url}`} className="flex items-center gap-1">
+                      <span className="min-w-0 flex-1 truncate" title={x.storeName}>
+                        {planStoreIds.has(x.storeId) && <span title="This Store is already in your Plan" className="text-emerald-600 dark:text-emerald-400">● </span>}
+                        {x.storeName}
+                        {x.qty < need && <span className="text-amber-600 dark:text-amber-400" title={`Only ${x.qty} in stock; you need ${need}`}> ({x.qty} left)</span>}
+                      </span>
+                      <span className="tabnum">{money(x.price)}</span>
+                      <Button className="text-[11px] py-0 px-1.5" disabled={blocked || short || x.qty < need} title={short ? shortWhy : x.qty < need ? `${x.storeName} has ${x.qty}; you need ${need}` : `Buy this Printing from ${x.storeName}`} onClick={() => onBuyFrom(lock, x.storeId)}>Buy</Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {inPlan.length === 0 && offers.length > 0 && <div className="mt-1 text-[11px] text-slate-500">None of these Stores are in your Plan yet.</div>}
+              <div className="mt-auto pt-1 space-y-1">
+                {o.locked
+                  ? <Button variant="primary" className="w-full text-xs py-1" title="Let any printing fill this line, cheapest first." onClick={() => onLock(null)}>🔒 Only this · allow any</Button>
+                  : <Button className="w-full text-xs py-1" disabled={o.cheapest == null || blocked || short} title={short ? shortWhy : 'Lock: buy only this printing, even if another is cheaper.'} onClick={() => onLock(lock)}>🔒 Only buy this one</Button>}
+                {!o.locked && (
+                  <Button variant="link" className="w-full text-[11px]" title={blocked ? 'Allow this Printing to be picked again.' : 'Never pick this Printing for any card unless you lock it. Saved in Settings.'}
+                    onClick={() => { setBlockedHere(b => ({ ...b, [o.printing.id]: !blocked })); onBlock(o.printing, !blocked, data.name); }}>
+                    {blocked ? 'Allow this Printing again' : '🚫 Never buy this Printing'}
+                  </Button>
+                )}
+              </div>
             </div>
-            {o.locked
-              ? <Button variant="primary" className="w-full mt-1 text-xs py-1" title="Let any printing fill this line, cheapest first." onClick={() => onLock(null)}>🔒 Only this · allow any</Button>
-              : <Button className="w-full mt-1 text-xs py-1" disabled={o.cheapest == null} title="Lock: buy only this printing, even if another is cheaper." onClick={() => onLock({ printingId: o.printing.id, finish: o.printing.finish })}>🔒 Only buy this one</Button>}
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {unconfirmed.length > 0 && (
+        <div className={data.options.length ? 'mt-4' : ''}>
+          {data.options.length > 0 && <p className="mb-2 text-xs text-slate-500">Also in stock, but the Printing isn't stated (go by the Store's picture; these can't be chosen):</p>}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {unconfirmed.map(u => (
+              <a key={`${u.storeId}:${u.url}`} href={u.url} target="_blank" rel="noreferrer" title={`${u.title} · ${u.storeName}`}
+                className="shrink-0 w-[118px] rounded-lg border border-slate-200 dark:border-slate-700 p-1.5 text-xs hover:border-indigo-400">
+                <CardImage src={u.image} alt={u.title} className="w-full aspect-[5/7] rounded object-cover" />
+                <div className="mt-1 flex items-baseline justify-between"><span className="tabnum font-semibold text-sm">{money(u.price)}</span><span className="text-slate-500 tabnum">{u.qty}×</span></div>
+                <div className="truncate text-slate-600 dark:text-slate-300">{u.storeName}</div>
+                <div className="text-slate-500">{u.finish !== 'nonfoil' ? 'Foil · ' : ''}{u.condition ?? 'cond. not stated'}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       {data.hint && <p className="text-xs text-slate-500 mt-2">Your list said {data.hint.text}.</p>}
     </div>
   );

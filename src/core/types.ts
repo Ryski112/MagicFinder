@@ -55,6 +55,8 @@ export interface Listing {
   quantity: number;
   url: string;
   title: string;
+  /** The Store's picture of the card. */
+  imageUrl?: string;
   english: boolean;
   /** False for Listings that can't be bought right now (seller on holiday). */
   buyable: boolean;

@@ -20,7 +20,9 @@ export interface SourceListing {
   /** Title as shown on the Source, e.g. "Lightning Bolt (Showcase) (Foil) (SP)". */
   title: string;
   scryfallId?: string;
-  /** Names the Store's picture across Stores (a Store platform's card id), so Listings sharing it are the same Printing. */
+  /** The Store's own picture of the card, which says more about the Printing than the title does. */
+  imageUrl?: string;
+  /** Names that picture across Stores (a Store platform's card id), so Listings sharing it are the same Printing. */
   imageKey?: string;
   setCode?: string;
   setName?: string;

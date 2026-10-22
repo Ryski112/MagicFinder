@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { Lock, ParseResponse, PlanChoices, Settings } from '../../shared/api';
 import { CardSearcher } from './CardSearcher';
+import { VariantA, VariantB, VariantC } from './CardSearcher.prototype';
+import { PrototypeSwitcher, useVariant } from './PrototypeSwitcher';
 import { Button, cx } from './ui';
 
 interface Props {
@@ -31,6 +33,9 @@ export function WantListStep(p: Props) {
   const [review, setReview] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // PROTOTYPE: card searcher variants, `?variant=` (see CardSearcher.prototype.tsx).
+  const [variant, setVariant] = useVariant(['now', 'A', 'B', 'C']);
+  const Searcher = { now: CardSearcher, A: VariantA, B: VariantB, C: VariantC }[variant] ?? CardSearcher;
   const lines = p.parsed?.lines ?? [];
   const included = lines.filter(l => isLineIncluded(l, p.choices, p.settings));
   const basics = lines.filter(l => l.isBasic);
@@ -73,7 +78,12 @@ export function WantListStep(p: Props) {
         <Button variant="primary" className="px-4" disabled={!url || importing} onClick={doImport}>{importing ? 'Importing…' : 'Import'}</Button>
       </div>
       {importError && <p className="text-sm text-rose-600 dark:text-rose-400">{importError}</p>}
-      <CardSearcher text={p.text} onText={p.onText} onLock={setLock} ready={p.catalogueReady} progress={p.catalogueProgress} />
+      <Searcher key={variant} text={p.text} onText={p.onText} onLock={setLock} ready={p.catalogueReady} progress={p.catalogueProgress} />
+      <PrototypeSwitcher
+        variants={[{ key: 'now', name: 'Current' }, { key: 'A', name: 'Quick-add list' }, { key: 'B', name: 'Gallery' }, { key: 'C', name: 'Palette' }]}
+        current={variant}
+        onChange={setVariant}
+      />
       <textarea
         className="w-full h-56 rounded-lg p-3 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700"
         placeholder={'4 Lightning Bolt\n1 Sol Ring (C21) 263\n1x Rhystic Study *F*'}

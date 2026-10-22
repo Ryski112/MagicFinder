@@ -14,6 +14,10 @@ Tests sit beside the code as `*.test.ts` and run against recorded fixtures, so t
 
 The preview server in `.claude/launch.json` keeps its data in the git-ignored `.magicfinder-data`, apart from the owner's real profile. The CardKingdom comparison is off there; switch on Settings → "Compare with CardKingdom" to see the bargain chips.
 
+## UI
+
+Before designing or changing any screen, read `docs/agents/ui.md`: the layout rules the owner settled, and a log of the designs they corrected.
+
 ## Live Sources
 
 Every request to a Source or Store is polite and paced, and the scripts that make them (`check-stores`, `probe-*`) are run deliberately, not as a check. Before touching a Source module, a probe, or anything that reads CardKingdom or a Shopify checkout, read `docs/agents/sources.md`: it holds the rate limits and data quirks that each cost a bug.

@@ -1,14 +1,18 @@
-// The Want List's card searcher: type a name, pick a suggestion, optionally pick a Printing, and the card is added to
-// the pasted text. Decided in "How should the Want List card searcher look and behave?" (layout A), with two later
-// owner changes: Enter on a suggestion chooses it like a click, and a Printing chosen here is locked, not just noted.
-// Keys: ↑/↓ move through suggestions; Enter, Tab or a click chooses the card and shows its Printings (Tab also moves
-// to quantity, then to the Printing strip, ←/→); Enter adds from any of them; Escape cancels.
-import { useEffect, useRef, useState } from 'react';
+// The Want List's card searcher: type a name, and any suggestion is added in one click, at any Printing or locked to
+// one chosen from its Printings. Decided in "How should the Want List card searcher look and behave?", then reworked
+// from a prototype (branch prototype/card-searcher, variant A1): the big card shows in a column inside the dropdown so
+// it never covers the results, Printings wrap in a grid that scrolls vertically, and each card has its own − n + for
+// copies. Earlier owner decisions still hold: Enter adds like a click, and a Printing chosen here is locked.
+// Keys: ↑/↓ move through cards; Enter adds the active card; → opens its Printings and moves into them, where the arrows
+// move and Enter adds that Printing; ← or ↑ from the edge goes back to the card; Escape closes the Printings, then the
+// list. A quantity typed first ("4 bolt") is how many copies each card adds.
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { addToWantList } from '../../core/addToWantList';
 import { defaultFinish, wantLineId } from '../../core/wantList';
 import type { CardSearchResult, CataloguePrintingView, Lock } from '../../shared/api';
 import { api } from '../api';
-import { Button, CardImage, cx } from './ui';
+import { clampQuantity, leadingQuantity, MAX_QUANTITY } from '../cardQuery';
+import { CardImage, cx } from './ui';
 
 interface Props {
   text: string;
@@ -39,6 +43,20 @@ function useSuggestions(q: string) {
   return hits;
 }
 
+function usePrintings(oracleId: string | null) {
+  const [printings, setPrintings] = useState<CataloguePrintingView[]>([]);
+  useEffect(() => {
+    setPrintings([]);
+    if (!oracleId) return;
+    let stale = false;
+    api.cardPrintings(oracleId).then(r => !stale && setPrintings(r.printings), () => {});
+    return () => {
+      stale = true;
+    };
+  }, [oracleId]);
+  return printings;
+}
+
 function useFlash() {
   const [msg, setMsg] = useState('');
   useEffect(() => {
@@ -55,241 +73,228 @@ function printingLabel(o: CataloguePrintingView) {
   return `${o.setCode} #${o.collectorNumber} · ${o.setName} (${o.year})${extra ? ` · ${extra}` : ''}`;
 }
 
+/** Scryfall's readable size: search results carry the small image, and the normal one sits at the same path. */
+const readable = (url: string | null) => url?.replace('/small/', '/normal/') ?? null;
+const cardShape = 'aspect-[488/680] rounded-[4.75%/3.5%]';
+const optionId = (i: number) => `card-option-${i}`;
+const printingId = (id: string) => `card-printing-${id}`;
+
+function Copies({ n, name, onChange }: { n: number; name: string; onChange: (n: number) => void }) {
+  const step = 'w-7 h-7 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 disabled:opacity-30';
+  return (
+    <div className="flex items-center rounded-lg border border-slate-300 dark:border-slate-700 shrink-0" onClick={e => e.stopPropagation()}>
+      <button type="button" tabIndex={-1} className={step} disabled={n <= 1} onClick={() => onChange(n - 1)} aria-label={`One fewer ${name}`}>−</button>
+      <span className="w-6 text-center text-sm font-semibold tabnum" aria-label={`${n} copies`}>{n}</span>
+      <button type="button" tabIndex={-1} className={step} disabled={n >= MAX_QUANTITY} onClick={() => onChange(n + 1)} aria-label={`One more ${name}`}>+</button>
+    </div>
+  );
+}
+
 export function CardSearcher(p: Props) {
   const [q, setQ] = useState('');
-  const [qty, setQty] = useState(1);
-  const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState<CardSearchResult | null>(null);
-  const [printings, setPrintings] = useState<CataloguePrintingView[]>([]);
-  // '' is "Any printing (cheapest)".
-  const [printing, setPrinting] = useState('');
-  const [preview, setPreview] = useState('');
+  const [active, setActive] = useState(0);
+  // The card whose Printings are open, and the Printing the cursor is on (-1 while it is on the card itself).
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(-1);
+  // Copies set with a card's − n +, by oracle id; a card without one adds the typed quantity.
+  const [copies, setCopies] = useState<Record<string, number>>({});
   const [msg, setMsg] = useFlash();
-  const hits = useSuggestions(chosen ? '' : q);
+  const typed = leadingQuantity(q);
+  const hits = useSuggestions(typed ? typed.rest : q);
+  const printings = usePrintings(expanded);
   const input = useRef<HTMLInputElement>(null);
-  const strip = useRef<HTMLDivElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setActive(0), [hits]);
+  const cur = hits[active];
+  const inPrintings = cursor >= 0 && !!cur && expanded === cur.oracleId;
+  const atPrinting = inPrintings ? printings[cursor] : undefined;
+  const copiesOf = (h: CardSearchResult) => copies[h.oracleId] ?? typed?.quantity ?? 1;
+
   useEffect(() => {
-    setPrinting('');
-    setPreview('');
-    setPrintings([]);
-    if (!chosen) return;
-    let stale = false;
-    api.cardPrintings(chosen.oracleId).then(r => !stale && setPrintings(r.printings), () => {});
-    return () => {
-      stale = true;
-    };
-  }, [chosen]);
+    setActive(0);
+    setExpanded(null);
+    setCursor(-1);
+  }, [hits]);
+  useEffect(() => {
+    const id = atPrinting ? printingId(atPrinting.id) : optionId(active);
+    document.getElementById(id)?.scrollIntoView({ block: 'nearest' });
+  }, [active, atPrinting]);
 
-  const reset = () => {
-    setQ('');
-    setQty(1);
-    setChosen(null);
-    input.current?.focus();
-  };
-  const add = (card: CardSearchResult, printingId: string) => {
-    const o = printings.find(x => x.id === printingId);
-    const r = addToWantList(p.text, { name: card.name, set: o?.setCode, collectorNumber: o?.collectorNumber }, qty);
+  const add = (card: CardSearchResult, o?: CataloguePrintingView) => {
+    const r = addToWantList(p.text, { name: card.name, set: o?.setCode, collectorNumber: o?.collectorNumber }, copiesOf(card));
     p.onText(r.text);
     // The line's id is what the server will give it once it reads "(SET) num" back as this Printing.
     if (o) {
       const lock = { printingId: o.id, finish: defaultFinish(o.finishes) };
       p.onLock(wantLineId(card.oracleId, 'main', lock), lock);
     }
-    setMsg(r.message);
-    reset();
+    setMsg(o ? `${r.message} · 🔒 locked to this printing` : r.message);
+    setQ('');
+    setCopies({});
+    setExpanded(null);
+    setCursor(-1);
+    input.current?.focus();
   };
-  const choose = (h: CardSearchResult) => {
-    setChosen(h);
-    setQ(h.name);
-    setOpen(false);
+  const toCard = (i: number) => {
+    setActive(Math.max(0, Math.min(hits.length - 1, i)));
+    setExpanded(null);
+    setCursor(-1);
   };
-  const browse = (step: number) => {
-    const ids = ['', ...printings.map(x => x.id)];
-    const next = ids[Math.min(ids.length - 1, Math.max(0, ids.indexOf(printing) + step))];
-    setPrinting(next);
-    setPreview(next);
-    strip.current?.querySelector(`[data-id="${next}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const columns = () => (grid.current ? getComputedStyle(grid.current).gridTemplateColumns.split(' ').length : 1);
+
+  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      if (expanded) {
+        setExpanded(null);
+        setCursor(-1);
+      } else setOpen(false);
+      return;
+    }
+    if (!cur) return;
+    const n = columns();
+    const last = printings.length - 1;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (inPrintings) {
+        if (Math.floor(cursor / n) < Math.floor(last / n)) setCursor(Math.min(cursor + n, last));
+        else toCard(active + 1);
+      } else if (expanded === cur.oracleId && printings.length) setCursor(0);
+      else toCard(active + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (inPrintings) setCursor(cursor - n >= 0 ? cursor - n : -1);
+      else toCard(active - 1);
+    } else if (e.key === 'ArrowRight' && (inPrintings || input.current?.selectionStart === q.length)) {
+      e.preventDefault();
+      if (inPrintings) setCursor(Math.min(cursor + 1, last));
+      else {
+        setExpanded(cur.oracleId);
+        setCursor(0);
+      }
+    } else if (e.key === 'ArrowLeft' && (inPrintings || expanded)) {
+      e.preventDefault();
+      if (inPrintings) setCursor(cursor - 1);
+      else setExpanded(null);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!inPrintings) add(cur);
+      else if (atPrinting) add(cur, atPrinting);
+    }
   };
 
   const notReady = `Card search is ready once the card list finishes downloading (${Math.round(p.progress * 100)}%)`;
-  const shown = printings.find(x => x.id === printing);
-  const previewed = printings.find(x => x.id === preview) ?? shown;
+  const showing = open && hits.length > 0;
 
   return (
     <div>
-      <div className="flex gap-2">
-        <div className="relative flex-1 min-w-0">
-          <input
-            ref={input}
-            disabled={!p.ready}
-            value={q}
-            role="combobox"
-            aria-label="Add a card by name"
-            aria-expanded={open && !chosen && hits.length > 0}
-            aria-controls="card-suggestions"
-            onFocus={() => setOpen(true)}
-            onBlur={() => setOpen(false)}
-            onChange={e => {
-              setQ(e.target.value);
-              setChosen(null);
-              setOpen(true);
-            }}
-            onKeyDown={e => {
-              if (chosen) {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  add(chosen, printing);
-                }
-                if (e.key === 'Escape') reset();
-                return;
-              }
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setActive(Math.min(active + 1, hits.length - 1));
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setActive(Math.max(active - 1, 0));
-              } else if (e.key === 'Enter' && hits.length) {
-                e.preventDefault();
-                choose(hits[active]);
-              } else if (e.key === 'Tab' && !e.shiftKey && hits.length) {
-                // Let the browser move focus on to quantity; the Printing strip follows.
-                choose(hits[active]);
-              } else if (e.key === 'Escape') setOpen(false);
-            }}
-            placeholder={p.ready ? '🔍 Add a card by name…' : notReady}
-            title={p.ready ? undefined : notReady}
-            className={cx(
-              'w-full rounded-lg px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 disabled:opacity-60',
-              chosen && 'border-indigo-500 font-medium',
-            )}
-          />
-          {open && !chosen && hits.length > 0 && (
-            <ul id="card-suggestions" role="listbox" className="absolute z-20 left-0 right-0 mt-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
-              {hits.map((h, i) => (
-                <li key={h.oracleId} role="option" aria-selected={i === active}>
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onMouseDown={e => {
-                      e.preventDefault();
-                      choose(h);
-                    }}
-                    onMouseEnter={() => setActive(i)}
-                    className={cx('w-full flex items-center gap-2 px-2 py-1 text-left text-sm', i === active && 'bg-indigo-50 dark:bg-indigo-950')}
-                  >
-                    <CardImage src={h.image} alt="" className="w-6 h-8 rounded-sm" />
-                    <span>
-                      {h.name}
-                      {h.matchedAlias && <span className="text-xs text-slate-500"> · matched “{h.matchedAlias}”</span>}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <div className="relative">
         <input
-          type="number"
-          min={1}
-          max={99}
-          value={qty}
+          ref={input}
           disabled={!p.ready}
-          onChange={e => setQty(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && chosen) add(chosen, printing);
-            if (e.key === 'Escape') reset();
+          value={q}
+          role="combobox"
+          aria-label="Add a card by name"
+          aria-expanded={showing}
+          aria-controls="card-suggestions"
+          aria-activedescendant={showing ? (atPrinting ? printingId(atPrinting.id) : optionId(active)) : undefined}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onChange={e => {
+            setQ(e.target.value);
+            setOpen(true);
           }}
-          aria-label="Quantity"
-          title="How many"
-          className="w-16 rounded-lg px-2 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 tabnum"
+          onKeyDown={onKey}
+          placeholder={p.ready ? '🔍 Add a card by name, or “4 bolt” for four…' : notReady}
+          title={p.ready ? undefined : notReady}
+          className="w-full rounded-xl px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none focus:border-indigo-500 focus:ring-4 ring-indigo-500/15 disabled:opacity-60"
         />
-        <Button
-          variant="primary"
-          tabIndex={chosen ? -1 : undefined}
-          disabled={!p.ready || (!chosen && !hits.length)}
-          onClick={() => (chosen ? add(chosen, printing) : hits[active] && add(hits[active], ''))}
-        >
-          Add
-        </Button>
-      </div>
-
-      {chosen && (
-        <div className="mt-2 flex gap-3 text-sm">
-          <CardImage src={previewed?.imageLarge ?? previewed?.image ?? chosen.image} alt={chosen.name} className="w-36 rounded-lg shrink-0 self-start" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between gap-2 text-xs text-slate-500 mb-1">
-              <span className="truncate">
-                Printing: <span className="text-slate-800 dark:text-slate-200">{shown ? printingLabel(shown) : 'Any printing (cheapest wins)'}</span>
-              </span>
-              <Button variant="link" className="text-xs shrink-0" tabIndex={-1} onClick={reset}>cancel (Esc)</Button>
+        {showing && cur && (
+          // Clicks inside keep focus in the box, so the list stays open and the keys keep working.
+          <div className="absolute z-30 left-0 right-0 mt-2 flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl overflow-hidden" onMouseDown={e => e.preventDefault()}>
+            <div className="flex-1 min-w-0 flex flex-col">
+              <ul id="card-suggestions" role="listbox" aria-label="Cards" className="max-h-[min(28rem,65vh)] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+                {hits.map((h, i) => (
+                  <li key={h.oracleId} role="presentation">
+                    <div
+                      id={optionId(i)}
+                      role="option"
+                      aria-selected={i === active && !inPrintings}
+                      className={cx('group flex items-center gap-3 px-3 py-2 cursor-pointer', i === active && 'bg-indigo-50 dark:bg-indigo-950/60')}
+                      onMouseEnter={() => {
+                        setActive(i);
+                        setCursor(-1);
+                      }}
+                      onClick={() => add(h)}
+                    >
+                      <CardImage src={h.image} alt="" className="w-10 h-14 rounded shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{h.name}</div>
+                        <div className="text-xs text-slate-500 truncate">{h.matchedAlias ? `matched “${h.matchedAlias}” · ` : ''}any printing (cheapest wins)</div>
+                      </div>
+                      <Copies n={copiesOf(h)} name={h.name} onChange={n => setCopies({ ...copies, [h.oracleId]: clampQuantity(n) })} />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        aria-expanded={expanded === h.oracleId}
+                        aria-label={`Printings of ${h.name}`}
+                        className={cx(
+                          'text-xs rounded-md px-2 py-1 border shrink-0',
+                          expanded === h.oracleId ? 'border-indigo-500 text-indigo-600 dark:text-indigo-300' : 'border-slate-300 dark:border-slate-700 text-slate-500',
+                        )}
+                        onClick={e => {
+                          e.stopPropagation();
+                          setActive(i);
+                          setCursor(-1);
+                          setExpanded(expanded === h.oracleId ? null : h.oracleId);
+                        }}
+                      >
+                        <span className="hidden sm:inline">Printings </span>{expanded === h.oracleId ? '▴' : '→'}
+                      </button>
+                    </div>
+                    {expanded === h.oracleId && (
+                      <div className="px-3 pb-3 bg-slate-50 dark:bg-slate-950/40" role="group" aria-label={`Printings of ${h.name}`}>
+                        <p className="text-xs text-slate-500 py-2">Click a printing to add {copiesOf(h)} locked: only that printing can fill the line. You can allow any printing in the review list.</p>
+                        <div ref={grid} className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1">
+                          {printings.map((o, j) => (
+                            <button
+                              key={o.id}
+                              id={printingId(o.id)}
+                              type="button"
+                              tabIndex={-1}
+                              role="option"
+                              aria-selected={inPrintings && j === cursor}
+                              title={printingLabel(o)}
+                              onMouseEnter={() => {
+                                setActive(i);
+                                setCursor(j);
+                              }}
+                              onClick={() => add(h, o)}
+                              className={cx('text-left rounded-md ring-indigo-500 hover:ring-2', inPrintings && j === cursor && 'ring-2')}
+                            >
+                              <CardImage src={o.image} alt={printingLabel(o)} className="w-full aspect-[488/680] rounded-md" />
+                              <div className="text-[11px] font-medium mt-0.5 truncate">{o.setCode} #{o.collectorNumber}</div>
+                              <div className="text-[11px] text-slate-500 truncate">{o.treatments[0] ?? o.year}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="px-3 py-1.5 text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800">↑↓ choose · Enter adds · → printings · Esc closes</div>
             </div>
-            <div
-              ref={strip}
-              tabIndex={0}
-              role="listbox"
-              aria-label="Printing"
-              onKeyDown={e => {
-                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  browse(e.key === 'ArrowRight' ? 1 : -1);
-                }
-                if (e.key === 'Enter') add(chosen, printing);
-                if (e.key === 'Escape') reset();
-              }}
-              onMouseLeave={() => setPreview(printing)}
-              className="flex gap-2 overflow-x-auto pb-2 rounded-lg outline-none focus-visible:ring-2 ring-indigo-500"
-            >
-              <button
-                type="button"
-                data-id=""
-                tabIndex={-1}
-                role="option"
-                aria-selected={printing === ''}
-                onClick={() => setPrinting('')}
-                onMouseEnter={() => setPreview('')}
-                className={cx(
-                  'shrink-0 w-20 h-28 rounded-md border-2 text-xs text-slate-500 flex items-center justify-center text-center px-1',
-                  printing === '' ? 'border-indigo-500' : 'border-slate-300 dark:border-slate-700',
-                )}
-              >
-                Any printing
-                <br />
-                (cheapest)
-              </button>
-              {printings.map(o => (
-                <button
-                  key={o.id}
-                  type="button"
-                  data-id={o.id}
-                  tabIndex={-1}
-                  role="option"
-                  aria-selected={printing === o.id}
-                  onClick={() => setPrinting(o.id)}
-                  onMouseEnter={() => setPreview(o.id)}
-                  title={printingLabel(o)}
-                  className={cx('shrink-0 w-20 text-left rounded-md border-2 overflow-hidden', printing === o.id ? 'border-indigo-500' : 'border-transparent')}
-                >
-                  <CardImage src={o.image} alt={printingLabel(o)} className="w-full" />
-                  <div className="text-[10px] leading-tight px-0.5 truncate">{o.setCode} #{o.collectorNumber}</div>
-                  <div className="text-[10px] leading-tight px-0.5 text-slate-500 truncate">{o.treatments[0] ?? o.year}</div>
-                </button>
-              ))}
-            </div>
-            {printing && (
-              <p className="text-xs text-slate-500">🔒 Added locked to this printing: only it can fill the line. You can allow any printing in the review list.</p>
-            )}
+            {/* The big card, beside the results rather than over them; phones go without it. */}
+            <aside className="hidden md:block w-60 shrink-0 border-l border-slate-200 dark:border-slate-800 p-3 bg-slate-50 dark:bg-slate-950/40" aria-hidden>
+              <CardImage src={atPrinting ? (atPrinting.imageLarge ?? readable(atPrinting.image)) : readable(cur.image)} alt={cur.name} className={cx('w-full shadow-lg', cardShape)} />
+              <div className="mt-2 text-sm font-medium leading-tight">{cur.name}</div>
+              <div className="text-xs text-slate-500">{atPrinting ? `${printingLabel(atPrinting)} · adds locked` : 'Any printing (cheapest wins)'}</div>
+            </aside>
           </div>
-        </div>
-      )}
-
-      <div className="h-5 mt-1 text-xs flex justify-between gap-2" aria-live="polite">
-        <span className="text-emerald-600 dark:text-emerald-400">{msg}</span>
-        {chosen && <span className="text-slate-400">{printings.length} printings · ← → to browse · Enter adds</span>}
+        )}
       </div>
+      <div className="h-5 mt-1 text-xs text-emerald-600 dark:text-emerald-400" aria-live="polite">{msg}</div>
     </div>
   );
 }

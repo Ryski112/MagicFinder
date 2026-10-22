@@ -110,10 +110,12 @@ Decided in [What Want List formats must import support, and what does Archidekt 
 
 **Archidekt URL**: the back end fetches `GET https://archidekt.com/api/decks/{id}/`. Moxfield URLs are Cloudflare-blocked, so Moxfield users paste instead. Don't use Archidekt's CSV export.
 
-**Card searcher**: decided in [How should the Want List card searcher look and behave?](https://github.com/Ryski112/MagicFinder/issues/18).
-- A search bar between the Archidekt row and the paste box, with a quantity box and **Add**. It searches every name alias in the local catalogue, in memory (`GET /api/cards/search?q=`), and shows 8 suggestions with images.
+**Card searcher**: decided in [How should the Want List card searcher look and behave?](https://github.com/Ryski112/MagicFinder/issues/18), then reworked from a prototype (variant A1 on branch `prototype/card-searcher-quick-add`).
+- A search bar between the Archidekt row and the paste box. It searches every name alias in the local catalogue, in memory (`GET /api/cards/search?q=`), and shows 8 suggestions with images.
 - Ranking: exact, starts with, every typed word starts a word of the name, contains, then typos (1 edit; 2 for words of 7+ letters; a half-typed last word counts as a prefix). Front faces of double-faced cards and flavour names match too; a flavour match shows "matched …". Ties go to the shorter name (there is no popularity data).
-- Keys: ↑/↓ move. **Enter**, **Tab** or a click chooses the card and shows an optional Printing strip (`GET /api/cards/{oracleId}/printings`, newest first, ←/→ with a large preview); Tab also moves on to quantity, then the strip. Enter then adds, with "Any printing (cheapest)" unless one was picked. Escape cancels. The box clears and keeps focus after adding, with a short confirmation.
+- One click or **Enter** adds a suggestion at any Printing. Each suggestion has its own − n + for copies; a quantity typed first ("4 bolt") sets them all. **Printings →** (or →) opens that card's Printings (`GET /api/cards/{oracleId}/printings`, newest first) as a wrapping grid that scrolls vertically; clicking one, or Enter on it, adds it locked.
+- The large card shows in a column inside the dropdown, never over the results; phones go without it.
+- Keys: ↑/↓ move through cards; → moves into the Printings, where the arrows move; ← or ↑ from the edge goes back to the card; Escape closes the Printings, then the list. The box clears and keeps focus after adding, with a short confirmation.
 - A Printing picked here is written as `N Name (SET) num` **and locked** to that Printing (the review list offers "allow any printing"). The same text pasted or imported from Archidekt stays an unlocked hint.
 - Adding raises the quantity of a plain main-deck line naming the same card and Printing; otherwise a new line goes at the end of the main deck (before other sections, or before the MTGO blank-line sideboard).
 - Disabled until the catalogue is ready, saying so with the download percentage (also as a tooltip).

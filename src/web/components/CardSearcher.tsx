@@ -1,8 +1,8 @@
 // The Want List's card searcher: type a name, and any suggestion is added in one click, at any Printing or locked to
 // one chosen from its Printings. Decided in "How should the Want List card searcher look and behave?", then reworked
-// from a prototype (branch prototype/card-searcher, variant A1): the big card shows in a column inside the dropdown so
-// it never covers the results, Printings wrap in a grid that scrolls vertically, and each card has its own − n + for
-// copies. Earlier owner decisions still hold: Enter adds like a click, and a Printing chosen here is locked.
+// from a prototype (variant A1 on branch prototype/card-searcher-quick-add): the big card shows in a column inside the
+// dropdown so it never covers the results, Printings wrap in a grid that scrolls vertically, and each card has its own
+// − n + for copies. Earlier owner decisions still hold: Enter adds like a click, and a Printing chosen here is locked.
 // Keys: ↑/↓ move through cards; Enter adds the active card; → opens its Printings and moves into them, where the arrows
 // move and Enter adds that Printing; ← or ↑ from the edge goes back to the card; Escape closes the Printings, then the
 // list. A quantity typed first ("4 bolt") is how many copies each card adds.

@@ -110,7 +110,7 @@ Decided in [What Want List formats must import support, and what does Archidekt 
 
 **Archidekt URL**: the back end fetches `GET https://archidekt.com/api/decks/{id}/`. Moxfield URLs are Cloudflare-blocked, so Moxfield users paste instead. Don't use Archidekt's CSV export.
 
-**Card searcher**: decided in [How should the Want List card searcher look and behave?](https://github.com/Ryski112/MagicFinder/issues/18), then reworked from a prototype (branch `prototype/card-searcher`, variant A1).
+**Card searcher**: decided in [How should the Want List card searcher look and behave?](https://github.com/Ryski112/MagicFinder/issues/18), then reworked from a prototype (variant A1 on branch `prototype/card-searcher-quick-add`).
 - A search bar between the Archidekt row and the paste box. It searches every name alias in the local catalogue, in memory (`GET /api/cards/search?q=`), and shows 8 suggestions with images.
 - Ranking: exact, starts with, every typed word starts a word of the name, contains, then typos (1 edit; 2 for words of 7+ letters; a half-typed last word counts as a prefix). Front faces of double-faced cards and flavour names match too; a flavour match shows "matched …". Ties go to the shorter name (there is no popularity data).
 - One click or **Enter** adds a suggestion at any Printing. Each suggestion has its own − n + for copies; a quantity typed first ("4 bolt") sets them all. **Printings →** (or →) opens that card's Printings (`GET /api/cards/{oracleId}/printings`, newest first) as a wrapping grid that scrolls vertically; clicking one, or Enter on it, adds it locked.

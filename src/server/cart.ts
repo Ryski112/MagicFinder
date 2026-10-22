@@ -45,7 +45,9 @@ function shopPrice(l: Listing): number {
 
 /** Picks the variant matching a Listing's condition and finish, falling back to the one with the same price. */
 export function pickVariant(l: Listing, variants: ShopifyVariant[], variantId?: string | null): ShopifyVariant | null {
-  if (variantId) return variants.find(v => String(v.id) === variantId) ?? null;
+  // A Store can remake a product's variants, so a variant id in an old link may be gone; then match as if there were none.
+  const linked = variantId ? variants.find(v => String(v.id) === variantId) : undefined;
+  if (linked) return linked;
   if (variants.length === 1) return variants[0];
   const cents = Math.round(shopPrice(l) * 100);
   const rank = RAW_RANK[l.extra?.rawCondition ?? ''] ?? (l.condition ? RAW_RANK[l.condition] : undefined);
@@ -61,18 +63,22 @@ export function pickVariant(l: Listing, variants: ShopifyVariant[], variantId?: 
   );
 }
 
-export type ProductFetcher = (url: string) => Promise<{ status: number; redirectedTo?: string; body?: any }>;
+/** `retryAfter` is the shop's Retry-After, in seconds, when it asked us to slow down. */
+export type ProductFetcher = (url: string) => Promise<{ status: number; redirectedTo?: string; body?: any; retryAfter?: number }>;
 
 const fetchProduct: ProductFetcher = async url => {
   const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }, redirect: 'follow' });
   const redirectedTo = res.redirected ? res.url : undefined;
-  if (!res.ok) return { status: res.status, redirectedTo };
+  const retryAfter = Number(res.headers.get('retry-after'));
+  if (!res.ok) return { status: res.status, redirectedTo, retryAfter: Number.isFinite(retryAfter) && res.headers.has('retry-after') ? retryAfter : undefined };
   try {
     return { status: res.status, redirectedTo, body: await res.json() };
   } catch {
     return { status: 0, redirectedTo };
   }
 };
+
+const sleep = (ms: number) => (ms > 0 ? new Promise<void>(r => setTimeout(r, ms)) : Promise.resolve());
 
 /** One pace per Store host for the whole server, so friends checking carts at the same Store share it. */
 const storeThrottles = new Map<string, Throttle>();
@@ -100,16 +106,23 @@ export async function checkShopifyCart(
     try {
       u = new URL(listing.url);
     } catch {
-      lines.push(base);
+      lines.push({ ...base, reason: "its link isn't a web address" });
       continue;
     }
     const handle = shopifyHandle(listing.url);
     if (!handle) {
-      lines.push(base);
+      lines.push({ ...base, reason: "its link doesn't name a product in the Store's shop" });
       continue;
     }
-    await (throttle ?? storeThrottle(u.host)).wait();
-    const r = await get(`https://${u.host}/products/${handle}.js`);
+    const pace = throttle ?? storeThrottle(u.host);
+    await pace.wait();
+    let r = await get(`https://${u.host}/products/${handle}.js`);
+    // A shop that is busy (429) or briefly failing (5xx) gets one more try, after the wait it asked for (at most 10 s).
+    if (r.status === 429 || r.status >= 500) {
+      await sleep(Math.min(r.retryAfter ?? 2, 10) * 1000);
+      await pace.wait();
+      r = await get(`https://${u.host}/products/${handle}.js`);
+    }
     if (r.redirectedTo && /\/password/.test(r.redirectedTo)) {
       return { storeId, storeName, cartUrl: null, lines: items.map(i => ({ ...base, listingId: i.listing.id, name: i.name, qty: i.qty, expectedPrice: i.listing.price, url: i.listing.url })), fallbackReason: `${storeName}'s shop is password-protected right now.` };
     }
@@ -118,14 +131,18 @@ export async function checkShopifyCart(
     }
     const variants: ShopifyVariant[] | undefined = r.body?.variants;
     if (!variants?.length) {
-      lines.push(base);
+      const why = r.status === 404 ? 'the Store no longer has this product page (it may have been renamed or removed)'
+        : r.status === 429 ? 'the Store asked us to slow down; try again in a minute'
+        : r.status >= 400 || r.status === 0 ? `the Store's product page didn't load (${r.status ? `HTTP ${r.status}` : 'not readable'})`
+        : 'the product page lists no variants';
+      lines.push({ ...base, reason: why });
       continue;
     }
     // A shop can answer from another domain (singles.area52.com.au moves to shop.area52.com.au); its cart lives there.
     host ??= r.redirectedTo ? new URL(r.redirectedTo).host : u.host;
     const v = pickVariant(listing, variants, u.searchParams.get('variant'));
     if (!v) {
-      lines.push(base);
+      lines.push({ ...base, reason: `none of the product's versions matches ${listing.condition ?? 'its condition'}${listing.finish === 'nonfoil' ? '' : ` ${listing.finish}`}` });
       continue;
     }
     // Compare in the shop's currency, then show the buyer today's price in NZD at the rate the Listing was priced at.

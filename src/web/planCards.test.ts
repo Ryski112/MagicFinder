@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ItemView, OfferView, StoreView } from '../shared/api';
-import { cardsElsewhere, costAtStore, planCards } from './planCards';
+import { cardsElsewhere, costAtStore, fillAtStore, planCards, printingCount } from './planCards';
 
 const offer = (storeId: string, price: number, qty: number): OfferView => ({
   listingId: `${storeId}:${price}`, storeId, storeName: storeId, price, qty, condition: 'NM', finish: 'nonfoil', label: '', printingId: null, storeImage: null, image: null, url: '', cardKingdomNzd: null, overCardKingdom: false, underCardKingdom: false,
@@ -34,5 +34,35 @@ describe('cardsElsewhere', () => {
     const cards = planCards(stores);
     expect(cardsElsewhere('a', cards, offers).map(e => [e.card.buyKey, e.cost, e.current])).toEqual([['ring', 3, 4]]);
     expect(cardsElsewhere('b', cards, offers).map(e => [e.card.buyKey, e.cost, e.current])).toEqual([['bolt', 3, 2]]);
+  });
+});
+
+describe('printingCount', () => {
+  const at = (listingId: string, printingId: string | null, finish: OfferView['finish'] = 'nonfoil') => ({ ...offer('a', 1, 1), listingId, printingId, finish });
+
+  it('counts a Printing once however many Listings offer it', () => {
+    expect(printingCount([at('1', 'p'), at('2', 'p'), at('3', 'q')])).toBe(2);
+  });
+
+  it('counts each finish of a Printing apart', () => {
+    expect(printingCount([at('1', 'p'), at('2', 'p', 'foil')])).toBe(2);
+  });
+
+  it('leaves out Listings whose Printing is not known', () => {
+    expect(printingCount([at('1', null), at('2', null), at('3', 'p')])).toBe(1);
+    expect(printingCount([at('1', null)])).toBe(0);
+  });
+});
+
+describe('fillAtStore', () => {
+  const offers = [offer('a', 3, 2), offer('a', 2, 1), offer('b', 1, 5)];
+
+  it('takes the cheapest Listings at the Store first, only as many as needed', () => {
+    expect(fillAtStore(offers, 'a', 2)?.map(f => [f.offer.price, f.qty])).toEqual([[2, 1], [3, 1]]);
+    expect(fillAtStore(offers, 'a', 1)?.map(f => [f.offer.price, f.qty])).toEqual([[2, 1]]);
+  });
+
+  it('is null when the Store has too few copies', () => {
+    expect(fillAtStore(offers, 'a', 4)).toBeNull();
   });
 });

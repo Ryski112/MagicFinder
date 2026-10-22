@@ -27,12 +27,13 @@ export function Button({ variant = 'outline', className, ...p }: ButtonHTMLAttri
   );
 }
 
-export function Switch({ checked, onChange, label, title, ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; title?: string; ariaLabel?: string }) {
+export function Switch({ checked, onChange, label, title, ariaLabel, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; title?: string; ariaLabel?: string; disabled?: boolean }) {
   return (
-    <label className="inline-flex items-center gap-2 text-sm cursor-pointer select-none" title={title}>
+    <label className={cx('inline-flex items-center gap-2 text-sm select-none', disabled ? 'opacity-70 cursor-default' : 'cursor-pointer')} title={title}>
       <button
         type="button"
         role="switch"
+        disabled={disabled}
         aria-checked={checked}
         aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         onClick={() => onChange(!checked)}
@@ -134,6 +135,104 @@ export function CardKingdomChip({ price, cardKingdomNzd, unsure = false }: { pri
     </span>
   );
 }
+
+/** A small card that shows the large one beside it while hovered. */
+export function HoverCard({ src, large, alt, className = 'w-10' }: { src: string | null | undefined; large?: string | null; alt: string; className?: string }) {
+  const big = large ?? src;
+  return (
+    <span className="relative group shrink-0">
+      <CardImage src={src} alt={alt} className={cx(className, 'aspect-[5/7] rounded')} />
+      {big && (
+        <span className="hidden group-hover:block absolute left-full ml-2 top-0 z-30 w-56 shadow-2xl rounded-xl overflow-hidden pointer-events-none">
+          <CardImage src={big} alt={alt} className="w-full aspect-[5/7]" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Scryfall's large image sits at the same path as the small one. */
+export const largeImage = (url: string | null | undefined) => url?.replace('/small/', '/normal/') ?? null;
+
+const listingButton = 'inline-flex items-center justify-center rounded-md font-semibold text-xs px-2.5 py-1 whitespace-nowrap shrink-0';
+
+/** A Listing's page at its Store, as the yellow button the Store sections use. */
+export function ListingButton({ url, className }: { url: string; className?: string }) {
+  return (
+    <a href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+      className={cx(listingButton, 'bg-amber-400 text-slate-900 hover:bg-amber-300', className)}>
+      View listing ↗
+    </a>
+  );
+}
+
+/** Takes up a View listing button's room, so a header's figures line up over the lines' prices (on a narrow screen the button sits under the price, so it takes none). */
+export function ListingButtonSpace() {
+  return <span aria-hidden className={cx(listingButton, 'invisible hidden sm:inline-flex')}>View listing ↗</span>;
+}
+
+/** The end of a line: its price, then View listing. On a narrow screen the button goes under the price, so the line keeps room for its name. */
+export function PriceAndListing({ price, note, url }: { price: number; note?: ReactNode; url: string }) {
+  return (
+    <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3 shrink-0">
+      <PriceCell price={price} note={note} />
+      <ListingButton url={url} />
+    </span>
+  );
+}
+
+/** The round chevron that opens a row's actions. */
+export function ActionsToggle({ open, onClick, name, title }: { open: boolean; onClick: () => void; name: string; title: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} actions for ${name}`} title={open ? 'Hide actions' : title}
+      className={cx('shrink-0 w-7 h-7 grid place-items-center rounded-full border transition-colors',
+        open
+          ? 'border-indigo-500 bg-indigo-600 text-white'
+          : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400')}>
+      {/* Drawn centred on its own 16×16 box, so it sits in the middle of the circle and turns about that middle. */}
+      <svg viewBox="0 0 16 16" aria-hidden="true" className={cx('w-3.5 h-3.5 transition-transform', open && 'rotate-90')}
+        fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 4l4 4-4 4" />
+      </svg>
+    </button>
+  );
+}
+
+/** A row's price, at a fixed width so the row's › buttons line up down the list. */
+export function PriceCell({ price, note }: { price: number; note?: ReactNode }) {
+  return (
+    <span className="w-24 shrink-0 text-right">
+      <span className="block tabnum">{money(price)}</span>
+      {note && <span className="block text-[11px] text-slate-500 tabnum">{note}</span>}
+    </span>
+  );
+}
+
+/** A five-point star, gold and filled when on, an outline when off. */
+export function Star({ on, className = 'w-4 h-4' }: { on: boolean; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cx(className, 'shrink-0 transition-colors', on ? 'fill-amber-400 text-amber-400' : 'fill-none text-slate-400')}
+      stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z" />
+    </svg>
+  );
+}
+
+/** Marks a Store as preferred, like a favourites button: a star that turns gold. */
+export function PreferButton({ on, onClick, storeName }: { on: boolean; onClick: () => void; storeName: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      title={on ? `${storeName} is a preferred Store: no postage, and it doesn't count toward your Store limit. Click to stop.` : `Make ${storeName} a preferred Store: somewhere you collect from for free, so it doesn't count toward your Store limit.`}
+      className={cx('group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors',
+        on ? 'border-amber-400/70 bg-amber-400/10 text-amber-600 dark:text-amber-300' : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-amber-400 hover:text-amber-600 dark:hover:text-amber-300')}>
+      <Star on={on} className={cx('w-3.5 h-3.5', !on && 'group-hover:text-amber-400')} />
+      {on ? 'Preferred' : 'Prefer'}
+    </button>
+  );
+}
+
+/** "3 Printings", or "Printings" when the count isn't known. */
+export const printingsLabel = (n: number) => (n > 0 ? `${n} Printing${n === 1 ? '' : 's'}` : 'Printings');
 
 /** A full, unaltered card image (Scryfall rules), with a plain fallback. */
 export function CardImage({ src, alt, className }: { src: string | null | undefined; alt: string; className?: string }) {

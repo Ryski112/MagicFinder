@@ -299,7 +299,7 @@ export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext,
     const cost = storeCost(rec, prep.buyer);
     const sources = [...new Set(shopListings.get(rec.id)!.map(l => l.source))];
     return {
-      id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', shipsToNz: shipsToNz(rec), sources, storeUrl: storeUrl(rec, shopListings.get(rec.id)!),
+      id: rec.id, name: rec.name, city: rec.location.city, country: rec.country ?? 'NZ', shipsToNz: shipsToNz(rec), sources, storeUrl: storeUrl(rec, shopListings.get(rec.id)!), site: rec.site ?? null, cart: rec.cart,
       preferred: prep.buyer.preferredStores.has(rec.id), postage: cost.postage, postageEstimated: cost.estimated && cost.kind !== 'pickup', freeOver: cost.kind === 'pickup' ? null : cost.freeOver,
     };
   });

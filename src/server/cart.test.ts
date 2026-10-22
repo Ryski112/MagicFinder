@@ -34,6 +34,10 @@ describe('pickVariant', () => {
   it('uses the variant id in the Listing link when there is one', () => {
     expect(pickVariant(listing(), shuffle, '203')?.id).toBe(203);
   });
+
+  it('matches by condition and finish when the linked variant is gone', () => {
+    expect(pickVariant(listing({ price: 5 }), shuffle, '999')?.id).toBe(100);
+  });
 });
 
 describe('checkShopifyCart', () => {
@@ -61,10 +65,23 @@ describe('checkShopifyCart', () => {
     expect(r.fallbackReason).toMatch(/password/);
   });
 
-  it('marks lines it cannot confirm, and links nothing when none are confirmed', async () => {
-    const r = await checkShopifyCart('s', 'S', [{ listing: listing({ url: 'https://x.test/cards/1' }), qty: 1, name: 'x' }], async () => ({ status: 404 }), noWait);
-    expect(r.lines[0].status).toBe('unconfirmed');
+  it('marks lines it cannot confirm, says why, and links nothing when none are confirmed', async () => {
+    const r = await checkShopifyCart('s', 'S', [
+      { listing: listing({ url: 'https://x.test/cards/1' }), qty: 1, name: 'x' },
+      { listing: listing({ url: 'https://x.test/products/gone' }), qty: 1, name: 'y' },
+    ], async () => ({ status: 404 }), noWait);
+    expect(r.lines.map(l => l.status)).toEqual(['unconfirmed', 'unconfirmed']);
+    expect(r.lines[0].reason).toMatch(/doesn't name a product/);
+    expect(r.lines[1].reason).toMatch(/no longer has this product page/);
     expect(r.cartUrl).toBeNull();
+  });
+
+  it('tries a busy shop once more before giving up on a line', async () => {
+    let calls = 0;
+    const r = await checkShopifyCart('s', 'S', [{ listing: listing({ price: 5 }), qty: 1, name: 'x' }],
+      async () => (++calls === 1 ? { status: 429, retryAfter: 0 } : { status: 200, body: { variants: shuffle } }), noWait);
+    expect(calls).toBe(2);
+    expect(r.lines[0].status).toBe('ok');
   });
 
   it('checks an Australian Store in AUD and reports the price in NZD', async () => {

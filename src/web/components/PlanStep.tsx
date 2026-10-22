@@ -2,10 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { UnconfirmedListingView, CardKingdomView, Exclusion, Finish, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, PrintingView, RungView, Settings, SplitView, StoreView, SweepView } from '../../shared/api';
 import { api } from '../api';
 import { ShopsView, type StorePick } from './ShopsView';
-import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
-import { cardsElsewhere, costAtStore, isWaivable, planCards, type Elsewhere } from '../planCards';
+import { CartDialog, cartLabel, cartTarget, type CartTarget } from './CartDialog';
+import { cardsElsewhere, costAtStore, isWaivable, planCards, printingCount, type Elsewhere } from '../planCards';
 import { sourceLine } from './SearchStep';
-import { AustraliaTag, Button, CardImage, CardKingdomChip, cx, money, Notice, SourceBadge, Switch, Tag, timeAgo, unsure } from './ui';
+import { ActionsToggle, AustraliaTag, Button, CardImage, CardKingdomChip, cx, HoverCard, ListingButton, ListingButtonSpace, money, Notice, PreferButton, PriceAndListing, printingsLabel, SourceBadge, Switch, Tag, timeAgo, unsure } from './ui';
 
 interface Props {
   runId: string;
@@ -32,7 +32,6 @@ export function PlanStep(p: Props) {
   useEffect(() => setShowRunnerUp(false), [base?.k]);
   const rung = showRunnerUp && base?.next ? base.next : base;
   /** Names the Plan to the cart check: negative for a runner-up. */
-  const cartK = base ? (rung?.runnerUp ? -base.k : base.k) : 0;
   const [finding, setFinding] = useState<number | null>(null);
   useEffect(() => setFinding(null), [base?.k, base?.next, base?.noRunnerUp, p.ladder.planId]);
   const anyPreferred = Object.keys(p.settings.preferredStores).length > 0;
@@ -183,7 +182,7 @@ export function PlanStep(p: Props) {
             <div className={cx(panel, 'rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm')}>
               <SourceBadge source="fetch" />
               <span className="flex-1 text-slate-600 dark:text-slate-300">Fetch TCG uses one cart for every seller, so all {fetchItems.length} Fetch Listings in this Plan check out together.</span>
-              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems, k: cartK })}>Open {fetchItems.length} Fetch Listings ↗</Button>
+              <Button variant="accent" onClick={() => setCart({ kind: 'fetch', items: fetchItems })}>Open {fetchItems.length} Fetch Listings ↗</Button>
             </div>
           ) }] : []),
         ]} ladder={p.ladder} settings={p.settings} onSettings={p.onSettings} onSearchAgain={p.onSearchAgain} onUnlock={ids => setLock(ids, null)} onRelax={relax} />
@@ -214,7 +213,8 @@ export function PlanStep(p: Props) {
             const { [s.id]: _gone, ...rest } = p.settings.preferredStores;
             p.onSettings({ preferredStores: p.settings.preferredStores[s.id] ? rest : { ...p.settings.preferredStores, [s.id]: s.name } });
           }}
-          onExclude={s => p.onSettings({ excludedStores: { ...p.settings.excludedStores, [s.id]: s.name } })} />
+          onExclude={s => p.onSettings({ excludedStores: { ...p.settings.excludedStores, [s.id]: s.name } })}
+          onRemove={removeCard} onCart={setCart} />
       )}
 
       <div className={cx('space-y-6', mode === 'shops' && 'hidden')}>
@@ -320,15 +320,9 @@ export function PlanStep(p: Props) {
           )}
           {view === 'cards' && <CardsView sortBy={sortBy} runId={p.runId} planStoreIds={planStoreIds} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onLock={setLock} stores={stores} leftOut={leftOut} notFound={p.ladder.notFound} offers={p.ladder.offers} pins={p.choices.pins ?? {}} onPin={setPin} onRemove={removeCard} onRelax={relax} />}
           {view === 'stores' && stores.map(s => (
-            <StoreSection key={s.id} sortBy={sortBy} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
+            <StoreSection key={s.id} offers={p.ladder.offers} sortBy={sortBy} store={s} runId={p.runId} settings={p.settings} onSettings={onStoreSettings}
               elsewhere={cardsElsewhere(s.id, cards, p.ladder.offers)} pins={p.choices.pins ?? {}} onPin={setPin} onPinAll={setPins}
-              onCart={() =>
-                setCart(
-                  s.cart === 'fetch'
-                    ? { kind: 'fetch', items: s.items, k: cartK, seller: s.name }
-                    : { kind: 'store', store: s, k: cartK, tab: s.cart === 'shopify' ? openCartTab(s.name) : undefined },
-                )
-              }
+              onCart={() => setCart(cartTarget(s, s.items))}
               onLock={setLock} onRemove={removeCard} planStoreIds={planStoreIds} qtyOf={qtyOf} onBuyFrom={buyFrom} onPinStore={pinStore} onBlock={blockPrinting} onBlockListing={blockListing} onAvoid={avoidStore} onExclude={() => excludeStore(s)} />
           ))}
         </section>
@@ -341,86 +335,114 @@ export function PlanStep(p: Props) {
 }
 
 function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock, onBlockListing, onLock, stores, leftOut, notFound, offers, pins, onPin, onRemove, onRelax }: { sortBy: 'name' | 'price'; runId: string; planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing']; onLock: (lineIds: string[], lock: Lock | null) => void; stores: StoreView[]; leftOut: LeftOutView[]; notFound: NotFoundView[]; offers: Record<string, OfferView[]>; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; onRemove: (name: string, lineIds: string[]) => void; onRelax: (lineIds: string[]) => void }) {
-  const [open, setOpen] = useState<string | null>(null);
-  const [printingsOpen, setPrintingsOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<{ buyKey: string; what: 'printings' | 'others' } | null>(null);
+  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
   const cost = (c: { bought: { item: ItemView }[] }) => c.bought.reduce((n, b) => n + b.item.price * b.item.qty, 0);
   const cards = planCards(stores, leftOut, notFound);
   // Dearest first; cards with nothing bought (left out, Not Found) go last, still by name.
   if (sortBy === 'price') cards.sort((a, b) => cost(b) - cost(a) || a.name.localeCompare(b.name));
+  const toggle = (buyKey: string, what: 'printings' | 'others') => setOpen(open?.buyKey === buyKey && open.what === what ? null : { buyKey, what });
+  // Each card is drawn like a Store section of the By Store Plan: a header, one line per Store it's bought from, and
+  // the card's actions under the whole box. Closing them also closes what they opened.
   return (
-    <ul className={cx(panel, 'rounded-xl divide-y divide-slate-100 dark:divide-slate-800')}>
+    <div className="space-y-3">
       {cards.map(c => {
         const all = offers[c.buyKey] ?? [];
         const chosen = new Set(c.bought.map(b => b.item.listingId));
+        const others = all.filter(o => !chosen.has(o.listingId));
+        const what = open?.buyKey === c.buyKey ? open.what : null;
+        const actions = actionsOpen === c.buyKey;
+        const toggleActions = () => {
+          if (actions && what) setOpen(null);
+          setActionsOpen(actions ? null : c.buyKey);
+        };
         // One chip per card: the dearest Listing over CardKingdom, else the best bargain under it.
         const ratio = (i: ItemView) => i.price / i.cardKingdomNzd!;
         const items = c.bought.map(b => b.item).filter(i => i.cardKingdomNzd !== null);
         const worst = items.filter(i => i.overCardKingdom).sort((a, b) => ratio(b) - ratio(a))[0]
           ?? items.filter(i => i.underCardKingdom).sort((a, b) => ratio(a) - ratio(b))[0];
         return (
-          <li key={c.buyKey} className="px-4 py-2 text-sm">
-            <div className="flex items-start gap-3">
-              <CardImage src={c.image} alt={c.name} className="w-10 aspect-[5/7] rounded shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="tabnum text-slate-500">{c.qty}×</span>
-                  <span className="font-medium">{c.name}</span>
-                  {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} unsure={unsure(worst.condition, worst.printing?.id ?? null)} />}
-                  {c.notFound && <Tag tone="warn">{c.bought.length ? `${c.missing} not found` : 'Not found'}</Tag>}
-                  {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
-                  {c.lineIds.length > 0 && <RemoveButton className="ml-auto" name={c.name} onClick={() => onRemove(c.name, c.lineIds)} />}
-                </div>
-                {c.waivable && <Button variant="link" className="text-xs mt-1" onClick={() => onRelax(c.lineIds)}>Don't exclude this card</Button>}
-                <ul className="mt-1 space-y-0.5">
-                  {c.bought.map(({ store, item }) => (
-                    <li key={item.listingId} className="flex flex-wrap items-center gap-2">
-                      <span>{item.qty}× from <span className="font-medium">{store.name}</span></span>
-                      <span className="text-xs text-slate-500 truncate">{item.printing?.label ?? item.title}</span>
-                      <span className="tabnum ml-auto">{money(item.price)}</span>
-                      <a href={item.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
-                    </li>
-                  ))}
-                </ul>
-                {pins[c.buyKey] && (
-                  <div className="text-xs mt-1 text-indigo-600 dark:text-indigo-400">
-                    📌 You chose this Store. <Button variant="link" className="text-xs" onClick={() => onPin(c.buyKey, null)}>Let MagicFinder choose</Button>
-                  </div>
-                )}
-                {c.lineIds.length > 0 && c.bought.length > 0 && (
-                  <Button variant="link" className="text-xs mt-1 mr-3" onClick={() => setPrintingsOpen(printingsOpen === c.buyKey ? null : c.buyKey)}>
-                    {printingsOpen === c.buyKey ? 'hide Printings' : 'Printings & Stores'}
-                  </Button>
-                )}
-                {all.length > chosen.size && (
-                  <Button variant="link" className="text-xs mt-1" onClick={() => setOpen(open === c.buyKey ? null : c.buyKey)}>
-                    {open === c.buyKey ? 'hide other Stores' : `${all.length - chosen.size} other Listing${all.length - chosen.size > 1 ? 's' : ''}`}
-                  </Button>
-                )}
+          <div key={c.buyKey} className={cx(panel, 'rounded-xl')}>
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
+              <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1 cursor-pointer" onClick={toggleActions}>
+                <span className="tabnum text-slate-500">{c.qty}×</span>
+                <span className="font-semibold">{c.name}</span>
+                {worst && <CardKingdomChip price={worst.price} cardKingdomNzd={worst.cardKingdomNzd!} unsure={unsure(worst.condition, worst.printing?.id ?? null)} />}
+                {c.notFound && <Tag tone="warn">{c.bought.length ? `${c.missing} not found` : 'Not found'}</Tag>}
+                {!c.notFound && c.missing > 0 && <Tag tone="warn">{c.bought.length ? `${c.missing} left out of this Plan` : 'Left out of this Plan'}</Tag>}
+                {pins[c.buyKey] && <span className="text-xs" title="You chose the Store for this card">📌</span>}
               </div>
+              <ActionsToggle open={actions} onClick={toggleActions} name={c.name} title="Printings, other Listings, or remove" />
+              <span className="w-24 shrink-0 text-right tabnum font-semibold">{c.bought.length ? money(cost(c)) : '—'}</span>
+              <ListingButtonSpace />
             </div>
-            {printingsOpen === c.buyKey && c.bought.length > 0 && (
-              <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
-                onLock={lock => { onLock(c.lineIds, lock); setPrintingsOpen(null); }}
-                onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); setPrintingsOpen(null); }}
-                onPinStore={storeId => { onPinStore(c.bought[0].item, storeId); setPrintingsOpen(null); }} />
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {c.bought.map(({ store, item }) => {
+                const img = item.printing?.image ?? item.storeImage ?? item.fallbackImage;
+                return (
+                  <li key={item.listingId} className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 text-sm">
+                    <HoverCard src={img} large={item.printing?.imageLarge ?? img} alt={item.name} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="tabnum text-slate-500">{item.qty}×</span>
+                        <span className="font-medium">{store.name}</span>
+                        {store.city && <span className="text-xs text-slate-500">{store.city}</span>}
+                        {store.sources.map(src => <SourceBadge key={src} source={src} />)}
+                        <Tag title={item.condition ? undefined : 'The Store did not state a condition'}>{item.condition ?? 'condition not stated'}</Tag>
+                        {item.finish !== 'nonfoil' && <Tag>{item.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
+                        {!item.printing && <Tag tone="warn" title="Matched the card but not the exact Printing">Printing not confirmed</Tag>}
+                        {(item.overCardKingdom || item.underCardKingdom) && item.cardKingdomNzd !== null && <CardKingdomChip price={item.price} cardKingdomNzd={item.cardKingdomNzd} unsure={unsure(item.condition, item.printing?.id ?? null)} />}
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">{item.printing?.label ?? item.title}</div>
+                    </div>
+                    <PriceAndListing price={item.price} url={item.url} />
+                  </li>
+                );
+              })}
+              {!c.bought.length && (
+                <li className="px-4 py-2 flex items-center gap-3 text-sm text-slate-500">
+                  <HoverCard src={c.image} alt={c.name} />
+                  No Store in this Plan has it.
+                </li>
+              )}
+            </ul>
+            {actions && (
+              <div className="px-4 py-2 flex flex-wrap items-center gap-2 border-t border-slate-200 dark:border-slate-800">
+                {c.lineIds.length > 0 && c.bought.length > 0 && (
+                  <Button className="text-xs py-1" onClick={() => toggle(c.buyKey, 'printings')}>{what === 'printings' ? 'Hide Printings' : printingsLabel(printingCount(all))}</Button>
+                )}
+                {others.length > 0 && (
+                  <Button className="text-xs py-1" onClick={() => toggle(c.buyKey, 'others')}>{what === 'others' ? 'Hide other Listings' : `${others.length} other Listing${others.length > 1 ? 's' : ''}`}</Button>
+                )}
+                {pins[c.buyKey] && <Button className="text-xs py-1" title="You chose this card's Store" onClick={() => onPin(c.buyKey, null)}>Let MagicFinder choose the Store</Button>}
+                {c.waivable && <Button className="text-xs py-1" onClick={() => onRelax(c.lineIds)}>Don't exclude this card</Button>}
+                {c.lineIds.length > 0 && <Button className="text-xs py-1 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-900" onClick={() => onRemove(c.name, c.lineIds)}>Remove from my list</Button>}
+              </div>
             )}
-            {open === c.buyKey && (
-              <div className="mt-3 grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {all.filter(o => !chosen.has(o.listingId)).map(o => {
+            {what === 'printings' && c.bought.length > 0 && (
+              <div className="px-4 pb-3">
+                <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
+                  onLock={lock => { onLock(c.lineIds, lock); setOpen(null); }}
+                  onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); setOpen(null); }}
+                  onPinStore={storeId => { onPinStore(c.bought[0].item, storeId); setOpen(null); }} />
+              </div>
+            )}
+            {what === 'others' && (
+              <div className="p-3 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+                {others.map(o => {
                   const canCover = costAtStore(all, o.storeId, c.qty) !== null;
                   return (
-                    <div key={o.listingId} className="flex flex-col min-w-0 rounded-xl p-2 bg-slate-50 dark:bg-slate-800 text-xs">
-                      <CardImage src={o.image} alt={c.name} className="w-full aspect-[5/7] rounded-lg" />
-                      <div className="mt-1 font-semibold text-sm leading-tight break-words" title={o.storeName}>{o.storeName}</div>
-                      <div className="h-8 overflow-hidden text-[11px] text-slate-600 dark:text-slate-300">{o.label}</div>
-                      <div className="flex flex-wrap items-center gap-1 my-1">
+                    <div key={o.listingId} className="flex flex-col gap-1 min-w-0 rounded-xl p-2 bg-slate-50 dark:bg-slate-800 text-xs">
+                      <CardImage src={o.storeImage ?? o.image} alt={c.name} className="w-full aspect-[5/7] rounded-lg" />
+                      <div className="font-semibold text-sm leading-tight break-words" title={o.storeName}>{o.storeName}</div>
+                      <div className="truncate text-[11px] text-slate-600 dark:text-slate-300" title={o.label}>{o.label}</div>
+                      <div className="flex flex-wrap items-center gap-1">
                         {o.condition && <Tag>{o.condition}</Tag>}
                         {o.finish !== 'nonfoil' && <Tag>{o.finish === 'foil' ? 'Foil' : 'Etched'}</Tag>}
                         {(o.overCardKingdom || o.underCardKingdom) && o.cardKingdomNzd !== null && <CardKingdomChip price={o.price} cardKingdomNzd={o.cardKingdomNzd} unsure={unsure(o.condition, o.printingId)} />}
                       </div>
-                      <div className="text-sm font-semibold tabnum">{money(o.price)}</div>
-                      <div className="text-[11px] text-slate-500">{o.qty} in stock</div>
-                      <a href={o.url} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline">View listing ↗</a>
+                      <div className="flex items-baseline justify-between"><span className="text-sm font-semibold tabnum">{money(o.price)}</span><span className="text-[11px] text-slate-500">{o.qty} in stock</span></div>
+                      <ListingButton url={o.url} />
                       <Button className="w-full mt-auto text-xs py-1" disabled={!canCover} title={canCover ? undefined : `${o.storeName} doesn't have all ${c.qty}`}
                         onClick={() => onPin(c.buyKey, o.storeId)}>Buy here</Button>
                     </div>
@@ -428,10 +450,10 @@ function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock
                 })}
               </div>
             )}
-          </li>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -889,8 +911,8 @@ function Unidentified({ listings }: { listings: LadderView['unidentified'] }) {
   );
 }
 
-function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onAvoid, onExclude }: {
-  sortBy: 'name' | 'price'; onAvoid: (item: ItemView, storeId: string) => void;
+function StoreSection({ offers, sortBy, store: s, runId, settings, onSettings, onCart, onLock, onRemove, elsewhere, pins, onPin, onPinAll, planStoreIds, qtyOf, onBuyFrom, onPinStore, onBlock, onBlockListing, onAvoid, onExclude }: {
+  offers: Record<string, OfferView[]>; sortBy: 'name' | 'price'; onAvoid: (item: ItemView, storeId: string) => void;
   onExclude: () => void; onPinAll: (buyKeys: string[], storeId: string) => void; qtyOf: Map<string, number>;
   planStoreIds: Set<string>; onBuyFrom: (item: ItemView, lock: Lock, storeId: string) => void; onPinStore: (item: ItemView, storeId: string) => void; onBlock: PrintingActions['onBlock']; onBlockListing: PrintingActions['onBlockListing'];
   store: StoreView; runId: string; elsewhere: Elsewhere[]; pins: Record<string, string>; onPin: (buyKey: string, storeId: string | null) => void; settings: Settings; onSettings: (p: Partial<Settings>) => void; onCart: () => void; onLock: (lineIds: string[], lock: Lock | null) => void; onRemove: (name: string, lineIds: string[]) => void;
@@ -902,12 +924,6 @@ function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, o
     if (on) next.add(s.id); else next.delete(s.id);
     onSettings({ pickupStores: [...next] });
   };
-  const cartLabel = {
-    shopify: '🛒 Add all to cart',
-    'hobbymaster-deckbuilder': 'Copy list & open Deck Builder',
-    'open-listings': 'Open Listings',
-    fetch: `Open ${s.items.length} Listing${s.items.length > 1 ? 's' : ''}`,
-  }[s.cart];
   return (
     <div className={cx(panel, 'rounded-xl')}>
       <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 rounded-t-xl">
@@ -916,35 +932,32 @@ function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, o
         {s.country === 'AU' && <AustraliaTag shipsToNz={s.shipsToNz} estimated={s.postageEstimated} />}
         {s.sources.map(src => <SourceBadge key={src} source={src} />)}
         {s.staleSince && <Tag tone="warn" title="Its Source couldn't be searched just now">prices from {timeAgo(s.staleSince)}</Tag>}
-        <div className="ml-auto flex items-center gap-3">
+        {/* The cart note sits under the whole row, so the buttons stay in line. */}
+        <div className="ml-auto flex flex-col items-end gap-0.5">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <Button variant="link" className="text-xs" onClick={onExclude}
             title={`Leave ${s.name} out of every Plan from now on, e.g. because it doesn't ship to you. You can add it back in Settings.`}>
             🚫 {s.country === 'AU' && !s.shipsToNz ? "Doesn't ship to NZ" : 'Exclude Store'}
           </Button>
-          <Button variant="link" className="text-xs" onClick={() => {
+          {/* A preferred Store is always collected from, so its toggle stays on and can't be turned off there. */}
+          {s.pickupEligible && (
+            <Switch checked={s.pickupOn || s.preferred} disabled={s.preferred} onChange={setPickup} ariaLabel={`I'll pick up from ${s.name}`} label={<>I'll pick up{!s.pickupConfirmed && <span className="text-xs text-slate-500"> (not confirmed)</span>}</>}
+              title={s.preferred ? `You collect from ${s.name} as a preferred Store. Un-prefer it to have it posted.` : s.pickupConfirmed ? (s.pickupFee ? `Pickup fee ${money(s.pickupFee)}` : 'Free pickup') : "This Store hasn't said whether it offers pickup; check before you rely on it"} />
+          )}
+          <PreferButton on={s.preferred} storeName={s.name} onClick={() => {
             const { [s.id]: _gone, ...rest } = settings.preferredStores;
             onSettings({ preferredStores: s.preferred ? rest : { ...settings.preferredStores, [s.id]: s.name } });
-          }}
-            title={s.preferred ? `${s.name} is a preferred Store: no postage, and it doesn't count toward your Store limit. Click to stop.` : `Make ${s.name} a preferred Store: somewhere you collect from for free, so it doesn't count toward your Store limit.`}>
-            {s.preferred ? '★ Preferred' : '☆ Prefer'}
-          </Button>
-          {s.pickupEligible && !s.preferred && (
-            <Switch checked={s.pickupOn} onChange={setPickup} ariaLabel={`I'll pick up from ${s.name}`} label={<>I'll pick up{!s.pickupConfirmed && <span className="text-xs text-slate-500"> (not confirmed)</span>}</>}
-              title={s.pickupConfirmed ? (s.pickupFee ? `Pickup fee ${money(s.pickupFee)}` : 'Free pickup') : "This Store hasn't said whether it offers pickup; check before you rely on it"} />
-          )}
-          {cartLabel && (
-            <span className="flex flex-col items-end">
-              <Button variant="accent" onClick={onCart}>{cartLabel}{s.cart !== 'hobbymaster-deckbuilder' && ' ↗'}</Button>
-              {s.cart === 'shopify' && <span className="text-[11px] text-slate-500 mt-0.5">replaces your {s.name} cart</span>}
-            </span>
-          )}
+          }} />
+          <Button variant="accent" onClick={onCart}>{cartLabel(s.cart, s.items.length)}</Button>
+        </div>
+        {s.cart === 'shopify' && <span className="text-[11px] text-slate-500">replaces your {s.name} cart</span>}
         </div>
       </div>
       <div className="grid md:grid-cols-[minmax(0,1fr)_230px]">
         <ul className="divide-y divide-slate-100 dark:divide-slate-800 min-w-0">
           {(sortBy === 'price' ? [...s.items].sort((a, b) => b.price * b.qty - a.price * a.qty || a.name.localeCompare(b.name)) : s.items).map(i => (
-            <li key={i.listingId} className="px-4 py-2">
-              <ItemRow item={i} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onAvoid={() => onAvoid(i, s.id)} onRemove={() => onRemove(i.name, i.lineIds)} />
+            <li key={i.listingId} className="px-3 sm:px-4 py-2">
+              <ItemRow item={i} printings={printingCount(offers[i.buyKey] ?? [])} open={open === i.listingId} onToggle={() => setOpen(open === i.listingId ? null : i.listingId)} pinned={pins[i.buyKey] === s.id} onUnpin={() => onPin(i.buyKey, null)} onAvoid={() => onAvoid(i, s.id)} onRemove={() => onRemove(i.name, i.lineIds)} />
               {open === i.listingId && (
                 <PrintingGrid runId={runId} lineId={i.lineIds[0]} planStoreIds={planStoreIds} need={qtyOf.get(i.buyKey) ?? i.qty} current={s.items.filter(x => x.buyKey === i.buyKey).map(x => ({ storeId: s.id, printingId: x.printing?.id ?? null, finish: x.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
                   onLock={lock => { onLock(i.lineIds, lock); setOpen(null); }} onBuyFrom={(lock, storeId) => { onBuyFrom(i, lock, storeId); setOpen(null); }} onPinStore={storeId => { onPinStore(i, storeId); setOpen(null); }} />
@@ -987,23 +1000,20 @@ function StoreSection({ sortBy, store: s, runId, settings, onSettings, onCart, o
   );
 }
 
-function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }: { item: ItemView; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onAvoid: () => void; onRemove: () => void }) {
+function ItemRow({ item: i, printings, open, onToggle, pinned, onUnpin, onAvoid, onRemove }: { item: ItemView; printings: number; open: boolean; onToggle: () => void; pinned: boolean; onUnpin: () => void; onAvoid: () => void; onRemove: () => void }) {
   // A Store's own picture is the best evidence when the title didn't settle the Printing.
   const img = i.printing?.image ?? i.storeImage ?? i.fallbackImage;
   // The row's actions stay out of the way until the buyer opens them, so narrow windows don't cut them off.
   const [actions, setActions] = useState(false);
-  const toggleActions = () => setActions(x => !x);
+  // Closing the actions also closes the Printings they opened.
+  const toggleActions = () => {
+    if (actions && open) onToggle();
+    setActions(!actions);
+  };
   return (
     <div>
-      <div className="flex items-center gap-3 text-sm">
-        <span className="relative group shrink-0">
-          <CardImage src={img} alt={i.name} className="w-10 aspect-[5/7] rounded" />
-          {(i.printing?.imageLarge ?? img) && (
-            <span className="hidden group-hover:block absolute left-12 top-0 z-30 w-56 shadow-2xl rounded-xl overflow-hidden pointer-events-none">
-              <CardImage src={i.printing?.imageLarge ?? img} alt={i.name} className="w-full aspect-[5/7]" />
-            </span>
-          )}
-        </span>
+      <div className="flex items-center gap-2 sm:gap-3 text-sm">
+        <HoverCard src={img} large={i.printing?.imageLarge ?? img} alt={i.name} />
         <div className="flex-1 min-w-0 cursor-pointer" onClick={toggleActions}>
           <div className="flex flex-wrap items-center gap-2">
             <span className="tabnum text-slate-500">{i.qty}×</span>
@@ -1017,38 +1027,17 @@ function ItemRow({ item: i, open, onToggle, pinned, onUnpin, onAvoid, onRemove }
           </div>
           <div className="text-xs text-slate-500 truncate">{i.printing?.label ?? i.title}</div>
         </div>
-        <div className="flex flex-col items-end sm:flex-row sm:items-center sm:gap-3 shrink-0">
-          <span className="tabnum">{money(i.price)}{i.extra?.priceAud && <span className="text-xs text-slate-500" title="Listed in Australian dollars; converted to NZD"> (A${Number(i.extra.priceAud).toFixed(2)})</span>}</span>
-          <a href={i.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap">View listing ↗</a>
-        </div>
-        <button type="button" onClick={toggleActions} aria-expanded={actions} aria-label={`${actions ? 'Hide' : 'Show'} actions for ${i.name}`} title={actions ? 'Hide actions' : 'Other Printings, buy elsewhere, or remove'}
-          className={cx('shrink-0 w-7 h-7 grid place-items-center rounded-full border transition-colors',
-            actions
-              ? 'border-indigo-500 bg-indigo-600 text-white'
-              : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400')}>
-          {/* Drawn centred on its own 16×16 box, so it sits in the middle of the circle and turns about that middle. */}
-          <svg viewBox="0 0 16 16" aria-hidden="true" className={cx('w-3.5 h-3.5 transition-transform', actions && 'rotate-90')}
-            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 4l4 4-4 4" />
-          </svg>
-        </button>
+        <ActionsToggle open={actions} onClick={toggleActions} name={i.name} title="Printings, buy elsewhere, or remove" />
+        <PriceAndListing price={i.price} url={i.url} note={i.extra?.priceAud && <span title="Listed in Australian dollars; converted to NZD">A${Number(i.extra.priceAud).toFixed(2)}</span>} />
       </div>
       {actions && (
         <div className="mt-2 ml-[3.25rem] flex flex-wrap gap-2">
-          <Button className="text-xs py-1" onClick={onToggle}>{open ? 'Hide other Printings' : 'Other Printings'}</Button>
+          <Button className="text-xs py-1" onClick={onToggle}>{open ? 'Hide Printings' : printingsLabel(printings)}</Button>
           <Button className="text-xs py-1" title="Buy this card from another Store; the Plan is made again without this one" onClick={onAvoid}>Not from this Store</Button>
           <Button className="text-xs py-1 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-900" onClick={onRemove}>Remove from my list</Button>
         </div>
       )}
     </div>
-  );
-}
-
-/** Takes a card off the Want List and re-plans without it. */
-function RemoveButton({ name, onClick, className }: { name: string; onClick: () => void; className?: string }) {
-  return (
-    <button type="button" onClick={onClick} title={`Remove ${name} from your list`} aria-label={`Remove ${name} from your list`}
-      className={cx('shrink-0 w-6 h-6 grid place-items-center rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50', className)}>✕</button>
   );
 }
 
@@ -1170,14 +1159,15 @@ function StoreTotals({ store: s, settings, onSettings }: { store: StoreView; set
   return (
     <div className="text-sm tabnum space-y-0.5">
       <div className="flex justify-between"><span>Cards</span><span>{money(s.subtotal)}</span></div>
-      <div className="flex justify-between items-center gap-2">
-        <span className="whitespace-nowrap">
+      {/* The label may wrap in the narrow totals column; the amount never does, so it can't spill past the edge. */}
+      <div className="flex justify-between items-start gap-2">
+        <span className="min-w-0">
           {postageLabel}
           {s.postageEstimated && <Button variant="link" className="ml-1 text-xs text-amber-600 dark:text-amber-400" title="This Store doesn't publish postage; click to enter what it charges you" onClick={() => setEditing(true)}>est.</Button>}
           {override !== undefined && <Button variant="link" className="ml-1 text-xs" title="Your price for this Store" onClick={() => setEditing(true)}>yours</Button>}
           {override === undefined && !s.postageEstimated && s.postageKind !== 'free' && <Button variant="link" className="ml-1 text-xs" title="Enter what this Store really charges you" onClick={() => setEditing(true)}>edit</Button>}
         </span>
-        <span>{s.postageKind === 'free' ? 'Free' : money(s.postage)}</span>
+        <span className="shrink-0 whitespace-nowrap">{s.postageKind === 'free' ? 'Free' : money(s.postage)}</span>
       </div>
       {editing && (
         <form className="flex gap-1 items-center" onSubmit={e => { e.preventDefault(); onSettings({ postageOverrides: { ...settings.postageOverrides, [s.id]: Number(value) } }); setEditing(false); }}>

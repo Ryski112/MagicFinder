@@ -1,19 +1,53 @@
 // Getting a Plan's cards into each Store's cart. The buyer always checks out themselves.
 import { useEffect, useState } from 'react';
-import type { CartCheckResponse, ItemView, StoreView } from '../../shared/api';
+import type { CartCheckResponse, CartKind } from '../../shared/api';
 import { api } from '../api';
 import { Button, Dialog, money, Notice } from './ui';
 
+/** A Listing to put in a cart: from a Plan's Store, or a card picked in Browse by Store. */
+export interface CartItem {
+  listingId: string;
+  name: string;
+  qty: number;
+  price: number;
+  url: string;
+}
+
+/** The Store a cart is for, as a Plan or Browse by Store knows it. */
+export interface CartStore {
+  id: string;
+  name: string;
+  cart: CartKind;
+  site: string | null;
+}
+
 export type CartTarget =
-  | { kind: 'fetch'; items: ItemView[]; k: number; seller?: string }
+  | { kind: 'fetch'; items: CartItem[]; seller?: string }
   /** `tab` is a tab opened on the click itself, sent to the cart once it's ready (null when pop-ups are blocked). */
-  | { kind: 'store'; store: StoreView; k: number; tab?: Window | null };
+  | { kind: 'store'; store: CartStore; items: CartItem[]; tab?: Window | null };
+
+/** The cart button's label for a Store's `cart` kind. */
+export function cartLabel(cart: CartKind, listings: number): string {
+  return {
+    shopify: '🛒 Add all to cart ↗',
+    'hobbymaster-deckbuilder': 'Copy list & open Deck Builder',
+    'open-listings': 'Open Listings ↗',
+    fetch: `Open ${listings} Listing${listings > 1 ? 's' : ''} ↗`,
+  }[cart];
+}
+
+/** The target for a Store's cart button, opening the Shopify cart's tab during the click. */
+export function cartTarget(store: CartStore, items: CartItem[]): CartTarget {
+  return store.cart === 'fetch'
+    ? { kind: 'fetch', items, seller: store.name }
+    : { kind: 'store', store, items, tab: store.cart === 'shopify' ? openCartTab(store.name) : undefined };
+}
 
 /**
  * Opens the tab a Shopify cart will load in, during the click, so the browser doesn't block it as a pop-up (a tab
  * opened after the stock check has finished would be). It says what's happening until the cart is ready.
  */
-export function openCartTab(storeName: string): Window | null {
+function openCartTab(storeName: string): Window | null {
   const tab = window.open('', '_blank');
   if (!tab) return null;
   tab.opener = null;
@@ -68,7 +102,7 @@ function ListingLinks({ items }: { items: { name: string; qty: number; price: nu
 
 export function CartDialog({ runId, target, onClose }: { runId: string; target: CartTarget; onClose: () => void }) {
   if (target.kind === 'fetch') {
-    const items = target.items.map(i => ({ name: i.name, qty: i.qty, price: i.price, url: i.url }));
+    const items = target.items;
     return (
       <Dialog open onClose={onClose} title={target.seller ? `Open ${items.length} Listings from ${target.seller}` : `Open ${items.length} Fetch Listings`}>
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
@@ -80,8 +114,8 @@ export function CartDialog({ runId, target, onClose }: { runId: string; target: 
     );
   }
   const s = target.store;
-  if (s.cart === 'shopify') return <ShopifyCart runId={runId} store={s} k={target.k} tab={target.tab ?? null} onClose={onClose} />;
-  const items = s.items.map(i => ({ name: i.name, qty: i.qty, price: i.price, url: i.url }));
+  const items = target.items;
+  if (s.cart === 'shopify') return <ShopifyCart runId={runId} store={s} items={items} tab={target.tab ?? null} onClose={onClose} />;
   if (s.cart === 'hobbymaster-deckbuilder') return <DeckBuilder store={s} items={items} onClose={onClose} />;
   return (
     <Dialog open onClose={onClose} title={`Open Listings at ${s.name}`}>
@@ -92,7 +126,7 @@ export function CartDialog({ runId, target, onClose }: { runId: string; target: 
   );
 }
 
-function DeckBuilder({ store, items, onClose }: { store: StoreView; items: { name: string; qty: number; price: number; url: string }[]; onClose: () => void }) {
+function DeckBuilder({ store, items, onClose }: { store: CartStore; items: CartItem[]; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const text = items.map(i => `${i.qty} ${i.name}`).join('\n');
   return (
@@ -113,14 +147,14 @@ function DeckBuilder({ store, items, onClose }: { store: StoreView; items: { nam
   );
 }
 
-function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: StoreView; k: number; tab: Window | null; onClose: () => void }) {
+function ShopifyCart({ runId, store, items, tab, onClose }: { runId: string; store: CartStore; items: CartItem[]; tab: Window | null; onClose: () => void }) {
   const [check, setCheck] = useState<CartCheckResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number; name: string } | null>(null);
   // Whether the tab opened on the click was sent to the cart (it may have been closed in the meantime).
   const [sent, setSent] = useState(false);
   useEffect(() => {
-    api.cart(runId, store.id, k, (done, total, name) => setProgress({ done, total, name })).then(
+    api.cart(runId, store.id, items.map(i => ({ listingId: i.listingId, qty: i.qty, name: i.name })), (done, total, name) => setProgress({ done, total, name })).then(
       r => {
         setCheck(r);
         if (tab && !tab.closed && r.cartUrl) {
@@ -135,7 +169,7 @@ function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: 
         if (tab && !tab.closed) tab.close();
       },
     );
-  }, [runId, store.id, k, tab]);
+  }, [runId, store.id, items, tab]);
   const bad = check?.lines.filter(l => l.status === 'unavailable' || l.status === 'unconfirmed') ?? [];
   const changed = check?.lines.filter(l => l.status === 'price-changed') ?? [];
   const good = check?.lines.filter(l => l.status === 'ok' || l.status === 'price-changed') ?? [];
@@ -144,7 +178,7 @@ function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: 
   return (
     <Dialog open onClose={onClose} title={`Add all to cart at ${store.name}`}>
       {error && <Notice tone="bad">{error}</Notice>}
-      {!check && !error && <CheckProgress storeName={store.name} progress={progress} total={store.items.length} />}
+      {!check && !error && <CheckProgress storeName={store.name} progress={progress} total={items.length} />}
       {check && (
         <div className="space-y-3 text-sm">
           {check.fallbackReason && <Notice tone="warn">{check.fallbackReason} Open the Listings instead.</Notice>}
@@ -175,10 +209,10 @@ function ShopifyCart({ runId, store, k, tab, onClose }: { runId: string; store: 
           {bad.length > 0 && (
             <div>
               <div className="font-medium mb-1">{check.cartUrl ? 'Left out of the cart' : 'Open these Listings'}:</div>
-              <ListingLinks items={bad.map(l => ({ name: l.name, qty: l.qty, price: l.expectedPrice, url: l.url, note: l.status === 'unavailable' ? 'sold out' : "couldn't confirm" }))} />
+              <ListingLinks items={bad.map(l => ({ name: l.name, qty: l.qty, price: l.expectedPrice, url: l.url, note: l.status === 'unavailable' ? 'sold out' : `couldn't confirm: ${l.reason ?? 'unknown reason'}` }))} />
             </div>
           )}
-          {check.fallbackReason && <ListingLinks items={store.items.map(i => ({ name: i.name, qty: i.qty, price: i.price, url: i.url }))} />}
+          {check.fallbackReason && <ListingLinks items={items} />}
         </div>
       )}
     </Dialog>

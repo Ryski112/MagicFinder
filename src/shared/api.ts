@@ -284,6 +284,8 @@ export interface ShopView {
   shipsToNz: boolean | null;
   sources: SourceId[];
   storeUrl: string | null;
+  site: string | null;
+  cart: CartKind;
   preferred: boolean;
   postage: number;
   postageEstimated: boolean;
@@ -421,6 +423,8 @@ export interface CartLineCheck {
   qty: number;
   expectedPrice: number;
   status: 'ok' | 'price-changed' | 'unavailable' | 'unconfirmed';
+  /** Why an unconfirmed line couldn't be checked, in the buyer's words. */
+  reason?: string;
   currentPrice?: number;
   variantId?: string;
   url: string;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Lock, ParseResponse, PlanChoices, Settings } from '../../shared/api';
 import { CardSearcher } from './CardSearcher';
-import { VariantA, VariantB, VariantC } from './CardSearcher.prototype';
+import { VariantA, VariantA1, VariantA2, VariantA3 } from './CardSearcher.prototype';
 import { PrototypeSwitcher, useVariant } from './PrototypeSwitcher';
 import { Button, cx } from './ui';
 
@@ -33,9 +33,9 @@ export function WantListStep(p: Props) {
   const [review, setReview] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-  // PROTOTYPE: card searcher variants, `?variant=` (see CardSearcher.prototype.tsx).
-  const [variant, setVariant] = useVariant(['now', 'A', 'B', 'C']);
-  const Searcher = { now: CardSearcher, A: VariantA, B: VariantB, C: VariantC }[variant] ?? CardSearcher;
+  // PROTOTYPE: card searcher variants, `?variant=` (see CardSearcher.prototype.tsx). Round 2 refines A; B and C lost.
+  const [variant, setVariant] = useVariant(['A1', 'A2', 'A3', 'A', 'now']);
+  const Searcher = { now: CardSearcher, A: VariantA, A1: VariantA1, A2: VariantA2, A3: VariantA3 }[variant] ?? CardSearcher;
   const lines = p.parsed?.lines ?? [];
   const included = lines.filter(l => isLineIncluded(l, p.choices, p.settings));
   const basics = lines.filter(l => l.isBasic);
@@ -80,7 +80,13 @@ export function WantListStep(p: Props) {
       {importError && <p className="text-sm text-rose-600 dark:text-rose-400">{importError}</p>}
       <Searcher key={variant} text={p.text} onText={p.onText} onLock={setLock} ready={p.catalogueReady} progress={p.catalogueProgress} />
       <PrototypeSwitcher
-        variants={[{ key: 'now', name: 'Current' }, { key: 'A', name: 'Quick-add list' }, { key: 'B', name: 'Gallery' }, { key: 'C', name: 'Palette' }]}
+        variants={[
+          { key: 'A1', name: 'Preview column + stepper' },
+          { key: 'A2', name: 'Spotlight + one-click counts' },
+          { key: 'A3', name: 'Big rows + live tally' },
+          { key: 'A', name: 'Round 1 quick-add list' },
+          { key: 'now', name: 'Current' },
+        ]}
         current={variant}
         onChange={setVariant}
       />

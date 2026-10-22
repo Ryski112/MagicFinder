@@ -338,7 +338,7 @@ Decided in [Which packaging approach, and where do friends download it?](https:/
 - **Update notice**: at most once a day, `GET /repos/Ryski112/MagicFinder/releases/latest`; a newer, undismissed version shows a banner (Download · What's new · not now). Silent on failure; skipped in dev mode. No self-updating.
 - **From source**: install Node, clone, `npm install`, `npm start` (or `start.sh` / `start.bat`). Still supported beside the downloads; both share the user data folder.
 - **Hosted mode**: decided on [Wayfinder: hosting MagicFinder on the NAS for friends](https://github.com/Ryski112/MagicFinder/issues/33). Each `vX.Y.Z` tag also publishes `ghcr.io/ryski112/magicfinder` (`.github/workflows/docker.yml`). `MAGICFINDER_HOSTED` switches on the hosted-only behaviour (a search per browser, settings kept in the browser, no update notice); the desktop download never sets it. The owner's setup guide is [`docs/hosting.md`](hosting.md), with placeholders for the owner's domain and network.
-- **Repo**: public since v0.2.0 (2026-10-17), as releases and the update check need. The intended licence is **MIT**; no `LICENSE` file has been added yet.
+- **Repo**: public since v0.2.0 (2026-10-17), as releases and the update check need. Licensed under **MIT** (`LICENSE`).
 - **Clean-room**: MTGBulkSingles (AGPL-3.0) is a reference only; copy no code.
 
 ## 12. Defaults chosen while writing this spec

@@ -78,6 +78,7 @@ async function stageCommon(dir: string) {
   await build({ ...shared, entryPoints: [join(ROOT, 'src/optimiser/worker.ts')], outfile: join(dir, 'src/server/worker.mjs') });
   cpSync(join(ROOT, 'dist/web'), join(dir, 'dist/web'), { recursive: true });
   cpSync(join(ROOT, 'data/stores.yaml'), join(dir, 'data/stores.yaml'));
+  cpSync(join(ROOT, 'LICENSE'), join(dir, 'LICENSE'));
   cpSync(join(ROOT, 'node_modules/highs'), join(dir, 'node_modules/highs'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, private: true, type: 'module' }, null, 2) + '\n');
 }

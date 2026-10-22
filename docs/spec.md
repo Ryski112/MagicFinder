@@ -13,14 +13,14 @@ This spec gathers the decisions made on the [Wayfinder map](https://github.com/R
 - Want List import by paste (Archidekt, Moxfield, Arena/MTGO, plain text) and by Archidekt deck URL, plus a card searcher that adds cards by name.
 - Live search per run with about a 1 h cache, then a Trade-off Ladder of Plans and a per-Store breakdown with clean links.
 - A per-Store button that opens the Store with the Plan's cards in the cart (where the Store supports it). The buyer checks out themselves.
+- Hosted mode: the same app as a Docker image on the owner's NAS, shared by invited friends who sign in through Cloudflare Access (§11).
 
 **Out of scope**
 - Sources beyond Fetch TCG and MtgSingles (design for them, don't build them). This includes reading Stores' own Shopify shops as a Source.
 - Australian Stores beyond MtgSingles AU, and Australian Stores' free-postage thresholds.
 - A public hosted site.
-- Docker/NAS and shared multi-user installs.
 - Automating checkout or placing orders.
-- An Electron desktop app or installer. That's wanted later, so keep the stack Electron-friendly.
+- An installer or code signing.
 - Store trust signals such as ratings.
 
 ## 2. Architecture
@@ -36,8 +36,6 @@ Decided in [Tech stack and how people install and run it](https://github.com/Rys
 | Optimiser | HiGHS WASM (`highs` npm, MIT) in worker threads |
 | Live updates | The server streams progress and Ladder updates to the UI (e.g. SSE) |
 | Tests | Vitest against recorded fixture responses. Tests never call live Sources |
-
-Keep the server and UI separable so an Electron shell can wrap them later without a rewrite.
 
 **Source plug-in interface**: each Source is a module that takes a card name and returns Listings plus a Source Status. Sources are registered in one place, and each can be switched on or off in Settings.
 
@@ -339,7 +337,8 @@ Decided in [Which packaging approach, and where do friends download it?](https:/
 - **Releases**: push tag `vX.Y.Z` matching `package.json`. The Release Action tests, builds, smoke-tests each archive on its own OS (`scripts/smoke-package.mjs`, plus the Windows launcher), and publishes a GitHub Release. Downloads use `releases/latest/download/<file>` links in the README's Install section.
 - **Update notice**: at most once a day, `GET /repos/Ryski112/MagicFinder/releases/latest`; a newer, undismissed version shows a banner (Download · What's new · not now). Silent on failure; skipped in dev mode. No self-updating.
 - **From source**: install Node, clone, `npm install`, `npm start` (or `start.sh` / `start.bat`). Still supported beside the downloads; both share the user data folder.
-- **Repo**: private for now, with collaborators invited. Make it public under **MIT** once the app works; it must be public before the first release to friends (releases of a private repo are 404 for them, and the update check needs it); the owner decides when.
+- **Hosted mode**: decided on [Wayfinder: hosting MagicFinder on the NAS for friends](https://github.com/Ryski112/MagicFinder/issues/33). Each `vX.Y.Z` tag also publishes `ghcr.io/ryski112/magicfinder` (`.github/workflows/docker.yml`). `MAGICFINDER_HOSTED` switches on the hosted-only behaviour (a search per browser, settings kept in the browser, no update notice); the desktop download never sets it. The owner's setup guide is [`docs/hosting.md`](hosting.md), with placeholders for the owner's domain and network.
+- **Repo**: public since v0.2.0 (2026-10-17), as releases and the update check need. Licensed under **MIT** (`LICENSE`).
 - **Clean-room**: MTGBulkSingles (AGPL-3.0) is a reference only; copy no code.
 
 ## 12. Defaults chosen while writing this spec

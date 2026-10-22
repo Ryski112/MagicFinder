@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { UnconfirmedListingView, CardKingdomView, Exclusion, Finish, ItemView, LadderView, LeftOutView, Lock, NotFoundView, OfferView, PlanChoices, PrintingsResponse, PrintingView, RungView, Settings, SplitView, StoreView, SweepView } from '../../shared/api';
 import { api } from '../api';
+import { CardsVariant, PlanVariantSwitcher, usePlanVariant } from './PlanViews.prototype';
 import { ShopsView, type StorePick } from './ShopsView';
 import { CartDialog, openCartTab, type CartTarget } from './CartDialog';
 import { cardsElsewhere, costAtStore, isWaivable, planCards, type Elsewhere } from '../planCards';
@@ -336,6 +337,7 @@ export function PlanStep(p: Props) {
       </div>
       </div>
       {cart && <CartDialog runId={p.runId} target={cart} onClose={() => setCart(c => (c === cart ? null : c))} />}
+      <PlanVariantSwitcher />
     </div>
   );
 }
@@ -347,6 +349,16 @@ function CardsView({ sortBy, runId, planStoreIds, onBuyFrom, onPinStore, onBlock
   const cards = planCards(stores, leftOut, notFound);
   // Dearest first; cards with nothing bought (left out, Not Found) go last, still by name.
   if (sortBy === 'price') cards.sort((a, b) => cost(b) - cost(a) || a.name.localeCompare(b.name));
+  const variant = usePlanVariant();
+  if (variant !== 'now') {
+    return <CardsVariant variant={variant} cards={cards} offers={offers} pins={pins} onPin={onPin} onRemove={onRemove} onRelax={onRelax}
+      printings={(c, close) => (
+        <PrintingGrid runId={runId} lineId={c.lineIds[0]} planStoreIds={planStoreIds} need={c.qty} current={c.bought.map(b => ({ storeId: b.store.id, printingId: b.item.printing?.id ?? null, finish: b.item.finish }))} onBlock={onBlock} onBlockListing={onBlockListing}
+          onLock={lock => { onLock(c.lineIds, lock); close(); }}
+          onBuyFrom={(lock, storeId) => { onBuyFrom(c.bought[0].item, lock, storeId); close(); }}
+          onPinStore={storeId => { onPinStore(c.bought[0].item, storeId); close(); }} />
+      )} />;
+  }
   return (
     <ul className={cx(panel, 'rounded-xl divide-y divide-slate-100 dark:divide-slate-800')}>
       {cards.map(c => {

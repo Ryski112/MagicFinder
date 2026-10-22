@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { Lock, LadderView, OfferView, ShopView } from '../../shared/api';
 import { costAtStore } from '../planCards';
+import { ShopDetailVariant, StorePickerB, usePlanVariant } from './PlanViews.prototype';
 import { AustraliaTag, Button, CardImage, cx, money, SourceBadge, Tag } from './ui';
 
 const panel = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
@@ -15,7 +16,7 @@ export interface StorePick {
   lock: Lock | null;
 }
 
-interface Stocked {
+export interface Stocked {
   buyKey: string;
   oracleId: string;
   name: string;
@@ -33,7 +34,7 @@ interface Stocked {
   ck: number | null;
 }
 
-interface ShopRow {
+export interface ShopRow {
   shop: ShopView;
   stocked: Stocked[];
   full: number;
@@ -47,7 +48,7 @@ function versus(price: number, ref: number | null) {
   return { pct, text: pct === 0 ? 'same' : `${pct > 0 ? '+' : '−'}${Math.abs(pct)}%` };
 }
 
-function Delta({ price, ref, label }: { price: number; ref: number | null; label: string }) {
+export function Delta({ price, ref, label }: { price: number; ref: number | null; label: string }) {
   const v = versus(price, ref);
   if (!v || ref === null) return <span className="text-slate-400">—</span>;
   return (
@@ -105,9 +106,14 @@ export function ShopsView({ ladder, onBuyAll, onPrefer, onExclude, preferred }: 
   const visible = rows.filter(r => (country === 'all' || r.shop.country === country) && r.shop.name.toLowerCase().includes(filter.toLowerCase()));
   const current = rows.find(r => r.shop.id === selected) ?? null;
   const wanted = ladder.cards.length;
+  const variant = usePlanVariant();
+  const Detail = variant === 'now' ? ShopDetail : ShopDetailVariant;
 
+  const picker = variant === 'B';
   return (
-    <section className="grid md:grid-cols-[300px_minmax(0,1fr)] gap-4 items-start">
+    <section className={picker ? 'space-y-4' : 'grid md:grid-cols-[300px_minmax(0,1fr)] gap-4 items-start'}>
+      {picker && <StorePickerB rows={visible} selected={selected} onSelect={setSelected} filter={filter} onFilter={setFilter} country={country} onCountry={setCountry} wanted={wanted} preferred={preferred} />}
+      {!picker && (
       <div className={cx(panel, 'rounded-xl')}>
         <div className="p-3 space-y-2 border-b border-slate-200 dark:border-slate-800">
           <div className="font-semibold">Stores with your cards ({visible.length})</div>
@@ -140,10 +146,11 @@ export function ShopsView({ ladder, onBuyAll, onPrefer, onExclude, preferred }: 
           {!visible.length && <li className="px-3 py-4 text-sm text-slate-500">No Store matches.</li>}
         </ul>
       </div>
+      )}
 
       <div className="space-y-3 min-w-0">
         {!current && <div className={cx(panel, 'rounded-xl p-6 text-slate-500')}>Pick a Store to see every card of your list it has in stock, with each Printing and finish.</div>}
-        {current && <ShopDetail row={current} wanted={wanted} showMissing={showMissing} onToggleMissing={() => setShowMissing(!showMissing)}
+        {current && <Detail variant={variant} row={current} wanted={wanted} showMissing={showMissing} onToggleMissing={() => setShowMissing(!showMissing)}
           missing={ladder.cards.filter(c => !current.stocked.some(s => s.buyKey === c.buyKey))}
           chosen={Object.fromEntries(Object.entries(chosen).filter(([k]) => k.startsWith(`${current.shop.id}|`)).map(([k, v]) => [k.slice(current.shop.id.length + 1), v]))}
           onChoose={(buyKey, listingId) => setChosen(m => {

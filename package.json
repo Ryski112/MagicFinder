@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "check-stores": "tsx scripts/check-stores.ts",
     "probe-postage": "tsx scripts/probe-postage.ts",
-    "probe-au": "tsx scripts/probe-au.ts"
+    "probe-au": "tsx scripts/probe-au.ts",
+    "prototype:plan-views": "tsx scripts/prototype-plan-views.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",

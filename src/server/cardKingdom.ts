@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Catalogue, Printing } from '../catalogue/catalogue';
-import type { Finish } from '../core/types';
+import { CONDITION_RANK } from '../core/eligibility';
+import type { Condition, Finish } from '../core/types';
 import type { BuyLine } from '../core/wantList';
 import type { CardKingdomView } from '../shared/api';
 import type { ExchangeRate } from './exchangeRate';
@@ -10,11 +11,18 @@ import { USER_AGENT } from './paths';
 const PRICELIST_URL = 'https://api.cardkingdom.com/api/v2/pricelist';
 const SITE = 'https://www.cardkingdom.com/';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Bumped when the saved file's shape changes; an older file is ignored and fetched again. */
+const CACHE_VERSION = 2;
 
+/** CardKingdom's grades on the app's condition scale: EX is about LP, VG about MP, G about HP. */
+const CK_CONDITIONS: [prefix: string, condition: Condition][] = [['nm', 'NM'], ['ex', 'LP'], ['vg', 'MP'], ['g', 'HP']];
+
+/** The copies CardKingdom has of one Printing and finish in one condition. */
 export interface CkEntry {
   usd: number;
   qty: number;
   url: string;
+  condition: Condition;
 }
 
 /** CardKingdom knows only foil and non-foil; it lists etched foils as foil. */
@@ -24,7 +32,8 @@ const key = (printingId: string, finish: CkFinish) => `${printingId}:${finish}`;
 const cents = (n: number) => Math.round(n * 100) / 100;
 
 export class CardKingdomPrices {
-  private entries = new Map<string, CkEntry>();
+  /** Per Printing and finish, one entry per condition in stock, cheapest first. */
+  private entries = new Map<string, CkEntry[]>();
   private fetchedAt = 0;
   private refreshing: Promise<void> | null = null;
   private readonly path: string | null;
@@ -34,8 +43,10 @@ export class CardKingdomPrices {
     if (this.path && existsSync(this.path)) {
       try {
         const saved = JSON.parse(readFileSync(this.path, 'utf8'));
-        this.entries = new Map(saved.entries);
-        this.fetchedAt = Number(saved.fetchedAt) || 0;
+        if (saved.version === CACHE_VERSION) {
+          this.entries = new Map(saved.entries);
+          this.fetchedAt = Number(saved.fetchedAt) || 0;
+        }
       } catch {
         this.entries = new Map();
       }
@@ -46,12 +57,16 @@ export class CardKingdomPrices {
     return this.entries.size > 0;
   }
 
-  get(printingId: string, finish: CkFinish): CkEntry | undefined {
-    return this.entries.get(key(printingId, finish));
+  /** The conditions CardKingdom has in stock of a Printing and finish, cheapest first. */
+  get(printingId: string, finish: CkFinish): readonly CkEntry[] {
+    return this.entries.get(key(printingId, finish)) ?? [];
   }
 
-  replace(rows: { printingId: string; finish: CkFinish; entry: CkEntry }[]) {
-    this.entries = new Map(rows.map(r => [key(r.printingId, r.finish), r.entry]));
+  /** For tests: an entry without a condition is NM. */
+  replace(rows: { printingId: string; finish: CkFinish; entry: Omit<CkEntry, 'condition'> & { condition?: Condition } }[]) {
+    const next = new Map<string, CkEntry[]>();
+    for (const r of rows) add(next, key(r.printingId, r.finish), { condition: 'NM', ...r.entry });
+    this.entries = next;
     this.fetchedAt = Date.now();
   }
 
@@ -66,21 +81,24 @@ export class CardKingdomPrices {
       const res = await this.fetchFn(PRICELIST_URL, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(180_000) });
       if (!res.ok) return;
       const body = await res.json();
-      const next = new Map<string, CkEntry>();
+      const next = new Map<string, CkEntry[]>();
       for (const row of body.data ?? []) {
-        const usd = Number(row.price_retail);
-        const qty = Number(row.qty_retail);
-        if (!row.scryfall_id || !(usd > 0) || !(qty > 0)) continue;
+        if (!row.scryfall_id) continue;
         const k = key(row.scryfall_id, row.is_foil === 'true' || row.is_foil === true ? 'foil' : 'nonfoil');
-        const cur = next.get(k);
-        if (!cur || usd < cur.usd) next.set(k, { usd, qty, url: SITE + String(row.url ?? '') });
+        const url = SITE + String(row.url ?? '');
+        // price_retail is the NM price but qty_retail counts every condition, so each condition is priced on its own.
+        for (const [prefix, condition] of CK_CONDITIONS) {
+          const usd = Number(row.condition_values?.[`${prefix}_price`]);
+          const qty = Number(row.condition_values?.[`${prefix}_qty`]);
+          if (usd > 0 && qty > 0) add(next, k, { usd, qty, url, condition });
+        }
       }
       if (!next.size) return;
       this.entries = next;
       this.fetchedAt = Date.now();
       if (this.path) {
         const tmp = `${this.path}.tmp`;
-        writeFileSync(tmp, JSON.stringify({ fetchedAt: this.fetchedAt, entries: [...next] }));
+        writeFileSync(tmp, JSON.stringify({ version: CACHE_VERSION, fetchedAt: this.fetchedAt, entries: [...next] }));
         renameSync(tmp, this.path);
       }
     } catch {
@@ -89,9 +107,22 @@ export class CardKingdomPrices {
   }
 }
 
+/** Adds an entry, keeping the cheaper where two rows share a condition, cheapest first. */
+function add(map: Map<string, CkEntry[]>, k: string, entry: CkEntry) {
+  const list = map.get(k) ?? [];
+  const same = list.findIndex(e => e.condition === entry.condition);
+  if (same >= 0 && list[same].usd <= entry.usd) return;
+  if (same >= 0) list.splice(same, 1);
+  list.push(entry);
+  list.sort((a, b) => a.usd - b.usd);
+  map.set(k, list);
+}
+
 export interface CardKingdomContext {
   prices: CardKingdomPrices;
   usdToNzd: number;
+  /** The worst condition the buyer takes, as for NZ Listings; NM when unset. */
+  minCondition?: Condition;
   /** Add 15% NZ GST, so CardKingdom's price compares fairly with NZ prices that include it. */
   gst?: boolean;
 }
@@ -151,18 +182,21 @@ function cardKingdomFinish(printing: Printing, ckFinish: CkFinish): Finish | nul
   return printing.finishes.includes(finish) || printing.finishes.length === 1 ? finish : null;
 }
 
-/** What CardKingdom sells of one line (a locked Printing, or any Printing), cheapest first. */
+/** What CardKingdom sells of one line (a locked Printing, or any Printing) in a condition the buyer takes, cheapest first. */
 export function cardKingdomOffers(line: CardKingdomLine, catalogue: Catalogue, ck: CardKingdomContext, allowFoils: boolean) {
   const lock = line.lock;
   const printings = lock
     ? [catalogue.getPrinting(lock.printingId)].filter((p): p is Printing => !!p)
     : catalogue.printingsOf(line.oracleId).filter(p => !p.nonTournament);
   const ckFinishes: CkFinish[] = lock || allowFoils ? ['nonfoil', 'foil'] : ['nonfoil'];
+  const worst = CONDITION_RANK[ck.minCondition ?? 'NM'];
   return printings
     .flatMap(p => ckFinishes.flatMap(ckFinish => {
-      const entry = ck.prices.get(p.id, ckFinish);
-      const finish = entry ? cardKingdomFinish(p, ckFinish) : null;
-      return entry && finish && (!lock || finish === lock.finish) ? [{ printingId: p.id, finish, entry }] : [];
+      const finish = cardKingdomFinish(p, ckFinish);
+      if (!finish || (lock && finish !== lock.finish)) return [];
+      return ck.prices.get(p.id, ckFinish)
+        .filter(entry => CONDITION_RANK[entry.condition] <= worst)
+        .map(entry => ({ printingId: p.id, finish, entry }));
     }))
     .sort((a, b) => a.entry.usd - b.entry.usd);
 }
@@ -190,6 +224,7 @@ export function compareAtCardKingdom(buy: BuyLine[], catalogue: Catalogue, ck: C
         priceUsd: o.entry.usd,
         priceNzd: cents(o.entry.usd * ck.usdToNzd),
         finish: o.finish,
+        condition: o.entry.condition,
         label: printing ? `${printing.setName} #${printing.collectorNumber}` : '',
         url: o.entry.url,
       });

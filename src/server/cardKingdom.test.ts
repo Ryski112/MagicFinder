@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
@@ -149,5 +149,66 @@ describe('cardKingdomUnitNzd', () => {
   it('includes GST when asked, so the +X% chip compares like with like', () => {
     const prices = pricesFor('Sol Ring', [{ usd: 2, qty: 1 }]);
     expect(cardKingdomUnitNzd({ prices, usdToNzd: 2, gst: true }, cat, lineFor('Sol Ring', 1), true)).toBe(4.6);
+  });
+});
+
+describe('CardKingdomPrices', () => {
+  const row = (id: string, cv: Record<string, string | number>, extra: Record<string, unknown> = {}) => ({
+    scryfall_id: id, is_foil: 'false', url: 'mtg/x', price_retail: '9.99', qty_retail: 7,
+    condition_values: { nm_price: '9.99', nm_qty: 0, ex_price: '7.99', ex_qty: 0, vg_price: '5.99', vg_qty: 0, g_price: '3.99', g_qty: 0, ...cv },
+    ...extra,
+  });
+  const fetchOf = (data: unknown[]) => (async () => new Response(JSON.stringify({ data }))) as unknown as typeof fetch;
+
+  it('prices each condition in stock on its own, never the NM price when CardKingdom has no NM copies', async () => {
+    const prices = new CardKingdomPrices(null, fetchOf([row('a', { ex_qty: 3, vg_qty: 4 })]));
+    await prices.refreshIfStale();
+    expect(prices.get('a', 'nonfoil').map(e => [e.condition, e.usd, e.qty])).toEqual([['MP', 5.99, 4], ['LP', 7.99, 3]]);
+  });
+
+  it('keeps the cheaper copy where two rows share a Printing, finish and condition', async () => {
+    const prices = new CardKingdomPrices(null, fetchOf([row('a', { nm_qty: 1 }), row('a', { nm_price: '8.50', nm_qty: 2 }), row('a', { nm_qty: 1 }, { is_foil: 'true' })]));
+    await prices.refreshIfStale();
+    expect(prices.get('a', 'nonfoil')).toEqual([{ condition: 'NM', usd: 8.5, qty: 2, url: 'https://www.cardkingdom.com/mtg/x' }]);
+    expect(prices.get('a', 'foil').map(e => e.usd)).toEqual([9.99]);
+  });
+
+  it('saves a versioned file and ignores one saved before conditions were priced', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'mf-ckp-'));
+    try {
+      writeFileSync(join(d, 'cardkingdom-prices.json'), JSON.stringify({ fetchedAt: Date.now(), entries: [['a:nonfoil', { usd: 1, qty: 1, url: '' }]] }));
+      expect(new CardKingdomPrices(d).ready).toBe(false);
+      await new CardKingdomPrices(d, fetchOf([row('a', { g_qty: 1 })])).refreshIfStale();
+      expect(new CardKingdomPrices(d).get('a', 'nonfoil').map(e => e.condition)).toEqual(['HP']);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('CardKingdom condition', () => {
+  function conditionPrices() {
+    const card = cat.findCard('Sol Ring')!;
+    const p = cat.printingsOf(card.oracleId).filter(x => !x.nonTournament && x.finishes.includes('nonfoil'))[0];
+    const prices = new CardKingdomPrices(null);
+    prices.replace([
+      { printingId: p.id, finish: 'nonfoil', entry: { usd: 6, qty: 1, url: '', condition: 'NM' } },
+      { printingId: p.id, finish: 'nonfoil', entry: { usd: 4, qty: 2, url: '', condition: 'LP' } },
+      { printingId: p.id, finish: 'nonfoil', entry: { usd: 2, qty: 5, url: '', condition: 'HP' } },
+    ]);
+    return prices;
+  }
+
+  it("uses the cheapest copy in a condition the buyer takes, NM when it isn't given", () => {
+    const prices = conditionPrices();
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1 }, cat, lineFor('Sol Ring', 1), false)).toBe(6);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1, minCondition: 'LP' }, cat, lineFor('Sol Ring', 1), false)).toBe(4);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1, minCondition: 'DMG' }, cat, lineFor('Sol Ring', 1), false)).toBe(2);
+  });
+
+  it('fills a line from the cheapest acceptable conditions, and says which', () => {
+    const view = compareAtCardKingdom([lineFor('Sol Ring', 4)], cat, { prices: conditionPrices(), usdToNzd: 1, minCondition: 'MP' }, { allowFoils: false, shippingUsd: 0 });
+    expect(view.items.map(i => [i.qty, i.condition, i.priceUsd])).toEqual([[2, 'LP', 4], [1, 'NM', 6]]);
+    expect(view.missing.map(m => m.missing)).toEqual([1]);
   });
 });

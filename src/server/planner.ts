@@ -58,7 +58,7 @@ export function preparePlan(want: ResolvedWantList, search: SearchResult, choice
   const buy = buyLines(want.lines, listChoices(choices, ctx.settings));
   const buyer = buyerContext(ctx.settings);
   const ck = ctx.cardKingdom && ctx.settings.cardKingdom.enabled && ctx.settings.cardKingdom.ignoreOver
-    ? { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst }
+    ? { ...ctx.cardKingdom, gst: ctx.settings.cardKingdom.addGst, minCondition: ctx.settings.minCondition }
     : null;
   const settings = { minCondition: ctx.settings.minCondition, allowFoils: ctx.settings.allowFoils, blockedPrintings: ctx.settings.blockedPrintings, blockedListings: ctx.settings.blockedListings };
   const byOracle = new Map<string, Listing[]>();
@@ -184,7 +184,7 @@ export interface ViewExtras {
 export function ladderView(prep: Prepared, state: LadderState, ctx: PlanContext, x: ViewExtras): LadderView {
   const { catalogue, settings } = ctx;
   const buyByKey = new Map(prep.buy.map(b => [b.key, b]));
-  const ck = ctx.cardKingdom && settings.cardKingdom.enabled ? { ...ctx.cardKingdom, gst: settings.cardKingdom.addGst } : null;
+  const ck = ctx.cardKingdom && settings.cardKingdom.enabled ? { ...ctx.cardKingdom, gst: settings.cardKingdom.addGst, minCondition: settings.minCondition } : null;
   const ckByKey = new Map<string, number | null>();
   const ckUnit = (b: BuyLine) => {
     if (!ck) return null;

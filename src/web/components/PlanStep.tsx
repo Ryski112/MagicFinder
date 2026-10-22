@@ -554,9 +554,9 @@ function SplitPanel({ runId, planId, k, onTakeOut }: { runId: string; planId: nu
                 <div className="font-medium mb-1">At CardKingdom · {money(r.ck.totalNzd)}</div>
                 <ul className="space-y-0.5">
                   {r.ck.items.map(i => (
-                    <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="flex gap-2 tabnum">
+                    <li key={`${i.buyKey}:${i.label}:${i.finish}:${i.condition}`} className="flex gap-2 tabnum">
                       <span className="text-slate-500">{i.qty}×</span>
-                      <a href={i.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 truncate hover:underline" title={i.label}>{i.name}{i.finish !== 'nonfoil' && ' (foil)'}</a>
+                      <a href={i.url} target="_blank" rel="noreferrer" className="flex-1 min-w-0 truncate hover:underline" title={i.label}>{i.name}{i.finish !== 'nonfoil' && ' (foil)'}{i.condition !== 'NM' && ` (${i.condition})`}</a>
                       <span>{money(i.priceNzd * i.qty)}</span>
                     </li>
                   ))}
@@ -648,10 +648,11 @@ function CardKingdomPanel({ ck, planTotal, leftOut, split }: { split?: ReactNode
           </div>
           {cardsOpen[x.key] && <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {x.ck.items.map(i => (
-              <li key={`${i.buyKey}:${i.label}:${i.finish}`} className="px-4 py-2 flex items-center gap-3 text-sm">
+              <li key={`${i.buyKey}:${i.label}:${i.finish}:${i.condition}`} className="px-4 py-2 flex items-center gap-3 text-sm">
                 <span className="tabnum text-slate-500">{i.qty}×</span>
                 <span className="font-medium">{i.name}</span>
                 {i.finish !== 'nonfoil' && <Tag>Foil</Tag>}
+                {i.condition !== 'NM' && <Tag>{i.condition}</Tag>}
                 <span className="text-xs text-slate-500 truncate flex-1">{i.label}</span>
                 <span className="tabnum text-slate-500">{usd(i.priceUsd)}</span>
                 <span className="tabnum">{money(i.priceNzd)}</span>

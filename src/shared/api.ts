@@ -292,7 +292,7 @@ export interface ShopView {
 
 export interface CardKingdomView {
   usdToNzd: number;
-  items: { buyKey: string; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; label: string; url: string }[];
+  items: { buyKey: string; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; condition: Condition; label: string; url: string }[];
   missing: { buyKey: string; name: string; missing: number }[];
   subtotalUsd: number;
   shippingUsd: number;
@@ -338,7 +338,7 @@ export interface SplitView {
   saves: number;
   /** Null when nothing is better bought at CardKingdom. */
   ck: {
-    items: { buyKey: string; lineIds: string[]; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; label: string; url: string }[];
+    items: { buyKey: string; lineIds: string[]; name: string; qty: number; priceUsd: number; priceNzd: number; finish: Finish; condition: Condition; label: string; url: string }[];
     subtotalUsd: number;
     shippingUsd: number;
     shippingNzd: number;

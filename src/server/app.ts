@@ -228,17 +228,18 @@ export function createApp(d: AppDeps) {
 
   app.post('/api/runs/:id/cart', async c => {
     const run = d.runs.get(c.req.param('id'));
-    const { storeId, k } = await c.req.json<{ storeId: string; k: number }>();
-    // A negative k names the runner-up Plan of that rung.
-    const rung = run?.ladder?.rungs.find(r => r.k === Math.abs(k));
-    const store = (k < 0 ? rung?.next : rung)?.stores.find(s => s.id === storeId);
+    // The Listings to cart come from the page (a Plan's Store, or cards picked in Browse by Store); each must be one
+    // this run offers at that Store.
+    const { storeId, lines } = await c.req.json<{ storeId: string; lines: { listingId: string; qty: number; name: string }[] }>();
     if (!run) return c.json({ error: gone ?? 'That Plan has changed. Pick it again.' }, 404);
-    if (!run.search || !store) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
-    const byId = new Map(run.search.listings.map(l => [l.id, l]));
-    const items = store.items.flatMap(i => {
-      const listing = byId.get(i.listingId);
+    const offered = new Map(Object.values(run.ladder?.offers ?? {}).flat().filter(o => o.storeId === storeId).map(o => [o.listingId, o]));
+    const byId = new Map(run.search?.listings.map(l => [l.id, l]) ?? []);
+    const items = lines.flatMap(i => {
+      const listing = offered.has(i.listingId) ? byId.get(i.listingId) : undefined;
       return listing ? [{ listing, qty: i.qty, name: i.name }] : [];
     });
+    const storeName = offered.values().next().value?.storeName;
+    if (!storeName || !items.length || items.length !== lines.length) return c.json({ error: 'That Plan has changed. Pick it again.' }, 404);
     // Stream progress so the dialog can show which card is being checked (about one a second). The explicit type and
     // no-transform keep proxies such as Cloudflare from compressing (and so holding back) the lines.
     c.header('Content-Type', 'application/x-ndjson');
@@ -246,7 +247,7 @@ export function createApp(d: AppDeps) {
     return stream(c, async out => {
       const send = (e: CartCheckEvent) => out.write(JSON.stringify(e) + '\n');
       try {
-        const result = await checkShopifyCart(store.id, store.name, items, undefined, undefined, (done, total, name) => {
+        const result = await checkShopifyCart(storeId, storeName, items, undefined, undefined, (done, total, name) => {
           void send({ type: 'progress', done, total, name });
         });
         await send({ type: 'result', result });

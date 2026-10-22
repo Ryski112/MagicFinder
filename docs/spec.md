@@ -282,13 +282,15 @@ Decided in [What should the results GUI look like?](https://github.com/Ryski112/
 - **Notices**: Not Found, couldn't recognise, skipped basics, unidentified Listings, Source Status warnings and stale-cache age.
 - **Ladder**: a row of rung cards ("N Stores · $X · saves $Y vs N−1"), with refining, timed-out and Try-longer badges. **Cheapest overall** is selected by default.
 - **Plan**: one section per Store.
-  - **Header**: the Store name (links to the Store), city, Source badge, the pickup toggle where eligible, and the Store's cart button (§9.1).
-  - **Each line**: a small card image that enlarges on hover, qty, name, 🔒 if locked, a condition tag, a "Printing not confirmed" tag, the Printing label, the price, and **View listing ↗**.
+  - **Header**: the Store name (links to the Store), city, Source badge, **Exclude Store**, the pickup toggle where eligible (on and locked for a preferred Store, which is always collected from), a **Prefer** star that turns gold when the Store is preferred, and the Store's cart button (§9.1).
+  - **Each line**: a small card image that enlarges on hover, qty, name, 🔒 if locked, a condition tag, a "Printing not confirmed" tag, the Printing label, a round › (or a click anywhere on the line) that opens the line's actions (**N Printings**, **Not from this Store**, **Remove from my list**), then the price and a yellow **View listing ↗**. Price and View listing always end the line, at the very right, and the price has a fixed width so the › buttons line up. Closing the actions also closes the Printings they opened.
   - **Side column**: cards subtotal, postage ("Free", "Pickup" or "est."), a "free postage over $X ($Y away)" nudge, and the Store total.
 - **Below the Plan**: a pickup hint and the Plan's **Landed Cost**.
-- **Other Printings** expands inline under a line as a grid of card images, each with "from $X · N Stores" and **Lock this one**.
+- **N Printings** (how many identified Printings the card's Listings offer, each finish apart; just **Printings** when none say which they are) expands inline under a line as a grid of card images, each with "from $X · N Stores" and **Lock this one**.
   - Locking collapses the grid back to the small image, and the Ladder reruns.
   - Locked Printings can be unlocked from the same grid.
+- **By card**: the same Plan, one section per card drawn like a Store section: a header with qty, name, CardKingdom chip, a › and the card's cost, then one line per Store it's bought from, laid out like the By Store lines (price and **View listing ↗** at the right). The › (or a click on the header) opens the card's actions under the whole section: **N Printings**, **N other Listings**, **Remove from my list**; closing them closes what they opened.
+- **Browse by Store**: a list of Stores with any of the Want List beside the open Store, which is the first in the list until the buyer picks one. On a narrow screen the list folds to the open Store's name with **Change Store**, so the Store sits right under it; there, and in the Plan, a line's View listing goes under its price. The Store is drawn like a Plan Store section: **Plan N cards from here**, then the Store's cart button (§9.1) for the ticked cards, at the Printing chosen or the cheapest copies there, a totals column (cards, postage, Store total, against CardKingdom and the average), and one line per card at its chosen or cheapest Printing, with a tick to leave it out, the same › actions (**N Printings**, **Remove from my list**), and price and **View listing ↗** at the right. Its Printings open as a grid that wraps and scrolls down. Chosen from a prototype: variant A on branch `prototype/plan-views`.
 
 ### 9.1 Store cart buttons
 
@@ -302,10 +304,10 @@ Each Store section's cart button depends on the Store table's `cart` field:
 | `open-listings` | **Open Listings** | Opens each Listing page from one click, with the line list shown alongside |
 
 **Shopify flow:**
-1. Resolve each line's variant: `?variant=` on the Listing URL, or one `products/<handle>.js` call (about 1 req/s), matching on condition and foil, with price as the tiebreaker.
+1. Resolve each line's variant with one `products/<handle>.js` call (about 1 req/s): the `?variant=` on the Listing URL when the product still has it, else matching on condition and foil, with price as the tiebreaker. A shop that answers 429 or 5xx gets one more try after its `Retry-After` (at most 10 s). The lines sent are the Plan's Listings at that Store, or in Browse by Store the ticked cards' Listings; the server takes only Listings this run found at that Store.
 2. Re-check `available` and price.
 3. One click: the click itself opens a new tab ("Checking {Store} still has your cards…"), so browsers don't block it, and the tab goes to `/cart/<variant>:<qty>,…?storefront=true` once the check finishes, including when some lines were dropped. A note under the button says it replaces the Store's current cart. If pop-ups are blocked, the dialog shows the summary and an **Open my cart** button instead.
-4. The MagicFinder tab shows nothing while the cart tab says what's happening, so the buyer can come straight back. Only when lines were dropped (sold out or unconfirmed), the Store can't take a cart link, or the tab was blocked or closed, does it show a dialog with the summary, e.g. "12/13 available, 1 price changed", and the dropped lines' Listing links.
+4. The MagicFinder tab shows nothing while the cart tab says what's happening, so the buyer can come straight back. Only when lines were dropped (sold out, or unconfirmed with the reason: product page gone, Store busy, no matching version), the Store can't take a cart link, or the tab was blocked or closed, does it show a dialog with the summary, e.g. "12/13 available, 1 price changed", and the dropped lines' Listing links.
 
 MagicFinder never reads `/cart` itself, never pre-fills email or address, and never goes past the Store's cart page. Details are in the [cart research](https://github.com/Ryski112/MagicFinder/blob/research/store-cart-prefill/docs/research/store-cart-prefill.md).
 

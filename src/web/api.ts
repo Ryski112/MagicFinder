@@ -83,8 +83,8 @@ export const api = {
   tryLonger: (runId: string, k: number) => call<{ ok: true }>('POST', `/api/runs/${runId}/try-longer`, { k }),
   printings: (runId: string, lineId: string) => call<PrintingsResponse>('GET', `/api/runs/${runId}/printings/${encodeURIComponent(lineId)}`),
   /** Runs the cart pre-check, reporting each card as it is checked. */
-  cart: async (runId: string, storeId: string, k: number, onProgress: (done: number, total: number, name: string) => void): Promise<CartCheckResponse> => {
-    const res = await send(`/api/runs/${runId}/cart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, k }) });
+  cart: async (runId: string, storeId: string, lines: { listingId: string; qty: number; name: string }[], onProgress: (done: number, total: number, name: string) => void): Promise<CartCheckResponse> => {
+    const res = await send(`/api/runs/${runId}/cart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ storeId, lines }) });
     if (!res.ok || !res.body) {
       const data = await res.json().catch(() => ({}));
       throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);

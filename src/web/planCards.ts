@@ -50,15 +50,22 @@ export function planCards(stores: StoreView[], leftOut: LeftOutView[] = [], notF
   return [...cards.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function costAtStore(offers: OfferView[], storeId: string, qty: number): number | null {
+/** The cheapest Listings at a Store that make up `qty` copies, or null when it has too few. */
+export function fillAtStore(offers: OfferView[], storeId: string, qty: number): { offer: OfferView; qty: number }[] | null {
   let need = qty;
-  let cost = 0;
+  const fill: { offer: OfferView; qty: number }[] = [];
   for (const o of offers.filter(x => x.storeId === storeId).sort((a, b) => a.price - b.price)) {
+    if (need <= 0) break;
     const take = Math.min(need, o.qty);
-    cost += take * o.price;
+    if (take > 0) fill.push({ offer: o, qty: take });
     need -= take;
   }
-  return need > 0 ? null : Math.round(cost * 100) / 100;
+  return need > 0 ? null : fill;
+}
+
+export function costAtStore(offers: OfferView[], storeId: string, qty: number): number | null {
+  const fill = fillAtStore(offers, storeId, qty);
+  return fill && Math.round(fill.reduce((s, f) => s + f.qty * f.offer.price, 0) * 100) / 100;
 }
 
 export function currentCost(card: PlanCard): number {
@@ -77,4 +84,9 @@ export function cardsElsewhere(storeId: string, cards: PlanCard[], offers: Recor
     const cost = costAtStore(offers[card.buyKey] ?? [], storeId, card.qty);
     return cost === null ? [] : [{ card, cost, current: currentCost(card) }];
   });
+}
+
+/** How many Printings a card's Listings offer, counting each finish apart. Listings that don't say which Printing they are aren't counted. */
+export function printingCount(offers: OfferView[]): number {
+  return new Set(offers.flatMap(o => (o.printingId ? [`${o.printingId}:${o.finish}`] : []))).size;
 }

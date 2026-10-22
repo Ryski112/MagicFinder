@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildCatalogue, Catalogue } from '../catalogue/catalogue';
 import type { BuyLine } from '../core/wantList';
-import { cardKingdomUnitNzd, CardKingdomPrices, compareAtCardKingdom, overCardKingdom, underCardKingdom } from './cardKingdom';
+import { cardKingdomOffers, cardKingdomUnitNzd, CardKingdomPrices, compareAtCardKingdom, overCardKingdom, underCardKingdom } from './cardKingdom';
 
 const dir = mkdtempSync(join(tmpdir(), 'mf-ck-'));
 let cat: Catalogue;
@@ -96,18 +96,58 @@ describe('underCardKingdom', () => {
 });
 
 describe('cardKingdomUnitNzd', () => {
-  it('uses the cheapest printing of the card at CardKingdom, whichever printing is being compared', () => {
-    const card = cat.findCard('Sol Ring')!;
+  it('uses the cheapest printing of the card at CardKingdom', () => {
     const prices = pricesFor('Sol Ring', [{ usd: 4, qty: 1 }, { usd: 2, qty: 1 }]);
-    const ck = { prices, usdToNzd: 2 };
-    expect(cardKingdomUnitNzd(ck, cat, card.oracleId, 'nonfoil')).toBe(4);
-    expect(cardKingdomUnitNzd(ck, cat, card.oracleId, 'etched')).toBeNull();
-    expect(cardKingdomUnitNzd(ck, cat, card.oracleId, 'foil')).toBeNull();
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 2 }, cat, lineFor('Sol Ring', 1), true)).toBe(4);
+  });
+
+  it('takes a cheaper foil only when foils are allowed', () => {
+    const card = cat.findCard('Sol Ring')!;
+    const printings = cat.printingsOf(card.oracleId).filter(p => !p.nonTournament && p.finishes.includes('foil') && p.finishes.includes('nonfoil'));
+    const prices = new CardKingdomPrices(null);
+    prices.replace([
+      { printingId: printings[0].id, finish: 'nonfoil', entry: { usd: 4, qty: 1, url: '' } },
+      { printingId: printings[1].id, finish: 'foil', entry: { usd: 3, qty: 1, url: '' } },
+    ]);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1 }, cat, lineFor('Sol Ring', 1), true)).toBe(3);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1 }, cat, lineFor('Sol Ring', 1), false)).toBe(4);
+  });
+
+  it('uses the locked Printing, even when another is cheaper', () => {
+    const card = cat.findCard('Sol Ring')!;
+    const printings = cat.printingsOf(card.oracleId).filter(p => !p.nonTournament && p.finishes.includes('nonfoil'));
+    const prices = pricesFor('Sol Ring', [{ usd: 4, qty: 1 }, { usd: 2, qty: 1 }]);
+    const locked = (printingId: string, finish: 'nonfoil' | 'foil') => ({ ...lineFor('Sol Ring', 1), lock: { printingId, finish } });
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1 }, cat, locked(printings[0].id, 'nonfoil'), true)).toBe(4);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 1 }, cat, locked(printings[0].id, 'foil'), true)).toBeNull();
+  });
+
+  it("reads CardKingdom's foil of an etched-only Printing as the etched foil, a foil the buyer must allow", () => {
+    const card = cat.findCard('Sol Ring')!;
+    const etched = cat.printingsOf(card.oracleId).find(p => !p.nonTournament && p.finishes.join() === 'etched')!;
+    const prices = new CardKingdomPrices(null);
+    prices.replace([{ printingId: etched.id, finish: 'foil', entry: { usd: 3, qty: 1, url: '' } }]);
+    const ck = { prices, usdToNzd: 1 };
+    expect(cardKingdomOffers(lineFor('Sol Ring', 1), cat, ck, true).map(o => o.finish)).toEqual(['etched']);
+    expect(cardKingdomUnitNzd(ck, cat, lineFor('Sol Ring', 1), false)).toBeNull();
+    expect(cardKingdomUnitNzd(ck, cat, { ...lineFor('Sol Ring', 1), lock: { printingId: etched.id, finish: 'etched' } }, false)).toBe(3);
+  });
+
+  it("takes CardKingdom's word for the finish of a Printing Scryfall knows in only one finish", () => {
+    const card = cat.findCard('Sol Ring')!;
+    const nonfoilOnly = cat.printingsOf(card.oracleId).find(p => !p.nonTournament && p.finishes.join() === 'nonfoil')!;
+    const both = cat.printingsOf(card.oracleId).find(p => !p.nonTournament && p.finishes.join() === 'nonfoil,foil')!;
+    const prices = new CardKingdomPrices(null);
+    prices.replace([
+      { printingId: nonfoilOnly.id, finish: 'foil', entry: { usd: 2, qty: 1, url: '' } },
+      { printingId: both.id, finish: 'foil', entry: { usd: 3, qty: 1, url: '' } },
+    ]);
+    const offers = cardKingdomOffers(lineFor('Sol Ring', 1), cat, { prices, usdToNzd: 1 }, true);
+    expect(offers.map(o => [o.printingId, o.finish])).toEqual([[nonfoilOnly.id, 'foil'], [both.id, 'foil']]);
   });
 
   it('includes GST when asked, so the +X% chip compares like with like', () => {
-    const card = cat.findCard('Sol Ring')!;
     const prices = pricesFor('Sol Ring', [{ usd: 2, qty: 1 }]);
-    expect(cardKingdomUnitNzd({ prices, usdToNzd: 2, gst: true }, cat, card.oracleId, 'nonfoil')).toBe(4.6);
+    expect(cardKingdomUnitNzd({ prices, usdToNzd: 2, gst: true }, cat, lineFor('Sol Ring', 1), true)).toBe(4.6);
   });
 });

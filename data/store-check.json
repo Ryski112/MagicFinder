@@ -1,0 +1,308 @@
+{
+  "badgers-sett": {
+    "policy": "f43a05bbcbdadb7f",
+    "meta": "eedaefc4283141c8",
+    "checkout": "cc5347c493fa2368",
+    "checked": "2026-11-01"
+  },
+  "bay-dragon": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "beadnd-games": {
+    "policy": "50bc80435d283a57",
+    "meta": "ae01ca40f065ff91",
+    "checkout": "73c4e59775fa4fe9",
+    "checked": "2026-11-01"
+  },
+  "bulbastore": {
+    "policy": "4283d547cb91dc5f",
+    "meta": "869649d6867eea37",
+    "checkout": "9e39f45802e8a823",
+    "checked": "2026-11-01"
+  },
+  "calico-keep": {
+    "policy": "83749f36a396f5e1",
+    "meta": "25853d4b33ae709e",
+    "checkout": "26d032c8d26b9608",
+    "checked": "2026-11-01"
+  },
+  "card-bard": {
+    "policy": null,
+    "meta": "f02961d35dfa4c3d",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "card-baron": {
+    "policy": "d3d09325c6722c86",
+    "meta": "e231d887ab2d60da",
+    "checkout": "06549982816e2078",
+    "checked": "2026-11-01"
+  },
+  "card-masters": {
+    "policy": "42709f6baa616efc",
+    "meta": "fc244e19b078da2c",
+    "checkout": "19db7d2d989a95d4",
+    "checked": "2026-11-01"
+  },
+  "card-merchant": {
+    "policy": "417f72d9da3a902a",
+    "meta": "3c5a1f034e940649",
+    "checkout": "15dbfc543eb48f8f",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-takapuna": {
+    "policy": "2b90b9e7d49618cf",
+    "meta": "745b8fd441450c64",
+    "checkout": "cc5347c493fa2368",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-ponsonby": {
+    "policy": null,
+    "meta": "1a66c162e463fb33",
+    "checkout": "284fbd85ba5b2f75",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-silverdale": {
+    "policy": null,
+    "meta": "003076d3291e9d16",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "card-merchant-hamilton": {
+    "policy": "cafcf09fa04b0914",
+    "meta": "d2e964a45c7e4fa3",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "card-merchant-whangarei": {
+    "policy": null,
+    "meta": "fe1891ca552c6763",
+    "checkout": "05747e5599433382",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-new-plymouth": {
+    "policy": "b83c7b347c437f65",
+    "meta": "ff6357a380b2491e",
+    "checkout": "6b02e654f758286a",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-taupo": {
+    "policy": null,
+    "meta": "be8cd8b1671538ce",
+    "checkout": "05747e5599433382",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-wellington": {
+    "policy": null,
+    "meta": "ca28d5b87d20e817",
+    "checkout": "ea2e62443436727e",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-blenheim": {
+    "policy": "c1924e431cd99688",
+    "meta": "3fa69db81ec92c11",
+    "checkout": "6b02e654f758286a",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-nelson": {
+    "policy": "6b13e00db1f98a47",
+    "meta": "0cdbf0cdd4ee2fe0",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "card-merchant-christchurch": {
+    "policy": "b73f44c73db5b61f",
+    "meta": "28047c29b8d7beb1",
+    "checkout": "e29e6e36f9543f4c",
+    "checked": "2026-11-01"
+  },
+  "card-merchant-dunedin": {
+    "policy": "357d3b2123a95795",
+    "meta": "8c002592a864d319",
+    "checkout": "32c2e50ab3955343",
+    "checked": "2026-11-01"
+  },
+  "card-slayer": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "card-spot": {
+    "policy": null,
+    "meta": "066d3864513478a4",
+    "checkout": "e838a7f24c261146",
+    "checked": "2026-11-01"
+  },
+  "collectors-guild": {
+    "policy": "cdb6b190e877131a",
+    "meta": "b8d13fabce3f0f90",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "game-roost": {
+    "policy": "4218b7bb5bc205c8",
+    "meta": "2c689e883a7b5d41",
+    "checkout": "18debfe24c5cb5a7",
+    "checked": "2026-11-01"
+  },
+  "games-lab": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "gaming-dna": {
+    "policy": "94465bde5123d20f",
+    "meta": "3140576d1d8e261a",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "goblin-games": {
+    "policy": "a8a524a841f2f806",
+    "meta": "feea50cf5017a4b3",
+    "checkout": "4f48c3e78d56eb92",
+    "checked": "2026-11-01"
+  },
+  "hobbixchange": {
+    "policy": "d81aaa1284150f56",
+    "meta": "4803d3c06897cdd4",
+    "checkout": "549c0b02c551384c",
+    "checked": "2026-11-01"
+  },
+  "hobby-lords": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "hobby-master": {
+    "policy": "d4fe344031366514",
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "iron-knight-gaming": {
+    "policy": "ce79ccb0cbc69ef8",
+    "meta": "8509e37e062735bb",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "kanto-corner": {
+    "policy": "ac11fceaea891604",
+    "meta": "8a9c5b5bfe9f15f4",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "magic-at-willis": {
+    "policy": "781ce9be9dd34829",
+    "meta": "aa1f3d119f459b8c",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "magic-red-dragon": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "meta-life": {
+    "policy": "7da3df9dd1525c6d",
+    "meta": "ab639c725e56578c",
+    "checkout": "8161036f5e686143",
+    "checked": "2026-11-01"
+  },
+  "mtg-magpie": {
+    "policy": "d32532ec64e29ae1",
+    "meta": "120d66c1fc7e1004",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "nova-games": {
+    "policy": "4df6f3c9db5c24b6",
+    "meta": "27e56a0db98b1fa5",
+    "checkout": "210ee9a70780cf78",
+    "checked": "2026-11-01"
+  },
+  "nz-trading-cards": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "otaku-mart": {
+    "policy": "dba73ce3cd8e8b81",
+    "meta": "a7953c55234e83ab",
+    "checkout": "4691a0d9f3a0dc2a",
+    "checked": "2026-11-01"
+  },
+  "playx": {
+    "policy": "2fb438b37009b00e",
+    "meta": "f19cef3957d781a7",
+    "checkout": "1d96ddedc9da0ab6",
+    "checked": "2026-11-01"
+  },
+  "pop-stop": {
+    "policy": "8e62ede560c8d462",
+    "meta": "1c5b053afd68c911",
+    "checkout": "1e9d8cea2a9f791d",
+    "checked": "2026-11-01"
+  },
+  "shuffle-and-cut": {
+    "policy": "cc30d14f5485d107",
+    "meta": "be2a233748b646a5",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "spellbound": {
+    "policy": "d7e0ff4314769ffc",
+    "meta": "7511b22ee9b99f2a",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "tcg-collector-nz": {
+    "policy": "58d5276c3d7a1631",
+    "meta": "0126669c041ba953",
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "tcg-culture": {
+    "policy": "92c35bd8e80844b0",
+    "meta": "4b0d074e05a52710",
+    "checkout": "e2203bc53c27d43c",
+    "checked": "2026-11-01"
+  },
+  "the-game-tree": {
+    "policy": "91ce6509c527fb20",
+    "meta": "a9367b10510bf7b5",
+    "checkout": "5262c173605989b0",
+    "checked": "2026-11-01"
+  },
+  "three-tree-market": {
+    "policy": "c73cedac81feda60",
+    "meta": "fe88fbee1bc23a8d",
+    "checkout": "4ade8d70d5b40247",
+    "checked": "2026-11-01"
+  },
+  "vagabond": {
+    "policy": null,
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  },
+  "valkyrie-games": {
+    "policy": "ebc0fa59ab703c32",
+    "meta": "b0fa5a399f79ae2d",
+    "checkout": "b08cd50b25ebfe48",
+    "checked": "2026-11-01"
+  },
+  "xp-games": {
+    "policy": "6172f361a1a399a6",
+    "meta": null,
+    "checkout": null,
+    "checked": "2026-11-01"
+  }
+}
